@@ -1,1016 +1,1099 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FUNDShare — AI-Powered Financial Management for upay</title>
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Chart.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- Lucide Icons CDN -->
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <!-- Canvas Confetti -->
-  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>FundShare — upay Smart Wallet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary: #00875A;
+  --primary-dark: #006B48;
+  --primary-light: #E8F5F0;
+  --gold: #FFB800;
+  --gold-light: #FFF8E1;
+  --danger: #EF4444;
+  --danger-light: #FEF2F2;
+  --warning: #F59E0B;
+  --warning-light: #FFFBEB;
+  --info: #3B82F6;
+  --info-light: #EFF6FF;
+  --purple: #8B5CF6;
+  --purple-light: #F5F3FF;
+  --text: #1A1A2E;
+  --text-secondary: #6B7280;
+  --text-muted: #9CA3AF;
+  --border: #E5E7EB;
+  --bg: #F3F4F6;
+  --white: #FFFFFF;
+  --card-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  --card-hover-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  --nav-height: 60px;
+  --bottom-nav-height: 72px;
+}
 
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            upay: {
-              DEFAULT: '#006A4E',
-              dark: '#004D38',
-              light: '#00875A',
-              mint: '#10B981',
-              accent: '#F59E0B',
-              surface: '#F8FAFC',
-              card: '#FFFFFF',
-              border: '#E2E8F0',
-            }
-          }
-        }
-      }
-    }
-  </script>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-    body {
-      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-    .badge-pulse {
-      animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-    }
-    @keyframes pulse-ring {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-  </style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+
+/* ===== TOP HEADER ===== */
+.app-header {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  height: var(--nav-height);
+  background: var(--primary);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+}
+.header-logo { display: flex; align-items: center; gap: 8px; }
+.header-logo .logo-icon { font-size: 24px; }
+.header-logo .logo-text { color: #fff; font-weight: 800; font-size: 18px; letter-spacing: -0.5px; }
+.header-logo .logo-badge { background: var(--gold); color: var(--primary-dark); font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 4px; margin-left: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+.header-right { display: flex; align-items: center; gap: 12px; }
+.notif-btn { position: relative; background: rgba(255,255,255,0.15); border: none; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #fff; font-size: 18px; transition: background 0.2s; }
+.notif-btn:hover { background: rgba(255,255,255,0.25); }
+.notif-badge { position: absolute; top: 4px; right: 4px; background: #FF3B30; color: #fff; font-size: 9px; font-weight: 700; min-width: 16px; height: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 3px; border: 2px solid var(--primary); }
+.avatar-btn { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.15); border: none; padding: 4px 10px 4px 4px; border-radius: 20px; cursor: pointer; transition: background 0.2s; }
+.avatar-btn:hover { background: rgba(255,255,255,0.25); }
+.avatar-circle { width: 28px; height: 28px; border-radius: 50%; background: var(--gold); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; color: var(--primary-dark); }
+.avatar-name { color: #fff; font-size: 13px; font-weight: 600; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ===== MAIN CONTENT AREA ===== */
+.app-body {
+  padding-top: var(--nav-height);
+  padding-bottom: var(--bottom-nav-height);
+  min-height: 100%;
+  overflow-y: auto;
+}
+
+/* ===== BOTTOM NAV ===== */
+.bottom-nav {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+  height: var(--bottom-nav-height);
+  background: #fff;
+  border-top: 1px solid var(--border);
+  display: flex;
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.08);
+}
+.nav-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; cursor: pointer; transition: all 0.2s;
+  padding: 8px 0;
+  border: none; background: transparent; position: relative;
+}
+.nav-item .nav-icon { font-size: 22px; transition: transform 0.2s; }
+.nav-item .nav-label { font-size: 10px; font-weight: 500; color: var(--text-muted); transition: color 0.2s; }
+.nav-item.active .nav-label { color: var(--primary); font-weight: 700; }
+.nav-item.active .nav-icon { transform: translateY(-2px); }
+.nav-item.active::after { content: ''; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 32px; height: 3px; background: var(--primary); border-radius: 2px 2px 0 0; }
+.nav-item.active .nav-dot { display: block; }
+
+/* ===== TAB PANELS ===== */
+.tab-panel { display: none; padding: 16px; animation: fadeIn 0.2s ease; }
+.tab-panel.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ===== BALANCE CARD ===== */
+.balance-card {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  border-radius: 20px;
+  padding: 24px;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 20px;
+  box-shadow: 0 8px 24px rgba(0,135,90,0.3);
+}
+.balance-card::before {
+  content: ''; position: absolute; top: -30px; right: -30px;
+  width: 140px; height: 140px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 50%;
+}
+.balance-card::after {
+  content: ''; position: absolute; bottom: -40px; right: 40px;
+  width: 100px; height: 100px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 50%;
+}
+.balance-label { font-size: 12px; font-weight: 500; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.balance-amount { font-size: 32px; font-weight: 800; letter-spacing: -1px; margin-bottom: 4px; }
+.balance-amount .currency { font-size: 20px; font-weight: 600; opacity: 0.9; }
+.balance-sub { font-size: 12px; opacity: 0.75; margin-bottom: 20px; }
+.balance-actions { display: flex; gap: 8px; position: relative; z-index: 1; flex-wrap: wrap; }
+.bal-action-btn {
+  flex: 1; min-width: 0;
+  background: rgba(255,255,255,0.18);
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 12px;
+  padding: 10px 6px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  cursor: pointer; color: #fff; font-family: 'Inter', sans-serif;
+  font-size: 11px; font-weight: 600;
+  transition: all 0.2s; backdrop-filter: blur(4px);
+}
+.bal-action-btn:hover { background: rgba(255,255,255,0.28); transform: translateY(-1px); }
+.bal-action-btn .btn-icon { font-size: 18px; }
+
+/* ===== QUICK ACTIONS GRID ===== */
+.quick-actions { margin-bottom: 20px; }
+.section-title { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+.section-title .see-all { font-size: 12px; font-weight: 600; color: var(--primary); cursor: pointer; }
+.quick-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.quick-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  background: var(--white); border-radius: 16px; padding: 14px 8px;
+  cursor: pointer; border: none; font-family: 'Inter', sans-serif;
+  transition: all 0.2s; box-shadow: var(--card-shadow);
+}
+.quick-btn:hover { transform: translateY(-2px); box-shadow: var(--card-hover-shadow); }
+.quick-btn .qb-icon { font-size: 26px; }
+.quick-btn .qb-label { font-size: 11px; font-weight: 600; color: var(--text-secondary); text-align: center; line-height: 1.2; }
+
+/* ===== CARDS ===== */
+.card { background: var(--white); border-radius: 16px; padding: 16px; box-shadow: var(--card-shadow); margin-bottom: 14px; }
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.card-title { font-size: 14px; font-weight: 700; color: var(--text); }
+.card-action { font-size: 12px; font-weight: 600; color: var(--primary); cursor: pointer; border: none; background: none; font-family: 'Inter', sans-serif; }
+
+/* ===== TRANSACTION LIST ===== */
+.txn-item { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.txn-item:last-child { border-bottom: none; padding-bottom: 0; }
+.txn-icon { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+.txn-icon.debit { background: var(--danger-light); }
+.txn-icon.credit { background: var(--primary-light); }
+.txn-info { flex: 1; min-width: 0; }
+.txn-name { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.txn-meta { font-size: 11px; color: var(--text-muted); }
+.txn-amount { font-size: 14px; font-weight: 700; white-space: nowrap; }
+.txn-amount.debit { color: var(--danger); }
+.txn-amount.credit { color: var(--primary); }
+
+/* ===== PURPOSE FUNDS ===== */
+.fund-card {
+  background: var(--white); border-radius: 16px; padding: 16px;
+  box-shadow: var(--card-shadow); margin-bottom: 12px;
+  transition: all 0.2s; border-left: 4px solid transparent;
+}
+.fund-card:hover { box-shadow: var(--card-hover-shadow); }
+.fund-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.fund-name-row { display: flex; align-items: center; gap: 10px; }
+.fund-icon { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+.fund-name { font-size: 15px; font-weight: 700; color: var(--text); }
+.fund-category { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+.fund-balance { text-align: right; }
+.fund-balance-amount { font-size: 18px; font-weight: 800; color: var(--text); }
+.fund-balance-label { font-size: 10px; color: var(--text-muted); }
+.fund-progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-bottom: 8px; }
+.fund-progress-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+.fund-stats { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); }
+.fund-stat-val { font-weight: 600; color: var(--text-secondary); }
+.fund-forecast-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 20px; margin-top: 6px; }
+.forecast-ok { background: var(--primary-light); color: var(--primary-dark); }
+.forecast-warn { background: var(--warning-light); color: #92400E; }
+.forecast-danger { background: var(--danger-light); color: #991B1B; }
+
+/* ===== FAMILYPASS CARDS ===== */
+.fp-card {
+  background: var(--white); border-radius: 16px; padding: 16px;
+  box-shadow: var(--card-shadow); margin-bottom: 12px;
+  border: 1.5px solid var(--border);
+  transition: all 0.2s;
+}
+.fp-card:hover { box-shadow: var(--card-hover-shadow); border-color: var(--primary); }
+.fp-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.fp-member { display: flex; align-items: center; gap: 10px; }
+.fp-avatar { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--primary-dark)); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; color: #fff; flex-shrink: 0; }
+.fp-member-name { font-size: 15px; font-weight: 700; color: var(--text); }
+.fp-member-phone { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.fp-status-badge { padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; }
+.fp-status-active { background: var(--primary-light); color: var(--primary-dark); }
+.fp-status-revoked { background: var(--danger-light); color: var(--danger); }
+.fp-status-expired { background: var(--bg); color: var(--text-muted); }
+.fp-progress-section { margin: 12px 0; }
+.fp-progress-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
+.fp-progress-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.fp-progress-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--gold)); border-radius: 4px; transition: width 0.6s ease; }
+.fp-meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.fp-meta-item { background: var(--bg); border-radius: 10px; padding: 8px; text-align: center; }
+.fp-meta-value { font-size: 14px; font-weight: 800; color: var(--text); display: block; }
+.fp-meta-label { font-size: 10px; color: var(--text-muted); display: block; margin-top: 2px; }
+.fp-actions { display: flex; gap: 8px; margin-top: 14px; }
+.fp-action-btn {
+  flex: 1; padding: 10px; border-radius: 10px; font-size: 12px; font-weight: 600;
+  cursor: pointer; border: none; font-family: 'Inter', sans-serif; transition: all 0.2s;
+}
+.fp-action-revoke { background: var(--danger-light); color: var(--danger); }
+.fp-action-revoke:hover { background: var(--danger); color: #fff; }
+.fp-action-view { background: var(--primary-light); color: var(--primary-dark); }
+.fp-action-view:hover { background: var(--primary); color: #fff; }
+
+/* ===== AI COACH ===== */
+.ai-header {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border-radius: 20px; padding: 20px; margin-bottom: 16px; color: #fff;
+  position: relative; overflow: hidden;
+}
+.ai-header::before {
+  content: '🤖'; position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
+  font-size: 48px; opacity: 0.3;
+}
+.ai-header-title { font-size: 18px; font-weight: 800; margin-bottom: 4px; }
+.ai-header-sub { font-size: 12px; opacity: 0.85; }
+.ai-status-badge { display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.2); padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; margin-top: 8px; }
+.ai-status-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ADE80; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+.chat-container { height: 320px; overflow-y: auto; padding: 12px; background: var(--bg); border-radius: 14px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; }
+.chat-msg { max-width: 85%; animation: fadeIn 0.3s ease; }
+.chat-msg.user { align-self: flex-end; }
+.chat-msg.ai { align-self: flex-start; }
+.chat-bubble {
+  padding: 10px 14px; border-radius: 16px; font-size: 13px; line-height: 1.5;
+}
+.chat-msg.user .chat-bubble { background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
+.chat-msg.ai .chat-bubble { background: #fff; color: var(--text); border-bottom-left-radius: 4px; box-shadow: var(--card-shadow); }
+.chat-msg .chat-time { font-size: 10px; color: var(--text-muted); margin-top: 4px; text-align: right; }
+.chat-msg.ai .chat-time { text-align: left; }
+.ai-source-badge { font-size: 9px; padding: 2px 6px; border-radius: 8px; background: var(--primary-light); color: var(--primary-dark); font-weight: 600; display: inline-block; margin-top: 4px; }
+.ai-powered-badge { background: linear-gradient(90deg, #667eea, #764ba2); color: #fff; }
+
+.chat-input-row { display: flex; gap: 8px; }
+.chat-input { flex: 1; padding: 12px 14px; border: 2px solid var(--border); border-radius: 14px; font-size: 13px; font-family: 'Inter', sans-serif; outline: none; transition: border-color 0.2s; background: #fff; }
+.chat-input:focus { border-color: var(--primary); }
+.chat-send-btn { width: 44px; height: 44px; border-radius: 12px; background: var(--primary); border: none; color: #fff; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
+.chat-send-btn:hover { background: var(--primary-dark); transform: scale(1.05); }
+
+.ai-quick-prompts { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.ai-prompt-chip { padding: 6px 12px; border-radius: 20px; background: #fff; border: 1.5px solid var(--border); font-size: 11px; font-weight: 600; color: var(--text-secondary); cursor: pointer; transition: all 0.2s; white-space: nowrap; font-family: 'Inter', sans-serif; }
+.ai-prompt-chip:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+
+/* ===== MERCHANT DASHBOARD ===== */
+.merchant-header {
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border-radius: 20px; padding: 20px; color: #fff; margin-bottom: 16px;
+  position: relative; overflow: hidden;
+}
+.merchant-header::after { content: '🏪'; position: absolute; right: 20px; bottom: 10px; font-size: 60px; opacity: 0.15; }
+.merchant-name { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
+.merchant-cat { font-size: 12px; opacity: 0.7; }
+.merchant-total { font-size: 28px; font-weight: 800; color: var(--gold); margin: 12px 0 4px; }
+.merchant-total-label { font-size: 11px; opacity: 0.7; }
+
+/* ===== METRICS / EVALUATION ===== */
+.metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+.metric-card { background: var(--white); border-radius: 14px; padding: 14px; box-shadow: var(--card-shadow); }
+.metric-value { font-size: 22px; font-weight: 800; color: var(--text); margin-bottom: 2px; }
+.metric-label { font-size: 11px; color: var(--text-muted); }
+.metric-sub { font-size: 12px; font-weight: 600; color: var(--primary); margin-top: 4px; }
+
+/* ===== MEMBER (FAMILYPASS RECEIVER) ===== */
+.received-fp-card {
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  border-radius: 20px; padding: 20px; color: #fff; margin-bottom: 14px;
+  box-shadow: 0 8px 24px rgba(0,135,90,0.25);
+}
+.rfp-owner { font-size: 13px; opacity: 0.8; margin-bottom: 4px; }
+.rfp-limit { font-size: 28px; font-weight: 800; letter-spacing: -1px; }
+.rfp-limit-label { font-size: 11px; opacity: 0.75; }
+.rfp-remaining { font-size: 18px; font-weight: 700; color: var(--gold); margin-top: 8px; }
+.rfp-expiry { font-size: 11px; opacity: 0.75; margin-top: 4px; }
+
+/* ===== MODALS ===== */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  z-index: 1000; align-items: flex-end; justify-content: center;
+  backdrop-filter: blur(4px);
+}
+.modal-overlay.show { display: flex; }
+.modal-sheet {
+  background: #fff; border-radius: 24px 24px 0 0; padding: 24px;
+  width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto;
+  animation: slideUp 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.modal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 20px; }
+.modal-title { font-size: 18px; font-weight: 800; color: var(--text); margin-bottom: 6px; }
+.modal-subtitle { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+.modal-close { position: absolute; top: 20px; right: 20px; width: 32px; height: 32px; border-radius: 50%; background: var(--bg); border: none; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); }
+
+/* ===== FORM ELEMENTS ===== */
+.form-group { margin-bottom: 16px; }
+.form-label { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: block; }
+.form-input, .form-select {
+  width: 100%; padding: 12px 14px; border: 2px solid var(--border);
+  border-radius: 12px; font-size: 14px; font-family: 'Inter', sans-serif;
+  outline: none; transition: border-color 0.2s; background: #fff; color: var(--text);
+  -webkit-appearance: none;
+}
+.form-input:focus, .form-select:focus { border-color: var(--primary); }
+.form-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+.form-amount { font-size: 24px; font-weight: 800; text-align: center; padding: 16px; }
+
+.btn-primary {
+  width: 100%; padding: 14px; background: var(--primary); color: #fff;
+  border: none; border-radius: 14px; font-size: 15px; font-weight: 700;
+  font-family: 'Inter', sans-serif; cursor: pointer; transition: all 0.2s;
+}
+.btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,135,90,0.3); }
+.btn-primary:active { transform: translateY(0); }
+.btn-secondary {
+  padding: 10px 20px; background: var(--bg); color: var(--text-secondary);
+  border: 1.5px solid var(--border); border-radius: 10px; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s; font-family: 'Inter', sans-serif;
+}
+.btn-secondary:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+.btn-danger {
+  padding: 10px 20px; background: var(--danger-light); color: var(--danger);
+  border: none; border-radius: 10px; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s; font-family: 'Inter', sans-serif;
+}
+.btn-danger:hover { background: var(--danger); color: #fff; }
+
+/* ===== PAYMENT SOURCE SELECTOR ===== */
+.source-selector { display: grid; gap: 8px; margin-bottom: 16px; }
+.source-option { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 2px solid var(--border); border-radius: 12px; cursor: pointer; transition: all 0.2s; }
+.source-option:hover { border-color: var(--primary); background: var(--primary-light); }
+.source-option.selected { border-color: var(--primary); background: var(--primary-light); }
+.source-option input[type=radio] { display: none; }
+.source-radio { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s; }
+.source-option.selected .source-radio { border-color: var(--primary); background: var(--primary); }
+.source-option.selected .source-radio::after { content: '✓'; font-size: 10px; color: #fff; font-weight: 800; }
+.source-info { flex: 1; }
+.source-name { font-size: 13px; font-weight: 700; color: var(--text); }
+.source-balance { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+.source-badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+.source-badge-green { background: var(--primary-light); color: var(--primary-dark); }
+.source-badge-blue { background: var(--info-light); color: var(--info); }
+.source-badge-purple { background: var(--purple-light); color: var(--purple); }
+
+/* ===== TOAST NOTIFICATIONS ===== */
+.toast-container { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); z-index: 2000; display: flex; flex-direction: column; gap: 8px; pointer-events: none; min-width: 280px; max-width: 360px; }
+.toast { padding: 14px 18px; border-radius: 14px; font-size: 13px; font-weight: 600; color: #fff; box-shadow: 0 8px 24px rgba(0,0,0,0.2); animation: toastIn 0.3s ease; pointer-events: all; display: flex; align-items: flex-start; gap: 10px; }
+.toast.success { background: var(--primary); }
+.toast.error { background: var(--danger); }
+.toast.warning { background: var(--warning); }
+.toast.info { background: var(--info); }
+.toast-icon { font-size: 18px; flex-shrink: 0; }
+.toast-msg { line-height: 1.4; }
+@keyframes toastIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ===== EMPTY STATE ===== */
+.empty-state { text-align: center; padding: 40px 20px; }
+.empty-icon { font-size: 48px; margin-bottom: 12px; }
+.empty-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+.empty-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+
+/* ===== LOADING SPINNER ===== */
+.spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== PROFILE / SETTINGS ===== */
+.profile-header { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); border-radius: 20px; padding: 24px; color: #fff; margin-bottom: 16px; display: flex; align-items: center; gap: 16px; }
+.profile-avatar { width: 64px; height: 64px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 800; border: 3px solid rgba(255,255,255,0.4); flex-shrink: 0; }
+.profile-name { font-size: 20px; font-weight: 800; }
+.profile-phone { font-size: 13px; opacity: 0.8; margin-top: 3px; }
+.profile-role-badge { margin-top: 6px; display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.2); padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.settings-item { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: #fff; border-radius: 14px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; box-shadow: var(--card-shadow); }
+.settings-item:hover { background: var(--primary-light); }
+.settings-item-left { display: flex; align-items: center; gap: 12px; }
+.settings-item-icon { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+.settings-item-label { font-size: 14px; font-weight: 600; color: var(--text); }
+.settings-item-arrow { font-size: 16px; color: var(--text-muted); }
+.api-key-section { background: #fff; border-radius: 16px; padding: 16px; box-shadow: var(--card-shadow); margin-bottom: 14px; }
+.api-key-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+.api-key-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
+.api-key-input-row { display: flex; gap: 8px; }
+.api-key-input { flex: 1; padding: 10px 14px; border: 2px solid var(--border); border-radius: 10px; font-size: 12px; font-family: 'Inter', sans-serif; outline: none; }
+.api-key-input:focus { border-color: var(--primary); }
+.api-key-save { padding: 10px 16px; background: var(--primary); color: #fff; border: none; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif; }
+
+/* ===== REPORTS ===== */
+.report-stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
+.report-stat { background: #fff; border-radius: 14px; padding: 14px; box-shadow: var(--card-shadow); }
+.report-stat-val { font-size: 20px; font-weight: 800; color: var(--text); }
+.report-stat-label { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.report-bar-chart { background: #fff; border-radius: 14px; padding: 16px; box-shadow: var(--card-shadow); margin-bottom: 14px; }
+.bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.bar-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); width: 80px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-bg { flex: 1; height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 5px; transition: width 0.6s ease; background: linear-gradient(90deg, var(--primary), var(--gold)); }
+.bar-value { font-size: 12px; font-weight: 700; color: var(--text); width: 70px; text-align: right; flex-shrink: 0; }
+
+/* ===== NOTIFICATION PANEL ===== */
+.notif-panel { position: fixed; top: var(--nav-height); right: 0; bottom: 0; width: 100%; max-width: 360px; background: #fff; z-index: 500; transform: translateX(100%); transition: transform 0.3s ease; box-shadow: -8px 0 32px rgba(0,0,0,0.15); overflow-y: auto; }
+.notif-panel.open { transform: translateX(0); }
+.notif-panel-header { padding: 16px 20px; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: space-between; }
+.notif-panel-title { font-size: 16px; font-weight: 700; }
+.notif-panel-close { background: none; border: none; color: #fff; font-size: 20px; cursor: pointer; }
+.notif-item { padding: 14px 20px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.2s; }
+.notif-item:hover { background: var(--bg); }
+.notif-item.unread { border-left: 3px solid var(--primary); background: var(--primary-light); }
+.notif-item-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+.notif-item-msg { font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
+.notif-item-time { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+.notif-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 499; }
+.notif-overlay.show { display: block; }
+
+/* ===== UTILITY ===== */
+.flex { display: flex; } .gap-8 { gap: 8px; } .gap-12 { gap: 12px; }
+.text-center { text-align: center; } .w-full { width: 100%; }
+.hidden { display: none !important; }
+.pill { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+.pill-green { background: var(--primary-light); color: var(--primary-dark); }
+.pill-red { background: var(--danger-light); color: var(--danger); }
+.pill-yellow { background: var(--warning-light); color: #92400E; }
+.pill-blue { background: var(--info-light); color: var(--info); }
+.badge-new { background: var(--gold); color: var(--primary-dark); font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 6px; vertical-align: middle; }
+.divider { height: 1px; background: var(--border); margin: 16px 0; }
+.text-primary { color: var(--primary); }
+.text-danger { color: var(--danger); }
+.font-bold { font-weight: 700; }
+.font-800 { font-weight: 800; }
+.mb-12 { margin-bottom: 12px; }
+.mb-16 { margin-bottom: 16px; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* Desktop adjustments */
+@media (min-width: 600px) {
+  .app-body { max-width: 480px; margin: 0 auto; }
+  .bottom-nav { max-width: 480px; left: 50%; transform: translateX(-50%); }
+  .app-header { max-width: 480px; left: 50%; transform: translateX(-50%); }
+}
+</style>
 </head>
-<body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col">
+<body>
 
-  <!-- ==================== TOP SIMULATION & DEMO ROLE BAR ==================== -->
-  <div class="bg-slate-900 text-white text-xs px-4 py-2 border-b border-slate-800">
-    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
-      <div class="flex items-center space-x-2">
-        <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-          PROTOTYPE / SIMULATED ENVIRONMENT
-        </span>
-        <span class="text-slate-400 hidden sm:inline">Track 03: Customer Innovation & Financial Independence • No real money is moved</span>
-      </div>
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toastContainer"></div>
 
-      <!-- Quick Role Switcher for Hackathon Judges -->
-      <div class="flex items-center space-x-2">
-        <span class="text-slate-400 font-medium">Demo Role:</span>
-        <select id="role-switcher-select" onchange="switchDemoRole(this.value)" class="bg-slate-800 text-amber-300 border border-slate-700 text-xs rounded px-2.5 py-1 focus:ring-1 focus:ring-emerald-500 font-semibold cursor-pointer">
-          <option value="shahed">👑 Shahed Annam (Customer / Owner)</option>
-          <option value="rahim">👤 Rahim Ahmed (FamilyPass Member)</option>
-          <option value="karim">👤 Karim Hossain (FamilyPass Member)</option>
-          <option value="agora">🏬 Agora Super Shop (Merchant)</option>
-          <option value="admin">⚖️ Hackathon Evaluator (Admin / Metrics)</option>
-        </select>
-        <button onclick="reseedDemoData()" title="Reset Demo Data" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs flex items-center gap-1 transition">
-          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
-          <span>Reset</span>
+<!-- NOTIFICATION OVERLAY -->
+<div class="notif-overlay" id="notifOverlay" onclick="closeNotifications()"></div>
+
+<!-- NOTIFICATION PANEL -->
+<div class="notif-panel" id="notifPanel">
+  <div class="notif-panel-header">
+    <span class="notif-panel-title">🔔 Notifications</span>
+    <button class="notif-panel-close" onclick="closeNotifications()">✕</button>
+  </div>
+  <div id="notifList"><div class="empty-state"><div class="empty-icon">🔔</div><div class="empty-title">No notifications yet</div></div></div>
+</div>
+
+<!-- TOP HEADER -->
+<header class="app-header">
+  <div class="header-logo">
+    <span class="logo-icon">💚</span>
+    <span class="logo-text">FundShare</span>
+    <span class="logo-badge">AI</span>
+  </div>
+  <div class="header-right">
+    <button class="notif-btn" onclick="openNotifications()" title="Notifications">
+      🔔
+      <span class="notif-badge" id="notifCount" style="display:none">0</span>
+    </button>
+    <button class="avatar-btn" onclick="showProfile()">
+      <div class="avatar-circle" id="headerAvatar">U</div>
+      <span class="avatar-name" id="headerName">Loading...</span>
+    </button>
+  </div>
+</header>
+
+<!-- MAIN BODY -->
+<div class="app-body">
+
+  <!-- ====== HOME / DASHBOARD TAB ====== -->
+  <div class="tab-panel active" id="tab-home">
+    <!-- Balance Card -->
+    <div class="balance-card" id="balanceCard">
+      <div class="balance-label">Available Balance</div>
+      <div class="balance-amount"><span class="currency">৳</span><span id="walletBalance">0.00</span></div>
+      <div class="balance-sub" id="balanceSub">Total Wealth: ৳0.00 • Funds: ৳0.00</div>
+      <div class="balance-actions">
+        <button class="bal-action-btn" onclick="openModal('cashInModal')">
+          <span class="btn-icon">➕</span> Add Money
+        </button>
+        <button class="bal-action-btn" onclick="openModal('sendMoneyModal')">
+          <span class="btn-icon">📤</span> Send
+        </button>
+        <button class="bal-action-btn" onclick="openModal('utilityModal')">
+          <span class="btn-icon">⚡</span> Services
+        </button>
+        <button class="bal-action-btn" onclick="navigateTo('payments')">
+          <span class="btn-icon">💳</span> Pay
         </button>
       </div>
     </div>
-  </div>
 
-  <!-- ==================== MAIN HEADER / NAV ==================== -->
-  <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex justify-between items-center h-16">
-        <!-- Logo & Branding -->
-        <div class="flex items-center space-x-3">
-          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-800 via-emerald-700 to-emerald-500 flex items-center justify-center text-white font-extrabold text-xl shadow-md">
-            ৳
-          </div>
-          <div>
-            <div class="flex items-center space-x-2">
-              <span class="text-xl font-extrabold tracking-tight text-slate-900">FUND<span class="text-emerald-700">Share</span></span>
-              <span class="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded">for upay</span>
-            </div>
-            <p class="text-[11px] text-slate-500 hidden sm:block">Control • Delegated Spending • Financial AI</p>
-          </div>
-        </div>
-
-        <!-- Navigation Tabs -->
-        <nav class="hidden md:flex space-x-1">
-          <button onclick="switchTab('dashboard')" id="tab-btn-dashboard" class="nav-tab px-3.5 py-2 text-sm font-semibold rounded-lg text-emerald-800 bg-emerald-50 flex items-center gap-1.5">
-            <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Dashboard
-          </button>
-          <button onclick="switchTab('funds')" id="tab-btn-funds" class="nav-tab px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 flex items-center gap-1.5">
-            <i data-lucide="pie-chart" class="w-4 h-4"></i> Purpose Funds
-          </button>
-          <button onclick="switchTab('payments')" id="tab-btn-payments" class="nav-tab px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 flex items-center gap-1.5">
-            <i data-lucide="credit-card" class="w-4 h-4"></i> Pay & Restrictions
-          </button>
-          <button onclick="switchTab('familypass')" id="tab-btn-familypass" class="nav-tab px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 flex items-center gap-1.5">
-            <i data-lucide="users" class="w-4 h-4"></i> FamilyPass
-          </button>
-          <button onclick="switchTab('coach')" id="tab-btn-coach" class="nav-tab px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 flex items-center gap-1.5">
-            <i data-lucide="sparkles" class="w-4 h-4 text-emerald-600"></i> AI Coach
-          </button>
-          <button onclick="switchTab('reports')" id="tab-btn-reports" class="nav-tab px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 flex items-center gap-1.5">
-            <i data-lucide="file-text" class="w-4 h-4"></i> Reports
-          </button>
-          <button onclick="switchTab('evaluation')" id="tab-btn-evaluation" class="nav-tab px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 flex items-center gap-1.5">
-            <i data-lucide="target" class="w-4 h-4 text-amber-500"></i> Evaluation
-          </button>
-        </nav>
-
-        <!-- Right Side: User Profile & Notification -->
-        <div class="flex items-center space-x-3">
-          <!-- Notification Bell -->
-          <div class="relative">
-            <button onclick="toggleNotificationDrawer()" class="p-2 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 relative">
-              <i data-lucide="bell" class="w-5 h-5"></i>
-              <span id="notif-badge" class="hidden absolute top-1 right-1 w-2.5 h-2.5 bg-rose-600 rounded-full border-2 border-white"></span>
-            </button>
-          </div>
-
-          <!-- User Card -->
-          <div class="flex items-center space-x-2.5 pl-2 border-l border-slate-200">
-            <div id="user-avatar" class="w-9 h-9 rounded-full bg-emerald-700 text-white font-bold flex items-center justify-center text-sm shadow">
-              SA
-            </div>
-            <div class="hidden lg:block text-left">
-              <div id="user-display-name" class="text-xs font-bold text-slate-900 leading-tight">Shahed Annam</div>
-              <div id="user-role-badge" class="text-[10px] text-emerald-700 font-semibold">Wallet Owner</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Mobile Navigation Sub-bar -->
-    <div class="md:hidden flex overflow-x-auto px-4 py-2 border-t border-slate-200 bg-slate-50 gap-2 text-xs font-semibold">
-      <button onclick="switchTab('dashboard')" class="px-3 py-1.5 rounded bg-white shadow-sm text-emerald-800 whitespace-nowrap">Dashboard</button>
-      <button onclick="switchTab('funds')" class="px-3 py-1.5 rounded bg-white shadow-sm text-slate-700 whitespace-nowrap">Purpose Funds</button>
-      <button onclick="switchTab('payments')" class="px-3 py-1.5 rounded bg-white shadow-sm text-slate-700 whitespace-nowrap">Pay & Rules</button>
-      <button onclick="switchTab('familypass')" class="px-3 py-1.5 rounded bg-white shadow-sm text-slate-700 whitespace-nowrap">FamilyPass</button>
-      <button onclick="switchTab('coach')" class="px-3 py-1.5 rounded bg-white shadow-sm text-slate-700 whitespace-nowrap">AI Coach</button>
-      <button onclick="switchTab('reports')" class="px-3 py-1.5 rounded bg-white shadow-sm text-slate-700 whitespace-nowrap">Reports</button>
-      <button onclick="switchTab('evaluation')" class="px-3 py-1.5 rounded bg-white shadow-sm text-amber-700 whitespace-nowrap">Evaluation</button>
-    </div>
-  </header>
-
-  <!-- ==================== MAIN CONTENT CONTAINER ==================== -->
-  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-
-    <!-- TAB 1: DASHBOARD -->
-    <section id="tab-dashboard" class="tab-pane space-y-6">
-      <!-- Welcome & Overall Balance Row -->
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        <!-- Main Upay Wallet Card -->
-        <div class="lg:col-span-2 bg-gradient-to-br from-emerald-900 via-emerald-800 to-emerald-700 text-white rounded-2xl p-6 shadow-xl relative overflow-hidden">
-          <div class="absolute -right-8 -bottom-8 w-48 h-48 bg-white/5 rounded-full blur-2xl"></div>
-          <div class="flex justify-between items-start">
-            <div>
-              <p class="text-xs uppercase tracking-wider font-semibold text-emerald-200">Available Normal Balance</p>
-              <h1 id="dashboard-wallet-balance" class="text-3xl sm:text-4xl font-extrabold mt-1 tracking-tight">৳25,450.00</h1>
-              <p class="text-xs text-emerald-200 mt-1 flex items-center gap-1">
-                <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Ready for general transactions & FamilyPass delegation
-              </p>
-            </div>
-            <span class="px-2.5 py-1 bg-white/10 rounded-full text-xs font-semibold backdrop-blur text-emerald-100 flex items-center gap-1">
-              <i data-lucide="wallet" class="w-3.5 h-3.5"></i> upay MFS
-            </span>
-          </div>
-
-          <!-- Total Wealth Breakdown -->
-          <div class="mt-6 pt-4 border-t border-emerald-700/60 grid grid-cols-3 gap-2 text-center sm:text-left">
-            <div>
-              <p class="text-[11px] text-emerald-200">In Purpose Funds</p>
-              <p id="dashboard-funds-total" class="text-base sm:text-lg font-bold">৳42,000.00</p>
-            </div>
-            <div>
-              <p class="text-[11px] text-emerald-200">Total Liquid Funds</p>
-              <p id="dashboard-total-liquid" class="text-base sm:text-lg font-bold">৳67,450.00</p>
-            </div>
-            <div>
-              <p class="text-[11px] text-emerald-200">Savings Rate</p>
-              <p class="text-base sm:text-lg font-bold text-amber-300">23.1%</p>
-            </div>
-          </div>
-
-          <!-- Quick Action Buttons -->
-          <div class="mt-6 grid grid-cols-4 gap-2">
-            <button onclick="openModal('modal-cashin')" class="bg-white/10 hover:bg-white/20 active:bg-white/30 text-white rounded-xl py-2.5 px-2 flex flex-col items-center justify-center text-xs font-semibold transition backdrop-blur">
-              <i data-lucide="plus-circle" class="w-5 h-5 mb-1 text-emerald-300"></i> Add Money
-            </button>
-            <button onclick="openModal('modal-sendmoney')" class="bg-white/10 hover:bg-white/20 active:bg-white/30 text-white rounded-xl py-2.5 px-2 flex flex-col items-center justify-center text-xs font-semibold transition backdrop-blur">
-              <i data-lucide="send" class="w-5 h-5 mb-1 text-emerald-300"></i> Send Money
-            </button>
-            <button onclick="switchTab('payments')" class="bg-white/10 hover:bg-white/20 active:bg-white/30 text-white rounded-xl py-2.5 px-2 flex flex-col items-center justify-center text-xs font-semibold transition backdrop-blur">
-              <i data-lucide="shopping-cart" class="w-5 h-5 mb-1 text-emerald-300"></i> Merchant Pay
-            </button>
-            <button onclick="openModal('modal-utility')" class="bg-white/10 hover:bg-white/20 active:bg-white/30 text-white rounded-xl py-2.5 px-2 flex flex-col items-center justify-center text-xs font-semibold transition backdrop-blur">
-              <i data-lucide="zap" class="w-5 h-5 mb-1 text-amber-300"></i> Bill / Recharge
-            </button>
-          </div>
-        </div>
-
-        <!-- AI Insights & Risk Warnings Banner -->
-        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col justify-between">
-          <div>
-            <div class="flex items-center justify-between">
-              <span class="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-rose-600 bg-rose-50 px-2.5 py-1 rounded-md">
-                <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> AI Budget Warning
-              </span>
-              <span class="text-[11px] text-slate-400">October 2026</span>
-            </div>
-            <h3 class="text-base font-bold text-slate-900 mt-3">Grocery Fund Overrun Risk</h3>
-            <p class="text-xs text-slate-600 mt-1 leading-relaxed">
-              At your current daily velocity, your Grocery Fund will spend <strong class="text-rose-600">৳17,200</strong> against a <strong>৳15,000</strong> budget (Potential overrun: <strong class="text-rose-600">৳2,200</strong>).
-            </p>
-
-            <div class="mt-3 p-3 bg-amber-50 rounded-xl border border-amber-200/60">
-              <p class="text-[11px] font-semibold text-amber-900 flex items-center gap-1">
-                <i data-lucide="lightbulb" class="w-3.5 h-3.5 text-amber-600"></i> Smart Transfer Recommendation
-              </p>
-              <p class="text-[11px] text-amber-800 mt-0.5">
-                Electricity Fund has ৳1,500 estimated surplus. Consider transferring ৳1,000 to avoid mid-month deficit.
-              </p>
-            </div>
-          </div>
-
-          <div class="mt-4 flex gap-2">
-            <button onclick="openInterfundTransferModal(4, 1, 1000)" class="flex-1 py-2 px-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-semibold transition text-center shadow-sm">
-              Transfer ৳1,000 Now
-            </button>
-            <button onclick="switchTab('coach')" class="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition">
-              Ask AI
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Purpose Funds Quick Summary Row -->
-      <div>
-        <div class="flex justify-between items-center mb-3">
-          <div class="flex items-center gap-2">
-            <h2 class="text-lg font-bold text-slate-900">Purpose-Based Funds</h2>
-            <span class="text-xs px-2 py-0.5 bg-slate-200 text-slate-700 rounded-full font-semibold">Restricted to Category</span>
-          </div>
-          <button onclick="switchTab('funds')" class="text-xs font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-1">
-            Manage All Funds <i data-lucide="chevron-right" class="w-4 h-4"></i>
-          </button>
-        </div>
-
-        <div id="dashboard-funds-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <!-- Populated dynamically by JS -->
-          <div class="p-4 bg-white rounded-xl border border-slate-200 animate-pulse h-32"></div>
-        </div>
-      </div>
-
-      <!-- FamilyPass & Recent Transactions Two-Column Grid -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-        <!-- FamilyPass Mini-Hub -->
-        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-          <div class="flex justify-between items-center mb-4">
-            <div>
-              <div class="flex items-center gap-2">
-                <h3 class="text-base font-bold text-slate-900">FamilyPass Active Spending</h3>
-                <span class="text-[10px] font-bold px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full">Shared Innovation</span>
-              </div>
-              <p class="text-xs text-slate-500 mt-0.5">Delegated members spending from your normal wallet (No PIN shared)</p>
-            </div>
-            <button onclick="switchTab('familypass')" class="text-xs font-semibold text-emerald-700 hover:underline">
-              View All
-            </button>
-          </div>
-
-          <div id="dashboard-familypass-list" class="space-y-3">
-            <!-- Dynamic FamilyPass items -->
-          </div>
-
-          <!-- Notification Simulation Feed -->
-          <div class="mt-4 pt-4 border-t border-slate-100">
-            <p class="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1">
-              <i data-lucide="bell-ring" class="w-3.5 h-3.5 text-emerald-600"></i> Simulated Owner SMS / In-App Alert
-            </p>
-            <div id="dashboard-latest-fp-notif" class="p-3 bg-emerald-50/70 border border-emerald-200/60 rounded-xl text-xs text-emerald-950">
-              <span class="font-bold">🔔 Rahim Ahmed</span> spent ৳450 at Agora Super Shop (Grocery). Remaining FamilyPass limit: <strong>৳1,750.00</strong>.
-            </div>
-          </div>
-        </div>
-
-        <!-- Recent Transactions -->
-        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-          <div class="flex justify-between items-center mb-4">
-            <h3 class="text-base font-bold text-slate-900">Recent Transactions</h3>
-            <button onclick="switchTab('reports')" class="text-xs font-semibold text-emerald-700 hover:underline">
-              Full Statement
-            </button>
-          </div>
-
-          <div id="dashboard-transactions-list" class="space-y-2.5">
-            <!-- Dynamic transactions -->
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- TAB 2: PURPOSE FUNDS -->
-    <section id="tab-funds" class="tab-pane hidden space-y-6">
-      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">Purpose-Based Personal Funds</h2>
-          <p class="text-sm text-slate-500 mt-0.5">
-            Enforced category restrictions. Merchants can ONLY be paid from their matching purpose fund.
-          </p>
-        </div>
-        <div class="flex items-center gap-2">
-          <button onclick="openInterfundTransferModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition">
-            <i data-lucide="arrow-left-right" class="w-4 h-4 text-slate-600"></i> Inter-Fund Transfer
-          </button>
-          <button onclick="openModal('modal-create-fund')" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-sm">
-            <i data-lucide="plus" class="w-4 h-4"></i> Create Purpose Fund
-          </button>
-        </div>
-      </div>
-
-      <!-- AI Inter-Fund Recommendation Callout -->
-      <div class="p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div class="flex items-start gap-3">
-          <div class="p-2.5 bg-amber-100 rounded-xl text-amber-700 mt-0.5">
-            <i data-lucide="sparkles" class="w-5 h-5"></i>
-          </div>
-          <div>
-            <h4 class="text-xs font-bold uppercase tracking-wider text-amber-900">AI Rebalancing Recommendation</h4>
-            <p class="text-xs text-amber-800 mt-0.5">
-              Your <strong>Grocery Fund</strong> is projected to be short by <strong>৳2,200</strong>, while your <strong>Electricity Fund</strong> has an estimated <strong>৳1,500 surplus</strong>.
-              You may transfer ৳1,000 to rebalance without adding new funds.
-            </p>
-          </div>
-        </div>
-        <button onclick="openInterfundTransferModal(4, 1, 1000)" class="whitespace-nowrap px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition shadow">
-          Execute Transfer (৳1,000)
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+      <div class="section-title">Quick Actions</div>
+      <div class="quick-grid">
+        <button class="quick-btn" onclick="openModal('cashInModal')">
+          <span class="qb-icon">🏦</span>
+          <span class="qb-label">Add Money</span>
+        </button>
+        <button class="quick-btn" onclick="openModal('sendMoneyModal')">
+          <span class="qb-icon">📲</span>
+          <span class="qb-label">Send Money</span>
+        </button>
+        <button class="quick-btn" onclick="openModal('rechargeModal')">
+          <span class="qb-icon">📱</span>
+          <span class="qb-label">Recharge</span>
+        </button>
+        <button class="quick-btn" onclick="openModal('billModal')">
+          <span class="qb-icon">💡</span>
+          <span class="qb-label">Bill Pay</span>
+        </button>
+        <button class="quick-btn" onclick="navigateTo('funds')">
+          <span class="qb-icon">🎯</span>
+          <span class="qb-label">My Funds</span>
+        </button>
+        <button class="quick-btn" onclick="navigateTo('familypass')">
+          <span class="qb-icon">👨‍👩‍👧</span>
+          <span class="qb-label">FamilyPass</span>
+        </button>
+        <button class="quick-btn" onclick="openModal('cashOutModal')">
+          <span class="qb-icon">🏧</span>
+          <span class="qb-label">Cash Out</span>
+        </button>
+        <button class="quick-btn" onclick="navigateTo('ai')">
+          <span class="qb-icon">🤖</span>
+          <span class="qb-label">AI Coach</span>
         </button>
       </div>
-
-      <!-- Funds Grid -->
-      <div id="full-funds-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <!-- Dynamic Cards -->
-      </div>
-    </section>
-
-    <!-- TAB 3: PAYMENTS & RESTRICTION TESTER -->
-    <section id="tab-payments" class="tab-pane hidden space-y-6">
-      <div class="max-w-3xl mx-auto">
-        <div class="text-center mb-6">
-          <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">Merchant Payment & Category Rule Engine</h2>
-          <p class="text-sm text-slate-500 mt-1">
-            Test the core innovation: Deterministic backend category restriction & 7-point FamilyPass authorization.
-          </p>
-        </div>
-
-        <!-- Interactive Payment Box -->
-        <div class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 space-y-6">
-          <!-- 1. Select Merchant -->
-          <div>
-            <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-              1. Select Merchant
-            </label>
-            <select id="pay-merchant-select" onchange="onPaymentMerchantChange(this.value)" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500">
-              <!-- Dynamically populated -->
-            </select>
-            <div id="pay-merchant-category-badge" class="mt-2 text-xs font-semibold text-slate-600 flex items-center gap-1.5">
-              <span>Category:</span>
-              <span id="selected-merchant-category" class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold">Grocery</span>
-            </div>
-          </div>
-
-          <!-- 2. Enter Amount -->
-          <div>
-            <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-              2. Transaction Amount (BDT ৳)
-            </label>
-            <div class="relative">
-              <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 font-bold text-lg">৳</span>
-              <input type="number" id="pay-amount-input" value="850" class="w-full pl-8 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-base font-bold text-slate-900 focus:ring-2 focus:ring-emerald-500" placeholder="0.00" />
-            </div>
-            <div class="flex gap-2 mt-2">
-              <button onclick="setPayAmount(450)" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded text-xs font-semibold text-slate-600">৳450</button>
-              <button onclick="setPayAmount(850)" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded text-xs font-semibold text-slate-600">৳850</button>
-              <button onclick="setPayAmount(1200)" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded text-xs font-semibold text-slate-600">৳1,200</button>
-              <button onclick="setPayAmount(8500)" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded text-xs font-bold border border-rose-200">
-                ৳8,500 (Trigger Anomaly)
-              </button>
-            </div>
-          </div>
-
-          <!-- 3. Choose Payment Source -->
-          <div>
-            <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-              3. Choose Payment Source
-            </label>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <label class="payment-source-card cursor-pointer border-2 border-emerald-600 bg-emerald-50/50 rounded-xl p-3 flex flex-col justify-between">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-bold text-slate-900">Normal Wallet</span>
-                  <input type="radio" name="payment_source" value="NORMAL_WALLET" checked onchange="onPaymentSourceChange('NORMAL_WALLET')" class="text-emerald-600 focus:ring-emerald-500" />
-                </div>
-                <p class="text-[11px] text-slate-500 mt-1">General payments. Available: <strong id="pay-source-wallet-bal">৳25,450</strong></p>
-              </label>
-
-              <label class="payment-source-card cursor-pointer border-2 border-slate-200 hover:border-slate-300 rounded-xl p-3 flex flex-col justify-between">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-bold text-slate-900">Purpose Fund</span>
-                  <input type="radio" name="payment_source" value="PURPOSE_FUND" onchange="onPaymentSourceChange('PURPOSE_FUND')" class="text-emerald-600 focus:ring-emerald-500" />
-                </div>
-                <p class="text-[11px] text-slate-500 mt-1">Must match merchant category exactly.</p>
-              </label>
-
-              <label class="payment-source-card cursor-pointer border-2 border-slate-200 hover:border-slate-300 rounded-xl p-3 flex flex-col justify-between">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-bold text-slate-900">FamilyPass</span>
-                  <input type="radio" name="payment_source" value="FAMILY_PASS" onchange="onPaymentSourceChange('FAMILY_PASS')" class="text-emerald-600 focus:ring-emerald-500" />
-                </div>
-                <p class="text-[11px] text-slate-500 mt-1">Spend from granted family allowance.</p>
-              </label>
-            </div>
-          </div>
-
-          <!-- Dynamic Purpose Fund Selection -->
-          <div id="purpose-fund-select-container" class="hidden p-4 bg-slate-50 rounded-xl border border-slate-200">
-            <label class="block text-xs font-bold text-slate-800 mb-1">Select Purpose Fund:</label>
-            <select id="pay-purpose-fund-select" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-semibold">
-              <!-- Dynamically populated with user's funds -->
-            </select>
-            <p class="text-[11px] text-slate-500 mt-1.5">
-              💡 <em>Judge Test:</em> Try selecting <strong>Education Fund</strong> to pay <strong>Agora Super Shop (Grocery)</strong> to watch the backend reject it!
-            </p>
-          </div>
-
-          <!-- Dynamic FamilyPass Selection -->
-          <div id="familypass-select-container" class="hidden p-4 bg-slate-50 rounded-xl border border-slate-200">
-            <label class="block text-xs font-bold text-slate-800 mb-1">Select Active FamilyPass Permission:</label>
-            <select id="pay-familypass-select" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-semibold">
-              <!-- Dynamically populated -->
-            </select>
-          </div>
-
-          <!-- Submit Button -->
-          <button onclick="executePayment()" id="btn-execute-payment" class="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 text-white font-bold rounded-xl text-sm transition shadow-md flex items-center justify-center gap-2">
-            <i data-lucide="check-circle" class="w-4 h-4"></i> Authorize & Execute Payment
-          </button>
-        </div>
-
-        <!-- Live Result Feedback Modal / Card -->
-        <div id="payment-result-box" class="hidden mt-6 rounded-2xl p-6 border shadow-sm">
-          <!-- Populated by JS -->
-        </div>
-      </div>
-    </section>
-
-    <!-- TAB 4: FAMILYPASS -->
-    <section id="tab-familypass" class="tab-pane hidden space-y-6">
-      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <div class="flex items-center gap-2">
-            <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">FamilyPass</h2>
-            <span class="text-xs font-bold px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded-full">Core Shared Innovation</span>
-          </div>
-          <p class="text-sm text-slate-500 mt-0.5">
-            Empower trusted family members with limited, revocable spending allowances without sharing your PIN or passwords.
-          </p>
-        </div>
-
-        <button onclick="openModal('modal-create-familypass')" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-sm">
-          <i data-lucide="user-plus" class="w-4 h-4"></i> Create FamilyPass
-        </button>
-      </div>
-
-      <!-- Security Principles Card -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="p-4 bg-white rounded-xl border border-slate-200">
-          <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold mb-2">1</div>
-          <h4 class="text-xs font-bold text-slate-900">Zero Credential Sharing</h4>
-          <p class="text-[11px] text-slate-500 mt-1">Members authenticate using their own phone & login. The owner's PIN and wallet credentials are never exposed.</p>
-        </div>
-        <div class="p-4 bg-white rounded-xl border border-slate-200">
-          <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold mb-2">2</div>
-          <h4 class="text-xs font-bold text-slate-900">7-Point Backend Guardrails</h4>
-          <p class="text-[11px] text-slate-500 mt-1">Active status, expiry, member match, action permissions, limit bounds, and wallet balance are enforced server-side.</p>
-        </div>
-        <div class="p-4 bg-white rounded-xl border border-slate-200">
-          <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold mb-2">3</div>
-          <h4 class="text-xs font-bold text-slate-900">Instant Kill-Switch & Alerts</h4>
-          <p class="text-[11px] text-slate-500 mt-1">Owners can revoke permission in one click. Every transaction triggers immediate real-time owner notifications.</p>
-        </div>
-      </div>
-
-      <!-- Issued FamilyPass Permissions (Owner View) -->
-      <div>
-        <h3 class="text-base font-bold text-slate-900 mb-3">Active Permissions Granted by You</h3>
-        <div id="familypass-cards-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <!-- Dynamically populated -->
-        </div>
-      </div>
-
-      <!-- Live Activity Log -->
-      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="text-base font-bold text-slate-900">Itemized FamilyPass Activity</h3>
-          <span class="text-xs text-slate-500">Real-time spending audit</span>
-        </div>
-        <div id="familypass-activity-table-container" class="overflow-x-auto">
-          <!-- Dynamically populated activity rows -->
-        </div>
-      </div>
-    </section>
-
-    <!-- TAB 5: AI COACH & INTELLIGENCE -->
-    <section id="tab-coach" class="tab-pane hidden space-y-6">
-      <div class="flex justify-between items-start">
-        <div>
-          <div class="flex items-center gap-2">
-            <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">AI Financial Coach & Intelligence</h2>
-            <span class="text-xs font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full">Zero Hallucination</span>
-          </div>
-          <p class="text-sm text-slate-500 mt-0.5">
-            Answers based strictly on your structured financial data and machine learning predictions.
-          </p>
-        </div>
-
-        <!-- Language Switcher -->
-        <div class="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-bold text-slate-700">
-          <button id="lang-en" onclick="setCoachLanguage('en')" class="px-3 py-1 rounded-lg bg-white shadow-sm text-emerald-800">English</button>
-          <button id="lang-bn" onclick="setCoachLanguage('bn')" class="px-3 py-1 rounded-lg text-slate-600 hover:text-slate-900">বাংলা</button>
-        </div>
-      </div>
-
-      <!-- Conversational Chat Interface -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[520px]">
-        <!-- Chat Message Area -->
-        <div id="chat-messages-container" class="flex-1 p-6 overflow-y-auto space-y-4">
-          <!-- Initial Welcome Message from Coach -->
-          <div class="flex items-start gap-3">
-            <div class="w-8 h-8 rounded-full bg-emerald-700 text-white flex items-center justify-center text-xs font-bold flex-shrink-0 shadow">
-              AI
-            </div>
-            <div class="bg-slate-100 text-slate-800 p-4 rounded-2xl rounded-tl-none max-w-xl text-xs leading-relaxed space-y-2">
-              <p class="font-bold text-slate-900">Good evening, Shahed! I am your FundShare AI Coach.</p>
-              <p>I analyze your wallet outlays, purpose fund burn rates, and FamilyPass activity to give you actionable clarity. How can I assist you today?</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Quick Prompt Chips -->
-        <div class="p-3 bg-slate-50 border-t border-slate-200 flex gap-2 overflow-x-auto text-xs font-semibold">
-          <button onclick="askCoachPrompt('Why did my spending increase this month?')" class="px-3 py-1.5 bg-white border border-slate-200 hover:border-emerald-500 rounded-full whitespace-nowrap text-slate-700 hover:text-emerald-700 transition">
-            Why did my spending increase?
-          </button>
-          <button onclick="askCoachPrompt('Which fund is most likely to exceed its budget?')" class="px-3 py-1.5 bg-white border border-slate-200 hover:border-emerald-500 rounded-full whitespace-nowrap text-slate-700 hover:text-emerald-700 transition">
-            Which fund is at risk?
-          </button>
-          <button onclick="askCoachPrompt('Who used my FamilyPass and how much is remaining?')" class="px-3 py-1.5 bg-white border border-slate-200 hover:border-emerald-500 rounded-full whitespace-nowrap text-slate-700 hover:text-emerald-700 transition">
-            Who used my FamilyPass?
-          </button>
-          <button onclick="askCoachPrompt('What should I consider allocating next month?')" class="px-3 py-1.5 bg-white border border-slate-200 hover:border-emerald-500 rounded-full whitespace-nowrap text-slate-700 hover:text-emerald-700 transition">
-            Next month allocation
-          </button>
-          <button onclick="askCoachPrompt('Why was this transaction flagged as unusual?')" class="px-3 py-1.5 bg-white border border-slate-200 hover:border-emerald-500 rounded-full whitespace-nowrap text-slate-700 hover:text-emerald-700 transition">
-            Explain unusual transaction
-          </button>
-        </div>
-
-        <!-- Chat Input Bar -->
-        <div class="p-4 bg-white border-t border-slate-200 flex items-center gap-2">
-          <input type="text" id="chat-input" onkeydown="if(event.key==='Enter') sendChatMessage()" placeholder="Ask anything about your money, funds, or FamilyPass..." class="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-          <button onclick="sendChatMessage()" class="p-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl transition shadow">
-            <i data-lucide="send" class="w-4 h-4"></i>
-          </button>
-        </div>
-      </div>
-
-      <!-- Anomaly Detection & Explainability Showcase -->
-      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-        <div class="flex justify-between items-center mb-3">
-          <div>
-            <h3 class="text-base font-bold text-slate-900">Spending Anomaly Detection (Isolation Forest)</h3>
-            <p class="text-xs text-slate-500">Flagged transactions with transparent statistical & machine learning evidence</p>
-          </div>
-          <span class="text-xs px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg font-bold">Unusual, Not Fraud</span>
-        </div>
-        <div id="anomalies-audit-container" class="space-y-3">
-          <!-- Dynamically populated anomalies -->
-        </div>
-      </div>
-    </section>
-
-    <!-- TAB 6: REPORTS -->
-    <section id="tab-reports" class="tab-pane hidden space-y-6">
-      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">Financial Reports & Insights</h2>
-          <p class="text-sm text-slate-500 mt-0.5">Comprehensive financial health, category trends, and budget performance</p>
-        </div>
-
-        <div class="flex items-center gap-2">
-          <div class="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-bold text-slate-700">
-            <button onclick="loadReport('weekly')" id="report-btn-weekly" class="px-3 py-1 rounded-lg text-slate-600">Weekly</button>
-            <button onclick="loadReport('monthly')" id="report-btn-monthly" class="px-3 py-1 rounded-lg bg-white shadow-sm text-emerald-800">Monthly</button>
-            <button onclick="loadReport('yearly')" id="report-btn-yearly" class="px-3 py-1 rounded-lg text-slate-600">Yearly</button>
-          </div>
-          <button onclick="window.print()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition">
-            <i data-lucide="printer" class="w-4 h-4"></i> Print
-          </button>
-        </div>
-      </div>
-
-      <!-- Report Content Card -->
-      <div id="report-content-card" class="bg-white rounded-2xl p-8 shadow-sm border border-slate-200 space-y-8">
-        <!-- Dynamically rendered report -->
-      </div>
-    </section>
-
-    <!-- TAB 7: HACKATHON EVALUATION & MODEL METRICS -->
-    <section id="tab-evaluation" class="tab-pane hidden space-y-6">
-      <div class="flex justify-between items-start">
-        <div>
-          <div class="flex items-center gap-2">
-            <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">Hackathon Evaluation & Model Metrics</h2>
-            <span class="text-xs font-bold px-2 py-0.5 bg-amber-100 text-amber-900 rounded-full border border-amber-300">Track 03 Criteria</span>
-          </div>
-          <p class="text-sm text-slate-500 mt-0.5">
-            Transparent validation metrics for judging: Anomaly Detection, Budget Forecasting, and User Experiment.
-          </p>
-        </div>
-      </div>
-
-      <!-- Dataset Overview -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div class="p-4 bg-white rounded-xl border border-slate-200">
-          <p class="text-xs text-slate-500 font-semibold">Synthetic Transactions</p>
-          <h3 id="eval-stat-txns" class="text-2xl font-extrabold text-slate-900 mt-1">250+</h3>
-          <p class="text-[10px] text-emerald-600 font-bold mt-0.5">180 Days Synthetic History</p>
-        </div>
-        <div class="p-4 bg-white rounded-xl border border-slate-200">
-          <p class="text-xs text-slate-500 font-semibold">Injected Anomalies</p>
-          <h3 id="eval-stat-anom" class="text-2xl font-extrabold text-rose-600 mt-1">3</h3>
-          <p class="text-[10px] text-slate-500 mt-0.5">Ground-Truth Tagged</p>
-        </div>
-        <div class="p-4 bg-white rounded-xl border border-slate-200">
-          <p class="text-xs text-slate-500 font-semibold">Registered Merchants</p>
-          <h3 id="eval-stat-merch" class="text-2xl font-extrabold text-slate-900 mt-1">16</h3>
-          <p class="text-[10px] text-slate-500 mt-0.5">Across 10 Categories</p>
-        </div>
-        <div class="p-4 bg-white rounded-xl border border-slate-200">
-          <p class="text-xs text-slate-500 font-semibold">Active FamilyPasses</p>
-          <h3 id="eval-stat-fps" class="text-2xl font-extrabold text-indigo-600 mt-1">2</h3>
-          <p class="text-[10px] text-slate-500 mt-0.5">Rahim & Karim</p>
-        </div>
-      </div>
-
-      <!-- Two-Column Model Performance Metrics -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-        <!-- Anomaly Detection Model (Isolation Forest) -->
-        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
-          <div class="flex justify-between items-center">
-            <h3 class="text-base font-bold text-slate-900">1. Spending Anomaly Detection Quality</h3>
-            <span class="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold">Isolation Forest</span>
-          </div>
-          <p class="text-xs text-slate-500">Evaluated on held-out test split with ground-truth synthetic injected outliers.</p>
-
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
-              <p class="text-[10px] font-semibold text-slate-500 uppercase">Precision</p>
-              <p class="text-xl font-extrabold text-emerald-700 mt-0.5">0.91</p>
-            </div>
-            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
-              <p class="text-[10px] font-semibold text-slate-500 uppercase">Recall</p>
-              <p class="text-xl font-extrabold text-emerald-700 mt-0.5">0.88</p>
-            </div>
-            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
-              <p class="text-[10px] font-semibold text-slate-500 uppercase">F1-Score</p>
-              <p class="text-xl font-extrabold text-emerald-700 mt-0.5">0.89</p>
-            </div>
-            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
-              <p class="text-[10px] font-semibold text-slate-500 uppercase">ROC-AUC</p>
-              <p class="text-xl font-extrabold text-emerald-700 mt-0.5">0.94</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Budget Forecasting Metrics -->
-        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
-          <div class="flex justify-between items-center">
-            <h3 class="text-base font-bold text-slate-900">2. Budget Forecasting Accuracy</h3>
-            <span class="text-xs px-2 py-0.5 bg-blue-100 text-blue-800 rounded font-bold">Hybrid Velocity</span>
-          </div>
-          <p class="text-xs text-slate-500">Measured across 8 held-out historical synthetic monthly fund outcomes.</p>
-
-          <div class="grid grid-cols-3 gap-3 text-center">
-            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
-              <p class="text-[10px] font-semibold text-slate-500 uppercase">MAE (Mean Abs Error)</p>
-              <p class="text-xl font-extrabold text-blue-700 mt-0.5">৳412.50</p>
-            </div>
-            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
-              <p class="text-[10px] font-semibold text-slate-500 uppercase">RMSE</p>
-              <p class="text-xl font-extrabold text-blue-700 mt-0.5">৳528.10</p>
-            </div>
-            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
-              <p class="text-[10px] font-semibold text-slate-500 uppercase">MAPE</p>
-              <p class="text-xl font-extrabold text-blue-700 mt-0.5">3.8%</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- User / Business Experiment: Baseline vs FundShare -->
-      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-6">
-        <div class="flex justify-between items-center">
-          <div>
-            <h3 class="text-base font-bold text-slate-900">3. User & Business Experiment Results (Section 30)</h3>
-            <p class="text-xs text-slate-500">Comparing Baseline (Manual Spreadsheet / MFS List) vs FundShare Prototype across 5 financial comprehension tasks</p>
-          </div>
-          <span class="text-xs px-2.5 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-full">4.5× Efficiency Boost</span>
-        </div>
-
-        <!-- Comparative Metrics Row -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div class="p-4 bg-slate-50 rounded-xl border border-slate-200">
-            <p class="text-xs text-slate-500 font-bold uppercase">Avg Task Completion Time</p>
-            <div class="flex items-baseline gap-2 mt-1">
-              <span class="text-2xl font-extrabold text-emerald-700">14.2s</span>
-              <span class="text-xs text-slate-400 line-through">64.5s baseline</span>
-            </div>
-            <p class="text-[11px] text-emerald-600 font-semibold mt-1">4.5× faster financial problem solving</p>
-          </div>
-
-          <div class="p-4 bg-slate-50 rounded-xl border border-slate-200">
-            <p class="text-xs text-slate-500 font-bold uppercase">Task Accuracy & Correctness</p>
-            <div class="flex items-baseline gap-2 mt-1">
-              <span class="text-2xl font-extrabold text-emerald-700">96.7%</span>
-              <span class="text-xs text-slate-400 line-through">66.7% baseline</span>
-            </div>
-            <p class="text-[11px] text-emerald-600 font-semibold mt-1">Virtually eliminated category & debt errors</p>
-          </div>
-
-          <div class="p-4 bg-slate-50 rounded-xl border border-slate-200">
-            <p class="text-xs text-slate-500 font-bold uppercase">System Usability Scale (SUS)</p>
-            <div class="flex items-baseline gap-2 mt-1">
-              <span class="text-2xl font-extrabold text-emerald-700">91.8</span>
-              <span class="text-xs text-slate-400 line-through">60.2 baseline</span>
-            </div>
-            <p class="text-[11px] text-emerald-600 font-semibold mt-1">Classified as 'Best Imaginable'</p>
-          </div>
-        </div>
-
-        <!-- Live Trial Recording Form for Judges -->
-        <div class="p-4 bg-emerald-50/50 border border-emerald-200 rounded-xl space-y-3">
-          <h4 class="text-xs font-bold text-emerald-950 uppercase tracking-wider flex items-center gap-1.5">
-            <i data-lucide="plus-circle" class="w-4 h-4 text-emerald-600"></i> Record Live Hackathon Trial Result
-          </h4>
-          <div class="grid grid-cols-1 sm:grid-cols-5 gap-2">
-            <input type="text" id="exp-participant" placeholder="Participant ID (e.g. Judge-1)" class="px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs" />
-            <select id="exp-condition" class="px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold">
-              <option value="FUNDSHARE">FundShare Prototype</option>
-              <option value="BASELINE">Baseline (Manual)</option>
-            </select>
-            <input type="number" id="exp-time" placeholder="Time (seconds)" class="px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs" />
-            <select id="exp-correct" class="px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold">
-              <option value="true">Correct (Passed)</option>
-              <option value="false">Incorrect (Failed)</option>
-            </select>
-            <button onclick="submitExperimentTrial()" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition shadow-sm">
-              Save Trial
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-  </main>
-
-  <!-- ==================== NOTIFICATION DRAWER ==================== -->
-  <div id="notification-drawer" class="fixed inset-y-0 right-0 max-w-sm w-full bg-white shadow-2xl border-l border-slate-200 z-50 transform translate-x-full transition-transform duration-300 ease-in-out p-6 flex flex-col">
-    <div class="flex justify-between items-center pb-4 border-b border-slate-200">
-      <div class="flex items-center gap-2">
-        <i data-lucide="bell" class="w-5 h-5 text-emerald-700"></i>
-        <h3 class="text-base font-bold text-slate-900">Notifications</h3>
-      </div>
-      <button onclick="toggleNotificationDrawer()" class="p-1 rounded-lg text-slate-400 hover:text-slate-600">
-        <i data-lucide="x" class="w-5 h-5"></i>
-      </button>
     </div>
-    <div id="notifications-drawer-list" class="flex-1 overflow-y-auto py-4 space-y-3">
-      <!-- Populated dynamically -->
+
+    <!-- Recent Transactions -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Recent Transactions</span>
+        <button class="card-action" onclick="navigateTo('history')">See All</button>
+      </div>
+      <div id="recentTxns"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No transactions yet</div></div></div>
+    </div>
+
+    <!-- FamilyPass Alerts (owner) -->
+    <div class="card" id="fpAlertCard" style="display:none">
+      <div class="card-header">
+        <span class="card-title">👨‍👩‍👧 FamilyPass Activity</span>
+        <button class="card-action" onclick="navigateTo('familypass')">Manage</button>
+      </div>
+      <div id="fpAlertContent"></div>
     </div>
   </div>
 
-  <!-- ==================== MODALS ==================== -->
-
-  <!-- Modal: Add Money / Cash In -->
-  <div id="modal-cashin" class="modal-backdrop fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
-      <div class="flex justify-between items-center">
-        <h3 class="text-base font-bold text-slate-900">Add Money to Normal Wallet</h3>
-        <button onclick="closeModal('modal-cashin')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+  <!-- ====== FUNDS TAB ====== -->
+  <div class="tab-panel" id="tab-funds">
+    <div class="section-title">
+      Purpose Funds
+      <button class="btn-secondary" style="font-size:12px;padding:6px 14px;" onclick="openModal('createFundModal')">+ Create Fund</button>
+    </div>
+    <div id="fundsList">
+      <div class="empty-state">
+        <div class="empty-icon">🎯</div>
+        <div class="empty-title">No Purpose Funds yet</div>
+        <div class="empty-sub">Create funds to control where your money is spent</div>
+        <button class="btn-primary" style="max-width:200px;margin:0 auto;" onclick="openModal('createFundModal')">Create First Fund</button>
       </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">Amount (৳)</label>
-        <input type="number" id="cashin-amount" value="5000" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-base font-bold" />
+    </div>
+    <!-- Inter-Fund Transfer -->
+    <div class="card" id="transferCard" style="display:none">
+      <div class="card-header">
+        <span class="card-title">⇄ Inter-Fund Transfer</span>
+        <button class="card-action" onclick="openModal('transferFundModal')">Transfer</button>
       </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">Source (Simulated)</label>
-        <select class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
-          <option>Bank Transfer (City Bank / Brac Bank)</option>
-          <option>Visa / Mastercard Card</option>
-          <option>upay Agent Cash In</option>
-        </select>
-      </div>
-      <div class="flex gap-2 pt-2">
-        <button onclick="closeModal('modal-cashin')" class="flex-1 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold">Cancel</button>
-        <button onclick="submitCashIn()" class="flex-1 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold">Confirm Add Money</button>
-      </div>
+      <p style="font-size:12px;color:var(--text-muted);">Move money between your purpose funds. AI may suggest optimal transfers based on your spending patterns.</p>
     </div>
   </div>
 
-  <!-- Modal: Send Money -->
-  <div id="modal-sendmoney" class="modal-backdrop fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
-      <div class="flex justify-between items-center">
-        <h3 class="text-base font-bold text-slate-900">Send Money</h3>
-        <button onclick="closeModal('modal-sendmoney')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+  <!-- ====== PAYMENTS TAB ====== -->
+  <div class="tab-panel" id="tab-payments">
+    <div class="section-title">Pay a Merchant</div>
+    <!-- Merchant Search -->
+    <div class="card" style="margin-bottom:14px;">
+      <div class="form-group" style="margin-bottom:0">
+        <input type="text" class="form-input" id="merchantSearch" placeholder="🔍 Search merchants..." oninput="filterMerchants(this.value)">
       </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">Recipient Phone or Username</label>
-        <input type="text" id="sendmoney-receiver" value="rahim" placeholder="e.g. 01811000002 or rahim" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold" />
+    </div>
+    <!-- Category Filter -->
+    <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;margin-bottom:14px;" id="categoryFilter">
+      <button class="ai-prompt-chip" onclick="filterByCategory('')" style="white-space:nowrap">All</button>
+      <button class="ai-prompt-chip" onclick="filterByCategory('Grocery')" style="white-space:nowrap">🛒 Grocery</button>
+      <button class="ai-prompt-chip" onclick="filterByCategory('Medicine')" style="white-space:nowrap">💊 Medicine</button>
+      <button class="ai-prompt-chip" onclick="filterByCategory('Education')" style="white-space:nowrap">📚 Education</button>
+      <button class="ai-prompt-chip" onclick="filterByCategory('Restaurant/Food')" style="white-space:nowrap">🍽 Food</button>
+      <button class="ai-prompt-chip" onclick="filterByCategory('Electricity')" style="white-space:nowrap">⚡ Utility</button>
+      <button class="ai-prompt-chip" onclick="filterByCategory('Transport')" style="white-space:nowrap">🚌 Transport</button>
+      <button class="ai-prompt-chip" onclick="filterByCategory('Shopping')" style="white-space:nowrap">🛍 Shopping</button>
+    </div>
+    <div id="merchantGrid"></div>
+  </div>
+
+  <!-- ====== FAMILYPASS TAB ====== -->
+  <div class="tab-panel" id="tab-familypass">
+    <!-- Shown for Customer/Owner role -->
+    <div id="fpOwnerView">
+      <div class="section-title">
+        FamilyPass <span class="badge-new">NEW</span>
+        <button class="btn-secondary" style="font-size:12px;padding:6px 14px;" onclick="openModal('createFPModal')">+ Grant Pass</button>
       </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">Amount (৳)</label>
-        <input type="number" id="sendmoney-amount" value="500" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-base font-bold" />
+      <div class="card" style="background:var(--primary-light);border:1.5px solid var(--primary);margin-bottom:14px;">
+        <div style="font-size:13px;color:var(--primary-dark);font-weight:600;line-height:1.5;">
+          💡 <strong>FamilyPass</strong> lets trusted family members spend from your wallet within a set limit — without sharing your PIN. They use their own login.
+        </div>
       </div>
-      <div class="flex gap-2 pt-2">
-        <button onclick="closeModal('modal-sendmoney')" class="flex-1 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold">Cancel</button>
-        <button onclick="submitSendMoney()" class="flex-1 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold">Send Money</button>
-      </div>
+      <div id="fpIssuedList"></div>
+    </div>
+
+    <!-- Shown for Member role -->
+    <div id="fpMemberView" style="display:none">
+      <div class="section-title">Your FamilyPass</div>
+      <div id="fpReceivedList"></div>
+      <div id="fpMemberHistory" style="margin-top:16px"></div>
     </div>
   </div>
 
-  <!-- Modal: Utility Services (Bill / Recharge / Cashout) -->
-  <div id="modal-utility" class="modal-backdrop fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
-      <div class="flex justify-between items-center">
-        <h3 class="text-base font-bold text-slate-900">Simulated Utility & Services</h3>
-        <button onclick="closeModal('modal-utility')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+  <!-- ====== AI COACH TAB ====== -->
+  <div class="tab-panel" id="tab-ai">
+    <div class="ai-header">
+      <div class="ai-header-title">🤖 AI Financial Coach</div>
+      <div class="ai-header-sub">Powered by Gemini AI • Grounded in your real data</div>
+      <div class="ai-status-badge"><span class="ai-status-dot"></span> <span id="aiStatusText">Online</span></div>
+    </div>
+
+    <div class="ai-quick-prompts" id="aiQuickPrompts">
+      <button class="ai-prompt-chip" onclick="sendQuickPrompt('Which fund is at risk of overrun?')">⚠️ Fund risks</button>
+      <button class="ai-prompt-chip" onclick="sendQuickPrompt('Recommend next month allocations')">📊 Next month</button>
+      <button class="ai-prompt-chip" onclick="sendQuickPrompt('Show FamilyPass spending status')">👥 FamilyPass</button>
+      <button class="ai-prompt-chip" onclick="sendQuickPrompt('Explain unusual flagged transactions')">🔍 Anomalies</button>
+      <button class="ai-prompt-chip" onclick="sendQuickPrompt('Give me my financial health summary')">📑 Summary</button>
+    </div>
+
+    <div class="chat-container" id="chatContainer">
+      <div class="chat-msg ai">
+        <div class="chat-bubble">👋 <strong>Hello!</strong> I'm your AI Financial Coach. I can analyze your spending patterns, fund balances, FamilyPass activity, and help you make smarter financial decisions.<br><br>Ask me anything about your finances!</div>
+        <div class="chat-time">Now <span class="ai-source-badge" id="aiInitBadge">Loading...</span></div>
       </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">Service Type</label>
-        <select id="utility-type" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
-          <option value="BILL">Utility Bill (Electricity / Water / Gas)</option>
-          <option value="RECHARGE">Mobile Recharge</option>
-          <option value="CASHOUT">Cash Out via Agent</option>
-        </select>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">Amount (৳)</label>
-        <input type="number" id="utility-amount" value="1200" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-base font-bold" />
-      </div>
-      <div class="flex gap-2 pt-2">
-        <button onclick="closeModal('modal-utility')" class="flex-1 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold">Cancel</button>
-        <button onclick="submitUtilityService()" class="flex-1 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold">Confirm Payment</button>
-      </div>
+    </div>
+
+    <div class="chat-input-row">
+      <input type="text" class="chat-input" id="chatInput" placeholder="Ask about your finances..." onkeypress="if(event.key==='Enter') sendAiMessage()">
+      <button class="chat-send-btn" onclick="sendAiMessage()" id="sendBtn">➤</button>
     </div>
   </div>
 
-  <!-- Modal: Create Purpose Fund -->
-  <div id="modal-create-fund" class="modal-backdrop fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
-      <div class="flex justify-between items-center">
-        <h3 class="text-base font-bold text-slate-900">Create New Purpose Fund</h3>
-        <button onclick="closeModal('modal-create-fund')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
-      </div>
+  <!-- ====== MORE TAB ====== -->
+  <div class="tab-panel" id="tab-more">
+    <div class="profile-header" id="profileHeader">
+      <div class="profile-avatar" id="profileAvatar">U</div>
       <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">Fund Name</label>
-        <input type="text" id="create-fund-name" placeholder="e.g. Treatment / Emergency Medical" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold" />
+        <div class="profile-name" id="profileName">Loading...</div>
+        <div class="profile-phone" id="profilePhone">---</div>
+        <div class="profile-role-badge" id="profileRoleBadge">Customer</div>
       </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">Restricted Business Category</label>
-        <select id="create-fund-category" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
-          <option value="Grocery">Grocery</option>
-          <option value="Medicine">Medicine</option>
-          <option value="Treatment">Treatment</option>
-          <option value="Education">Education</option>
-          <option value="Electricity">Electricity</option>
-          <option value="Restaurant/Food">Restaurant / Food</option>
-          <option value="Transport">Transport</option>
-          <option value="Rent">Rent</option>
-          <option value="Shopping">Shopping</option>
-          <option value="Other">Other</option>
-        </select>
-        <p class="text-[10px] text-slate-500 mt-1">This fund can ONLY pay merchants registered in this category.</p>
+    </div>
+
+    <!-- Merchant Dashboard (shown for MERCHANT role) -->
+    <div id="merchantDashSection" style="display:none">
+      <div class="section-title">Business Dashboard</div>
+      <div class="merchant-header">
+        <div class="merchant-name" id="mDashName">Your Business</div>
+        <div class="merchant-cat" id="mDashCat">Category</div>
+        <div class="merchant-total" id="mDashTotal">৳0</div>
+        <div class="merchant-total-label">Total Received (Last 20 txns)</div>
       </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">Monthly Budget (৳)</label>
-        <input type="number" id="create-fund-budget" value="5000" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold" />
+      <div class="card">
+        <div class="card-title" style="margin-bottom:12px">Recent Payments Received</div>
+        <div id="merchantTxnList"></div>
       </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">Initial Allocation from Wallet (৳)</label>
-        <input type="number" id="create-fund-initial" value="2000" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold" />
+    </div>
+
+    <!-- Admin/Evaluator Section -->
+    <div id="evalSection" style="display:none">
+      <div class="section-title">📊 Evaluation Dashboard</div>
+      <div class="metrics-grid" id="evalMetrics"></div>
+      <div class="card" id="evalDetailsCard"></div>
+    </div>
+
+    <!-- Reports -->
+    <div id="reportsSection">
+      <div class="section-title" style="margin-top:8px">Financial Reports</div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+        <button class="ai-prompt-chip" onclick="loadReport('monthly')">📅 Monthly</button>
+        <button class="ai-prompt-chip" onclick="loadReport('weekly')">📆 Weekly</button>
+        <button class="ai-prompt-chip" onclick="loadReport('yearly')">📊 Yearly</button>
       </div>
-      <div class="flex gap-2 pt-2">
-        <button onclick="closeModal('modal-create-fund')" class="flex-1 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold">Cancel</button>
-        <button onclick="submitCreateFund()" class="flex-1 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold">Create Fund</button>
+      <div id="reportContent"></div>
+    </div>
+
+    <!-- AI API Key Config -->
+    <div class="api-key-section">
+      <div class="api-key-title">🤖 Gemini AI Configuration</div>
+      <div class="api-key-sub">Enter your Gemini API key to enable real AI responses. Get it free at <strong>aistudio.google.com</strong></div>
+      <div class="api-key-input-row">
+        <input type="password" class="api-key-input" id="geminiKeyInput" placeholder="AIzaSy...">
+        <button class="api-key-save" onclick="saveGeminiKey()">Save</button>
       </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:8px;" id="geminiKeyStatus">Not configured — using offline AI</div>
+    </div>
+
+    <!-- Settings Items -->
+    <div class="section-title" style="margin-top:8px">Settings</div>
+    <div class="settings-item" onclick="openModal('changePasswordModal')">
+      <div class="settings-item-left">
+        <div class="settings-item-icon" style="background:var(--primary-light)">🔑</div>
+        <span class="settings-item-label">Change PIN</span>
+      </div>
+      <span class="settings-item-arrow">›</span>
+    </div>
+    <div class="settings-item" onclick="openModal('seedDataModal')">
+      <div class="settings-item-left">
+        <div class="settings-item-icon" style="background:var(--gold-light)">🔄</div>
+        <span class="settings-item-label">Reset Demo Data</span>
+      </div>
+      <span class="settings-item-arrow">›</span>
+    </div>
+    <div class="settings-item" onclick="doLogout()" style="margin-top:8px;">
+      <div class="settings-item-left">
+        <div class="settings-item-icon" style="background:var(--danger-light)">🚪</div>
+        <span class="settings-item-label" style="color:var(--danger)">Logout</span>
+      </div>
+      <span class="settings-item-arrow" style="color:var(--danger)">›</span>
     </div>
   </div>
 
-  <!-- Modal: Inter-Fund Transfer -->
-  <div id="modal-interfund-transfer" class="modal-backdrop fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
-      <div class="flex justify-between items-center">
-        <h3 class="text-base font-bold text-slate-900">Inter-Fund Transfer</h3>
-        <button onclick="closeModal('modal-interfund-transfer')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
-      </div>
-      <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900">
-        Move money between your personal purpose funds. (AI advises, but action requires your confirmation).
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">Source Fund (Deduct from)</label>
-        <select id="transfer-source-fund" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold"></select>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">Destination Fund (Add to)</label>
-        <select id="transfer-dest-fund" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold"></select>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">Amount (৳)</label>
-        <input type="number" id="transfer-amount" value="1000" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-base font-bold" />
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">Optional Reason / Note</label>
-        <input type="text" id="transfer-reason" value="Rebalancing surplus to cover grocery overrun" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs" />
-      </div>
-      <div class="flex gap-2 pt-2">
-        <button onclick="closeModal('modal-interfund-transfer')" class="flex-1 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold">Cancel</button>
-        <button onclick="submitInterFundTransfer()" class="flex-1 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold">Confirm Transfer</button>
-      </div>
+</div><!-- end app-body -->
+
+<!-- ====== BOTTOM NAV ====== -->
+<nav class="bottom-nav">
+  <button class="nav-item active" id="nav-home" onclick="navigateTo('home')">
+    <span class="nav-icon">🏠</span>
+    <span class="nav-label">Home</span>
+  </button>
+  <button class="nav-item" id="nav-funds" onclick="navigateTo('funds')">
+    <span class="nav-icon">🎯</span>
+    <span class="nav-label">Funds</span>
+  </button>
+  <button class="nav-item" id="nav-payments" onclick="navigateTo('payments')">
+    <span class="nav-icon">💳</span>
+    <span class="nav-label">Pay</span>
+  </button>
+  <button class="nav-item" id="nav-familypass" onclick="navigateTo('familypass')">
+    <span class="nav-icon">👨‍👩‍👧</span>
+    <span class="nav-label">FamilyPass</span>
+  </button>
+  <button class="nav-item" id="nav-ai" onclick="navigateTo('ai')">
+    <span class="nav-icon">🤖</span>
+    <span class="nav-label">AI Coach</span>
+  </button>
+  <button class="nav-item" id="nav-more" onclick="navigateTo('more')">
+    <span class="nav-icon">☰</span>
+    <span class="nav-label">More</span>
+  </button>
+</nav>
+
+<!-- ====== MODALS ====== -->
+
+<!-- Cash In Modal -->
+<div class="modal-overlay" id="cashInModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">💰 Add Money</div>
+    <div class="modal-subtitle">Add money to your FundShare wallet from your bank</div>
+    <div class="form-group">
+      <label class="form-label">Amount (৳)</label>
+      <input type="number" class="form-input form-amount" id="cashInAmount" placeholder="0" min="10">
     </div>
-  </div>
-
-  <!-- Modal: Create FamilyPass -->
-  <div id="modal-create-familypass" class="modal-backdrop fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
-      <div class="flex justify-between items-center">
-        <h3 class="text-base font-bold text-slate-900">Create New FamilyPass</h3>
-        <button onclick="closeModal('modal-create-familypass')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">Select Trusted Member</label>
-        <select id="fp-member-select" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
-          <option value="rahim">Rahim Ahmed (01811000002)</option>
-          <option value="karim">Karim Hossain (01911000003)</option>
-          <option value="fatima">Fatima Begum (01711000004)</option>
-        </select>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">Spending Limit (৳)</label>
-        <input type="number" id="fp-limit-amount" value="3000" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-base font-bold" />
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">Duration</label>
-        <select id="fp-duration-days" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
-          <option value="7">7 Days</option>
-          <option value="15">15 Days</option>
-          <option value="30" selected>30 Days (Monthly)</option>
-          <option value="60">60 Days</option>
-        </select>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">Allowed Action</label>
-        <select id="fp-allowed-action" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
-          <option value="MERCHANT_PAYMENT">Merchant Payment Only</option>
-          <option value="ALL">All Actions</option>
-        </select>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">Purpose Label</label>
-        <input type="text" id="fp-purpose-label" value="Monthly Household Allowance" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs" />
-      </div>
-      <div class="flex gap-2 pt-2">
-        <button onclick="closeModal('modal-create-familypass')" class="flex-1 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold">Cancel</button>
-        <button onclick="submitCreateFamilyPass()" class="flex-1 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold">Issue FamilyPass</button>
-      </div>
+    <div class="form-group">
+      <label class="form-label">Reference (Optional)</label>
+      <input type="text" class="form-input" id="cashInRef" placeholder="Bank transfer, ATM, etc.">
     </div>
+    <button class="btn-primary" onclick="doCashIn()">Add Money</button>
+    <div style="margin-top:10px"><button class="btn-secondary w-full" onclick="closeModal('cashInModal')">Cancel</button></div>
   </div>
+</div>
 
-  <!-- Include Client-Side Application JavaScript -->
-  <script src="/static/app.js"></script>
+<!-- Send Money Modal -->
+<div class="modal-overlay" id="sendMoneyModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📤 Send Money</div>
+    <div class="modal-subtitle">Send to any FundShare or upay user</div>
+    <div class="form-group">
+      <label class="form-label">Recipient Phone / Username</label>
+      <input type="text" class="form-input" id="sendReceiver" placeholder="01XXXXXXXXX or username">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Amount (৳)</label>
+      <input type="number" class="form-input form-amount" id="sendAmount" placeholder="0" min="1">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Note (Optional)</label>
+      <input type="text" class="form-input" id="sendRef" placeholder="Reason for transfer">
+    </div>
+    <button class="btn-primary" onclick="doSendMoney()">Send Money</button>
+    <div style="margin-top:10px"><button class="btn-secondary w-full" onclick="closeModal('sendMoneyModal')">Cancel</button></div>
+  </div>
+</div>
 
-  <!-- Lucide Icon Renderer Initialization -->
-  <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      lucide.createIcons();
-    });
-  </script>
+<!-- Mobile Recharge Modal -->
+<div class="modal-overlay" id="rechargeModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📱 Mobile Recharge</div>
+    <div class="modal-subtitle">Recharge any operator in Bangladesh</div>
+    <div class="form-group">
+      <label class="form-label">Mobile Number</label>
+      <input type="text" class="form-input" id="rechargePhone" placeholder="01XXXXXXXXX">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Operator</label>
+      <select class="form-select" id="rechargeOperator">
+        <option>Grameenphone</option><option>Robi</option><option>Banglalink</option><option>Teletalk</option><option>Airtel</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Amount (৳)</label>
+      <input type="number" class="form-input form-amount" id="rechargeAmount" placeholder="0" min="10">
+    </div>
+    <button class="btn-primary" onclick="doUtility('RECHARGE', 'rechargeAmount', 'rechargePhone')">Recharge Now</button>
+    <div style="margin-top:10px"><button class="btn-secondary w-full" onclick="closeModal('rechargeModal')">Cancel</button></div>
+  </div>
+</div>
+
+<!-- Bill Payment Modal -->
+<div class="modal-overlay" id="billModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">💡 Bill Payment</div>
+    <div class="modal-subtitle">Pay electricity, gas, water, internet bills</div>
+    <div class="form-group">
+      <label class="form-label">Service Provider</label>
+      <select class="form-select" id="billProvider">
+        <option>DESCO</option><option>DPDC</option><option>Titas Gas</option><option>WASA</option><option>Link3 Internet</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Account / Meter Number</label>
+      <input type="text" class="form-input" id="billAccount" placeholder="Account number">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Amount (৳)</label>
+      <input type="number" class="form-input form-amount" id="billAmount" placeholder="0" min="10">
+    </div>
+    <button class="btn-primary" onclick="doUtility('BILL', 'billAmount', 'billAccount')">Pay Bill</button>
+    <div style="margin-top:10px"><button class="btn-secondary w-full" onclick="closeModal('billModal')">Cancel</button></div>
+  </div>
+</div>
+
+<!-- Cash Out Modal -->
+<div class="modal-overlay" id="cashOutModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🏧 Cash Out</div>
+    <div class="modal-subtitle">Withdraw cash via any agent or ATM</div>
+    <div class="form-group">
+      <label class="form-label">Agent Number / ATM</label>
+      <input type="text" class="form-input" id="cashOutAgent" placeholder="Agent phone or ATM ID">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Amount (৳)</label>
+      <input type="number" class="form-input form-amount" id="cashOutAmount" placeholder="0" min="100">
+    </div>
+    <div class="card" style="background:var(--warning-light);border:1.5px solid var(--warning);">
+      <div style="font-size:12px;color:#92400E;">⚠️ Standard cash-out fee applies. Ensure agent has sufficient cash.</div>
+    </div>
+    <button class="btn-primary" onclick="doUtility('CASHOUT', 'cashOutAmount', 'cashOutAgent')">Cash Out</button>
+    <div style="margin-top:10px"><button class="btn-secondary w-full" onclick="closeModal('cashOutModal')">Cancel</button></div>
+  </div>
+</div>
+
+<!-- Create Fund Modal -->
+<div class="modal-overlay" id="createFundModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🎯 Create Purpose Fund</div>
+    <div class="modal-subtitle">Allocate money for a specific spending purpose</div>
+    <div class="form-group">
+      <label class="form-label">Fund Name</label>
+      <input type="text" class="form-input" id="fundName" placeholder="e.g., Grocery, Education, Medicine">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Category (Restricts which merchants can be paid)</label>
+      <select class="form-select" id="fundCategory">
+        <option value="">Select category...</option>
+        <option value="Grocery">🛒 Grocery</option>
+        <option value="Medicine">💊 Medicine</option>
+        <option value="Treatment">🏥 Treatment</option>
+        <option value="Education">📚 Education</option>
+        <option value="Electricity">⚡ Electricity</option>
+        <option value="Restaurant/Food">🍽 Restaurant/Food</option>
+        <option value="Transport">🚌 Transport</option>
+        <option value="Rent">🏠 Rent</option>
+        <option value="Shopping">🛍 Shopping</option>
+        <option value="Other">📦 Other</option>
+      </select>
+      <div class="form-hint">⚠️ Only merchants in this category can accept payment from this fund</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Initial Allocation (৳)</label>
+      <input type="number" class="form-input form-amount" id="fundAllocation" placeholder="0" min="0">
+      <div class="form-hint" id="fundWalletHint">Available wallet balance: loading...</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Monthly Budget (৳)</label>
+      <input type="number" class="form-input" id="fundBudget" placeholder="Monthly spending target">
+    </div>
+    <button class="btn-primary" onclick="doCreateFund()">Create Fund</button>
+    <div style="margin-top:10px"><button class="btn-secondary w-full" onclick="closeModal('createFundModal')">Cancel</button></div>
+  </div>
+</div>
+
+<!-- Inter-Fund Transfer Modal -->
+<div class="modal-overlay" id="transferFundModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">⇄ Transfer Between Funds</div>
+    <div class="modal-subtitle">Move money from one purpose fund to another</div>
+    <div class="form-group">
+      <label class="form-label">From Fund</label>
+      <select class="form-select" id="transferSource"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">To Fund</label>
+      <select class="form-select" id="transferDest"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Amount (৳)</label>
+      <input type="number" class="form-input form-amount" id="transferAmount" placeholder="0" min="1">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Reason (Optional)</label>
+      <input type="text" class="form-input" id="transferReason" placeholder="Why are you transferring?">
+    </div>
+    <button class="btn-primary" onclick="doFundTransfer()">Transfer Now</button>
+    <div style="margin-top:10px"><button class="btn-secondary w-full" onclick="closeModal('transferFundModal')">Cancel</button></div>
+  </div>
+</div>
+
+<!-- Pay Merchant Modal -->
+<div class="modal-overlay" id="payMerchantModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">💳 Pay Merchant</div>
+    <div class="modal-subtitle" id="payMerchantSub">Paying: ---</div>
+    <div class="form-group">
+      <label class="form-label">Amount (৳)</label>
+      <input type="number" class="form-input form-amount" id="payAmount" placeholder="0" min="1">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Payment Source</label>
+      <div class="source-selector" id="paySourceSelector"></div>
+    </div>
+    <button class="btn-primary" onclick="doPayMerchant()">Pay Now</button>
+    <div style="margin-top:10px"><button class="btn-secondary w-full" onclick="closeModal('payMerchantModal')">Cancel</button></div>
+  </div>
+</div>
+
+<!-- Create FamilyPass Modal -->
+<div class="modal-overlay" id="createFPModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">👨‍👩‍👧 Grant FamilyPass</div>
+    <div class="modal-subtitle">Allow a family member to spend from your wallet</div>
+    <div class="card" style="background:var(--primary-light);border:1.5px solid var(--primary);">
+      <div style="font-size:12px;color:var(--primary-dark);line-height:1.5;">🔒 <strong>Secure:</strong> They use their own login. Your PIN is NEVER shared. You can revoke anytime.</div>
+    </div>
+    <div style="height:12px"></div>
+    <div class="form-group">
+      <label class="form-label">Member Phone / Username</label>
+      <input type="text" class="form-input" id="fpMember" placeholder="Member's phone or username">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Spending Limit (৳)</label>
+      <input type="number" class="form-input form-amount" id="fpLimit" placeholder="0" min="100">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Duration (Days)</label>
+      <select class="form-select" id="fpDuration">
+        <option value="7">7 Days</option>
+        <option value="14">14 Days</option>
+        <option value="30" selected>30 Days</option>
+        <option value="60">60 Days</option>
+        <option value="90">90 Days</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Purpose Label</label>
+      <input type="text" class="form-input" id="fpPurpose" placeholder="e.g., Household groceries, School expenses">
+    </div>
+    <button class="btn-primary" onclick="doCreateFamilyPass()">Grant FamilyPass</button>
+    <div style="margin-top:10px"><button class="btn-secondary w-full" onclick="closeModal('createFPModal')">Cancel</button></div>
+  </div>
+</div>
+
+<!-- Seed Data Modal -->
+<div class="modal-overlay" id="seedDataModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🔄 Reset Demo Data</div>
+    <div class="modal-subtitle">Re-seed the database with fresh demo data for evaluation</div>
+    <div class="card" style="background:var(--warning-light);border:1.5px solid var(--warning);">
+      <div style="font-size:13px;color:#92400E;line-height:1.5;">⚠️ <strong>Warning:</strong> This will reset all data. Demo accounts and transactions will be restored to default state.</div>
+    </div>
+    <div style="height:16px"></div>
+    <button class="btn-primary" onclick="doSeedData()">Reset & Re-seed Data</button>
+    <div style="margin-top:10px"><button class="btn-secondary w-full" onclick="closeModal('seedDataModal')">Cancel</button></div>
+  </div>
+</div>
+
+<!-- FamilyPass Member Pay Modal -->
+<div class="modal-overlay" id="fpMemberPayModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">💳 Pay via FamilyPass</div>
+    <div class="modal-subtitle" id="fpMemberPaySub">Using FamilyPass from: ---</div>
+    <div class="form-group">
+      <label class="form-label">Select Merchant</label>
+      <select class="form-select" id="fpMerchantSelect"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Amount (৳)</label>
+      <input type="number" class="form-input form-amount" id="fpPayAmount" placeholder="0" min="1">
+    </div>
+    <div class="card" style="background:var(--primary-light);" id="fpPayLimitInfo">
+      <div style="font-size:12px;color:var(--primary-dark);">Remaining limit: loading...</div>
+    </div>
+    <div style="height:12px"></div>
+    <button class="btn-primary" onclick="doFPMemberPay()">Pay via FamilyPass</button>
+    <div style="margin-top:10px"><button class="btn-secondary w-full" onclick="closeModal('fpMemberPayModal')">Cancel</button></div>
+  </div>
+</div>
+
+<!-- Change Password Modal -->
+<div class="modal-overlay" id="changePasswordModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🔑 Change PIN</div>
+    <div class="modal-subtitle">Update your wallet security PIN</div>
+    <div class="form-group">
+      <label class="form-label">Current PIN</label>
+      <input type="password" class="form-input" id="currentPin" placeholder="Current PIN">
+    </div>
+    <div class="form-group">
+      <label class="form-label">New PIN</label>
+      <input type="password" class="form-input" id="newPin" placeholder="New PIN (min 6 chars)">
+    </div>
+    <button class="btn-primary" onclick="showToast('info','Feature coming soon in production version!')">Update PIN</button>
+    <div style="margin-top:10px"><button class="btn-secondary w-full" onclick="closeModal('changePasswordModal')">Cancel</button></div>
+  </div>
+</div>
+
+<script src="{% static 'app.js' %}"></script>
 </body>
 </html>

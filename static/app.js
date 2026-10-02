@@ -1,1282 +1,1117 @@
-/**
- * FUNDShare Client Application Engine
- * Handles real-time API sync, role switching, payment rule testing,
- * interactive AI coach conversations, and model evaluation telemetry.
- */
+// ============================================================
+//  FundShare App.js — Complete Frontend Engine
+//  Handles: Auth, Navigation, All API calls, Role-based UI
+// ============================================================
 
-let state = {
-  currentUser: null,
-  walletBalance: 25450.0,
+const state = {
+  user: null,
+  wallet: null,
   funds: [],
   merchants: [],
   familyPasses: { issued: [], received: [] },
-  transactions: [],
   notifications: [],
-  selectedPaymentSource: 'NORMAL_WALLET',
-  coachLanguage: 'en',
-  activeTab: 'dashboard'
+  unreadNotifications: 0,
+  currentTab: 'home',
+  selectedMerchant: null,
+  selectedFamilyPass: null,
 };
 
+// ============================================================
+// CSRF TOKEN
+// ============================================================
+function getCsrfToken() {
+  const cookie = document.cookie.split(';').find(c => c.trim().startsWith('csrftoken='));
+  return cookie ? cookie.split('=')[1].trim() : '';
+}
+
+// ============================================================
+// HTTP HELPERS
+// ============================================================
+async function apiGet(url) {
+  const r = await fetch(url, { credentials: 'same-origin' });
+  if (r.status === 401) { window.location.href = '/login/'; return null; }
+  return r.json();
+}
+
+async function apiPost(url, data) {
+  const r = await fetch(url, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+    body: JSON.stringify(data)
+  });
+  if (r.status === 401) { window.location.href = '/login/'; return null; }
+  return { ok: r.ok, status: r.status, data: await r.json() };
+}
+
+// ============================================================
+// TOAST NOTIFICATIONS
+// ============================================================
+function showToast(type, message, duration = 4000) {
+  const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span class="toast-icon">${icons[type] || 'ℹ️'}</span><span class="toast-msg">${message}</span>`;
+  const container = document.getElementById('toastContainer');
+  container.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateY(-10px)'; el.style.transition = '0.3s'; setTimeout(() => el.remove(), 300); }, duration);
+}
+
+// ============================================================
+// MODAL MANAGEMENT
+// ============================================================
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (el) { el.classList.add('show'); document.body.style.overflow = 'hidden'; }
+  // Pre-populate wallet hint for fund creation
+  if (id === 'createFundModal' && state.wallet) {
+    document.getElementById('fundWalletHint').textContent = `Available wallet balance: ৳${fmt(state.wallet)}`;
+  }
+  if (id === 'transferFundModal') populateFundSelects();
+  if (id === 'fpMemberPayModal') populateFPMerchantSelect();
+}
+
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) { el.classList.remove('show'); document.body.style.overflow = ''; }
+}
+
+// Close on overlay click
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('modal-overlay')) closeModal(e.target.id);
+});
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+const TAB_MAP = {
+  home: 'home', funds: 'funds', payments: 'payments', familypass: 'familypass',
+  ai: 'ai', more: 'more', history: 'more'
+};
+
+function navigateTo(tab) {
+  const mapped = TAB_MAP[tab] || tab;
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const panel = document.getElementById(`tab-${mapped}`);
+  const navBtn = document.getElementById(`nav-${mapped}`);
+  if (panel) panel.classList.add('active');
+  if (navBtn) navBtn.classList.add('active');
+  state.currentTab = mapped;
+  if (mapped === 'funds') loadFunds();
+  if (mapped === 'payments') loadMerchants();
+  if (mapped === 'familypass') loadFamilyPass();
+  if (mapped === 'more') loadMoreTab();
+  if (mapped === 'ai') initAiChat();
+}
+
+// ============================================================
+// FORMAT HELPERS
+// ============================================================
+function fmt(n) { return parseFloat(n || 0).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function fmtDate(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return d.toLocaleDateString('en-BD', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('en-BD', { hour: '2-digit', minute: '2-digit', hour12: true });
+}
+function timeAgo(ts) {
+  if (!ts) return '';
+  const diff = (Date.now() - new Date(ts).getTime()) / 1000;
+  if (diff < 60) return 'Just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+const CATEGORY_ICONS = {
+  'Grocery': '🛒', 'Medicine': '💊', 'Treatment': '🏥', 'Education': '📚',
+  'Electricity': '⚡', 'Restaurant/Food': '🍽', 'Transport': '🚌',
+  'Rent': '🏠', 'Shopping': '🛍', 'Other': '📦'
+};
+const CATEGORY_COLORS = {
+  'Grocery': '#10B981', 'Medicine': '#EF4444', 'Treatment': '#F59E0B',
+  'Education': '#3B82F6', 'Electricity': '#FBBF24', 'Restaurant/Food': '#F97316',
+  'Transport': '#6366F1', 'Rent': '#8B5CF6', 'Shopping': '#EC4899', 'Other': '#6B7280'
+};
+const TXN_TYPE_LABELS = {
+  'CASH_IN': 'Add Money', 'SEND_MONEY': 'Send Money', 'MERCHANT_PAYMENT': 'Payment',
+  'MOBILE_RECHARGE': 'Recharge', 'BILL_PAYMENT': 'Bill Pay', 'CASH_OUT': 'Cash Out',
+  'FUND_ALLOCATION': 'Fund Allocation', 'FUND_TRANSFER': 'Fund Transfer'
+};
+
+// ============================================================
+// INIT APP
+// ============================================================
+async function initApp() {
+  const meData = await apiGet('/api/auth/me/');
+  if (!meData) return;
+
+  state.user = meData.user;
+  state.wallet = meData.wallet_balance;
+  state.unreadNotifications = meData.unread_notifications || 0;
+
+  renderHeader();
+  checkRoleBasedUI();
+  await loadDashboard();
+  loadNotifications();
+  initAiChat();
+
+  // Check for stored Gemini key
+  const storedKey = localStorage.getItem('gemini_api_key');
+  if (storedKey) {
+    const input = document.getElementById('geminiKeyInput');
+    if (input) input.value = storedKey;
+    updateGeminiStatus(true);
+  }
+}
+
+// ============================================================
+// RENDER HEADER
+// ============================================================
+function renderHeader() {
+  const u = state.user;
+  if (!u) return;
+  const initials = (u.full_name || u.username || 'U').substring(0, 2).toUpperCase();
+  document.getElementById('headerAvatar').textContent = initials;
+  document.getElementById('headerName').textContent = (u.full_name || u.username || 'User').split(' ')[0];
+  if (state.unreadNotifications > 0) {
+    const badge = document.getElementById('notifCount');
+    badge.textContent = state.unreadNotifications;
+    badge.style.display = 'flex';
+  }
+}
+
+// ============================================================
+// ROLE-BASED UI
+// ============================================================
+function checkRoleBasedUI() {
+  const role = state.user?.role;
+  // Show/hide nav items based on role
+  const fundsNav = document.getElementById('nav-funds');
+  const fpNav = document.getElementById('nav-familypass');
+
+  if (role === 'MERCHANT') {
+    // Merchant: hide funds and familypass nav
+    if (fundsNav) fundsNav.style.display = 'none';
+    if (fpNav) fpNav.style.display = 'none';
+  } else if (role === 'MEMBER') {
+    // Member: show familypass but no fund creation
+    if (fundsNav) fundsNav.style.display = 'none';
+  }
+
+  // Role badge on profile
+  const roleBadge = document.getElementById('profileRoleBadge');
+  if (roleBadge) {
+    const labels = { CUSTOMER: '👤 Customer', MEMBER: '👥 FamilyPass Member', MERCHANT: '🏪 Merchant', ADMIN: '🔑 Admin' };
+    roleBadge.textContent = labels[role] || role;
+  }
+
+  // FamilyPass view switching
+  if (role === 'MEMBER') {
+    const ov = document.getElementById('fpOwnerView');
+    const mv = document.getElementById('fpMemberView');
+    if (ov) ov.style.display = 'none';
+    if (mv) mv.style.display = 'block';
+  }
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+async function loadDashboard() {
+  const data = await apiGet('/api/wallet/summary/');
+  if (!data) return;
+
+  state.wallet = data.wallet_balance;
+  document.getElementById('walletBalance').textContent = fmt(data.wallet_balance);
+  document.getElementById('balanceSub').textContent =
+    `Total Wealth: ৳${fmt(data.total_liquid_wealth)} • Funds: ৳${fmt(data.funds_total_balance)}`;
+
+  // Recent transactions
+  renderRecentTxns(data.recent_transactions || []);
+
+  // FamilyPass alert
+  if (data.active_family_passes_count > 0) {
+    document.getElementById('fpAlertCard').style.display = 'block';
+    document.getElementById('fpAlertContent').innerHTML =
+      `<div style="font-size:13px;color:var(--text-secondary);">
+        <span style="font-weight:600;color:var(--primary);">${data.active_family_passes_count}</span> active pass(es) • 
+        Used: <strong>৳${fmt(data.family_pass_total_used)}</strong> • 
+        Remaining: <strong>৳${fmt(data.family_pass_total_limit - data.family_pass_total_used)}</strong>
+      </div>`;
+  }
+
+  // Overrun warning
+  if (data.overrun_funds_count > 0) {
+    showToast('warning', `⚠️ ${data.overrun_funds_count} fund(s) may exceed budget this month`);
+  }
+}
+
+function renderRecentTxns(txns) {
+  const el = document.getElementById('recentTxns');
+  if (!txns || txns.length === 0) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No transactions yet</div></div>';
+    return;
+  }
+  el.innerHTML = txns.slice(0, 6).map(t => {
+    const isCredit = t.transaction_type === 'CASH_IN';
+    const icon = isCredit ? '⬆️' : (TXN_TYPE_LABELS[t.transaction_type] ? '⬇️' : '💳');
+    const label = t.merchant_name || t.receiver_name || TXN_TYPE_LABELS[t.transaction_type] || t.transaction_type;
+    const statusBadge = t.status === 'REJECTED' ? `<span class="pill pill-red" style="font-size:9px;">REJECTED</span>` : '';
+    return `<div class="txn-item">
+      <div class="txn-icon ${isCredit ? 'credit' : 'debit'}">${CATEGORY_ICONS[t.category] || (isCredit ? '💚' : '💸')}</div>
+      <div class="txn-info">
+        <div class="txn-name">${label} ${statusBadge}</div>
+        <div class="txn-meta">${TXN_TYPE_LABELS[t.transaction_type] || t.transaction_type} • ${timeAgo(t.timestamp)}</div>
+      </div>
+      <div class="txn-amount ${isCredit ? 'credit' : 'debit'}">${isCredit ? '+' : '-'}৳${fmt(t.amount)}</div>
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+// FUNDS
+// ============================================================
+async function loadFunds() {
+  const funds = await apiGet('/api/funds/');
+  if (!funds) return;
+  state.funds = Array.isArray(funds) ? funds : [];
+  renderFunds();
+}
+
+function renderFunds() {
+  const el = document.getElementById('fundsList');
+  const transferCard = document.getElementById('transferCard');
+  if (state.funds.length === 0) {
+    el.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">🎯</div>
+      <div class="empty-title">No Purpose Funds yet</div>
+      <div class="empty-sub">Create funds to control where your money is spent</div>
+      <button class="btn-primary" style="max-width:200px;margin:0 auto;" onclick="openModal('createFundModal')">Create First Fund</button>
+    </div>`;
+    if (transferCard) transferCard.style.display = 'none';
+    return;
+  }
+  if (transferCard && state.funds.length >= 2) transferCard.style.display = 'block';
+
+  el.innerHTML = state.funds.map(f => {
+    const alloc = parseFloat(f.allocated_amount) || 0;
+    const curr = parseFloat(f.current_balance) || 0;
+    const spent = Math.max(0, alloc - curr);
+    const pct = alloc > 0 ? Math.min(100, (spent / alloc) * 100) : 0;
+    const color = CATEGORY_COLORS[f.category] || '#10B981';
+    const icon = CATEGORY_ICONS[f.category] || '💰';
+    const fc = f.forecast;
+    let forecastBadge = '';
+    if (fc) {
+      if (fc.potential_overrun > 0) {
+        forecastBadge = `<span class="fund-forecast-badge forecast-danger">🔴 Risk: ৳${fmt(fc.potential_overrun)} overrun</span>`;
+      } else {
+        forecastBadge = `<span class="fund-forecast-badge forecast-ok">✅ On track</span>`;
+      }
+    }
+    return `<div class="fund-card" style="border-left-color:${color};">
+      <div class="fund-header">
+        <div class="fund-name-row">
+          <div class="fund-icon" style="background:${color}22;">${icon}</div>
+          <div>
+            <div class="fund-name">${f.name}</div>
+            <div class="fund-category">${f.category} • ${pct.toFixed(0)}% used</div>
+          </div>
+        </div>
+        <div class="fund-balance">
+          <div class="fund-balance-amount">৳${fmt(curr)}</div>
+          <div class="fund-balance-label">Remaining</div>
+        </div>
+      </div>
+      <div class="fund-progress-bar">
+        <div class="fund-progress-fill" style="width:${pct}%;background:${pct > 85 ? '#EF4444' : pct > 65 ? '#F59E0B' : color};"></div>
+      </div>
+      <div class="fund-stats">
+        <span>Allocated: <span class="fund-stat-val">৳${fmt(alloc)}</span></span>
+        <span>Spent: <span class="fund-stat-val">৳${fmt(spent)}</span></span>
+      </div>
+      ${forecastBadge}
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+// MERCHANTS
+// ============================================================
+let allMerchants = [];
+let activeCategory = '';
+
+async function loadMerchants() {
+  if (allMerchants.length > 0) { renderMerchants(); return; }
+  const merchants = await apiGet('/api/merchants/');
+  if (!merchants) return;
+  allMerchants = merchants;
+  state.merchants = merchants;
+  renderMerchants();
+}
+
+function filterMerchants(query) {
+  const filtered = allMerchants.filter(m =>
+    m.business_name.toLowerCase().includes(query.toLowerCase()) &&
+    (activeCategory === '' || m.category === activeCategory)
+  );
+  renderMerchantGrid(filtered);
+}
+
+function filterByCategory(cat) {
+  activeCategory = cat;
+  document.querySelectorAll('#categoryFilter .ai-prompt-chip').forEach(btn => {
+    btn.style.borderColor = btn.textContent.includes(cat === '' ? 'All' : cat) ? 'var(--primary)' : '';
+    btn.style.color = btn.textContent.includes(cat === '' ? 'All' : cat) ? 'var(--primary)' : '';
+    btn.style.background = btn.textContent.includes(cat === '' ? 'All' : cat) ? 'var(--primary-light)' : '';
+  });
+  filterMerchants(document.getElementById('merchantSearch')?.value || '');
+}
+
+function renderMerchants() {
+  renderMerchantGrid(allMerchants);
+}
+
+function renderMerchantGrid(merchants) {
+  const el = document.getElementById('merchantGrid');
+  if (!merchants || merchants.length === 0) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">🏪</div><div class="empty-title">No merchants found</div></div>';
+    return;
+  }
+  el.innerHTML = merchants.map(m => {
+    const icon = CATEGORY_ICONS[m.category] || '🏪';
+    const color = CATEGORY_COLORS[m.category] || '#6B7280';
+    return `<div class="card" style="margin-bottom:10px;cursor:pointer;border-left:4px solid ${color};" onclick="selectMerchant(${m.id})">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="width:46px;height:46px;border-radius:12px;background:${color}22;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">${icon}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:700;color:var(--text);">${m.business_name}</div>
+          <div style="font-size:12px;color:var(--text-muted);">${m.category}</div>
+        </div>
+        <div style="font-size:20px;">›</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function selectMerchant(id) {
+  state.selectedMerchant = allMerchants.find(m => m.id === id);
+  if (!state.selectedMerchant) return;
+  const m = state.selectedMerchant;
+  document.getElementById('payMerchantSub').textContent = `Paying: ${m.business_name} (${m.category})`;
+  buildPaymentSourceSelector(m);
+  openModal('payMerchantModal');
+}
+
+function buildPaymentSourceSelector(merchant) {
+  const el = document.getElementById('paySourceSelector');
+  let html = `<div class="source-option selected" onclick="selectSource(this,'NORMAL_WALLET',null)">
+    <span class="source-radio"></span>
+    <div class="source-info">
+      <div class="source-name">💰 Normal Wallet</div>
+      <div class="source-balance">Balance: ৳${fmt(state.wallet)}</div>
+    </div>
+    <span class="source-badge source-badge-green">Default</span>
+  </div>`;
+
+  const matchingFunds = (state.funds || []).filter(f => f.category === merchant.category);
+  matchingFunds.forEach(f => {
+    html += `<div class="source-option" onclick="selectSource(this,'PURPOSE_FUND',${f.id})">
+      <span class="source-radio"></span>
+      <div class="source-info">
+        <div class="source-name">${CATEGORY_ICONS[f.category] || '🎯'} ${f.name} Fund</div>
+        <div class="source-balance">Remaining: ৳${fmt(f.current_balance)}</div>
+      </div>
+      <span class="source-badge source-badge-blue">Restricted</span>
+    </div>`;
+  });
+
+  // If no matching fund but other funds exist — show disabled options
+  const nonMatchingFunds = (state.funds || []).filter(f => f.category !== merchant.category);
+  nonMatchingFunds.forEach(f => {
+    html += `<div class="source-option" style="opacity:0.5;cursor:not-allowed;" title="Cannot pay ${merchant.category} merchant with ${f.category} fund">
+      <span class="source-radio"></span>
+      <div class="source-info">
+        <div class="source-name">${CATEGORY_ICONS[f.category] || '🎯'} ${f.name} Fund <span class="pill pill-red" style="font-size:9px;">RESTRICTED</span></div>
+        <div class="source-balance">Category mismatch: ${f.category} ≠ ${merchant.category}</div>
+      </div>
+    </div>`;
+  });
+
+  // FamilyPass for members
+  const receivedPasses = (state.familyPasses.received || []).filter(fp => fp.status === 'ACTIVE');
+  receivedPasses.forEach(fp => {
+    html += `<div class="source-option" onclick="selectSource(this,'FAMILY_PASS',${fp.id})">
+      <span class="source-radio"></span>
+      <div class="source-info">
+        <div class="source-name">👨‍👩‍👧 FamilyPass from ${fp.owner_name || 'Owner'}</div>
+        <div class="source-balance">Remaining: ৳${fmt(fp.remaining_limit)}</div>
+      </div>
+      <span class="source-badge source-badge-purple">FamilyPass</span>
+    </div>`;
+  });
+
+  el.innerHTML = html;
+  el.dataset.source = 'NORMAL_WALLET';
+  el.dataset.fundId = '';
+  el.dataset.fpId = '';
+}
+
+function selectSource(el, source, id) {
+  document.querySelectorAll('.source-option').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  const selector = document.getElementById('paySourceSelector');
+  selector.dataset.source = source;
+  selector.dataset.fundId = (source === 'PURPOSE_FUND') ? id : '';
+  selector.dataset.fpId = (source === 'FAMILY_PASS') ? id : '';
+}
+
+// ============================================================
+// FAMILYPASS
+// ============================================================
+async function loadFamilyPass() {
+  const data = await apiGet('/api/family-pass/');
+  if (!data) return;
+  state.familyPasses = { issued: data.issued_passes || [], received: data.received_passes || [] };
+  renderFamilyPass();
+}
+
+function renderFamilyPass() {
+  const role = state.user?.role;
+  if (role === 'MEMBER') {
+    renderFPMemberView();
+  } else {
+    renderFPOwnerView();
+  }
+}
+
+function renderFPOwnerView() {
+  const el = document.getElementById('fpIssuedList');
+  const passes = state.familyPasses.issued || [];
+  if (passes.length === 0) {
+    el.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">👨‍👩‍👧</div>
+      <div class="empty-title">No FamilyPass issued</div>
+      <div class="empty-sub">Grant a FamilyPass to let trusted family members spend from your wallet</div>
+      <button class="btn-primary" style="max-width:200px;margin:0 auto;" onclick="openModal('createFPModal')">Grant FamilyPass</button>
+    </div>`;
+    return;
+  }
+  el.innerHTML = passes.map(fp => {
+    const limit = parseFloat(fp.limit_amount) || 0;
+    const used = parseFloat(fp.used_amount) || 0;
+    const rem = parseFloat(fp.remaining_limit) || (limit - used);
+    const pct = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
+    const statusClass = { ACTIVE: 'fp-status-active', REVOKED: 'fp-status-revoked', EXPIRED: 'fp-status-expired' }[fp.status] || 'fp-status-expired';
+    const initials = (fp.member_name || fp.member_username || 'M').substring(0, 2).toUpperCase();
+    return `<div class="fp-card">
+      <div class="fp-header">
+        <div class="fp-member">
+          <div class="fp-avatar">${initials}</div>
+          <div>
+            <div class="fp-member-name">${fp.member_name || fp.member_username}</div>
+            <div class="fp-member-phone">${fp.purpose_label || 'Family Spending'}</div>
+          </div>
+        </div>
+        <span class="fp-status-badge ${statusClass}">${fp.status}</span>
+      </div>
+      <div class="fp-progress-section">
+        <div class="fp-progress-label">
+          <span>Used: ৳${fmt(used)}</span>
+          <span>Limit: ৳${fmt(limit)}</span>
+        </div>
+        <div class="fp-progress-bar">
+          <div class="fp-progress-fill" style="width:${pct}%;background:${pct > 85 ? '#EF4444' : pct > 65 ? '#F59E0B' : 'var(--primary)'};"></div>
+        </div>
+      </div>
+      <div class="fp-meta-grid">
+        <div class="fp-meta-item">
+          <span class="fp-meta-value">৳${fmt(rem)}</span>
+          <span class="fp-meta-label">Remaining</span>
+        </div>
+        <div class="fp-meta-item">
+          <span class="fp-meta-value">${fp.expiry_date || '---'}</span>
+          <span class="fp-meta-label">Expires</span>
+        </div>
+        <div class="fp-meta-item">
+          <span class="fp-meta-value">${fp.allowed_action || 'Pay'}</span>
+          <span class="fp-meta-label">Action</span>
+        </div>
+      </div>
+      ${fp.status === 'ACTIVE' ? `<div class="fp-actions">
+        <button class="fp-action-btn fp-action-revoke" onclick="revokeFP(${fp.id})">🚫 Revoke</button>
+        <button class="fp-action-btn fp-action-view" onclick="viewFPActivity(${fp.id})">📋 View Activity</button>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderFPMemberView() {
+  const received = state.familyPasses.received || [];
+  const el = document.getElementById('fpReceivedList');
+  if (received.length === 0) {
+    el.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">🎁</div>
+      <div class="empty-title">No FamilyPass received</div>
+      <div class="empty-sub">Ask your family member to grant you a FamilyPass</div>
+    </div>`;
+    return;
+  }
+  el.innerHTML = received.map(fp => {
+    const limit = parseFloat(fp.limit_amount) || 0;
+    const used = parseFloat(fp.used_amount) || 0;
+    const rem = parseFloat(fp.remaining_limit) || (limit - used);
+    return `<div class="received-fp-card">
+      <div class="rfp-owner">From: ${fp.owner_name || fp.owner_username}</div>
+      <div class="rfp-limit">৳${fmt(limit)}</div>
+      <div class="rfp-limit-label">Total Spending Limit</div>
+      <div class="rfp-remaining">৳${fmt(rem)} remaining</div>
+      <div class="rfp-expiry">Expires: ${fp.expiry_date || '---'} • ${fp.purpose_label || 'General'}</div>
+      <div style="height:16px"></div>
+      <button class="btn-primary" style="background:rgba(255,255,255,0.25);border:1.5px solid rgba(255,255,255,0.4);" 
+        onclick="openFPMemberPay(${fp.id},'${fp.owner_name || fp.owner_username}',${rem})">
+        💳 Use FamilyPass to Pay
+      </button>
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+// MORE TAB (Merchant, Admin, Reports)
+// ============================================================
+async function loadMoreTab() {
+  const role = state.user?.role;
+  const profileData = state.user;
+  document.getElementById('profileName').textContent = profileData?.full_name || profileData?.username || 'User';
+  document.getElementById('profilePhone').textContent = profileData?.phone || `@${profileData?.username}`;
+  const initials = (profileData?.full_name || profileData?.username || 'U').substring(0, 2).toUpperCase();
+  document.getElementById('profileAvatar').textContent = initials;
+
+  if (role === 'MERCHANT') {
+    document.getElementById('merchantDashSection').style.display = 'block';
+    document.getElementById('reportsSection').style.display = 'none';
+    await loadMerchantDashboard();
+  } else if (role === 'ADMIN') {
+    document.getElementById('evalSection').style.display = 'block';
+    await loadEvalDashboard();
+    loadReport('monthly');
+  } else {
+    loadReport('monthly');
+  }
+}
+
+async function loadMerchantDashboard() {
+  const data = await apiGet('/api/merchant/dashboard/');
+  if (!data || !data.merchant) return;
+  const m = data.merchant;
+  document.getElementById('mDashName').textContent = m.business_name;
+  document.getElementById('mDashCat').textContent = m.category;
+  document.getElementById('mDashTotal').textContent = `৳${fmt(data.total_received_volume)}`;
+  const txnEl = document.getElementById('merchantTxnList');
+  if (!data.transactions || data.transactions.length === 0) {
+    txnEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">No transactions yet</div>';
+    return;
+  }
+  txnEl.innerHTML = data.transactions.map(t => `
+    <div class="txn-item">
+      <div class="txn-icon credit">💳</div>
+      <div class="txn-info">
+        <div class="txn-name">${t.sender_name || 'Customer'}</div>
+        <div class="txn-meta">${t.payment_source} • ${timeAgo(t.timestamp)}</div>
+      </div>
+      <div class="txn-amount credit">+৳${fmt(t.amount)}</div>
+    </div>`).join('');
+}
+
+async function loadEvalDashboard() {
+  const data = await apiGet('/api/evaluation/metrics/');
+  if (!data) return;
+  const metricsEl = document.getElementById('evalMetrics');
+  const anomaly = data.anomaly_detection || {};
+  const forecast = data.forecasting || {};
+  const ds = data.dataset_stats || {};
+  metricsEl.innerHTML = `
+    <div class="metric-card">
+      <div class="metric-value">${(anomaly.f1_score || 0).toFixed(2)}</div>
+      <div class="metric-label">Anomaly F1-Score</div>
+      <div class="metric-sub">Precision: ${(anomaly.precision || 0).toFixed(2)}</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-value">${(anomaly.roc_auc || 0).toFixed(3)}</div>
+      <div class="metric-label">ROC-AUC Score</div>
+      <div class="metric-sub">IsolationForest ML</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-value">৳${fmt(forecast.mae || 0)}</div>
+      <div class="metric-label">Forecast MAE</div>
+      <div class="metric-sub">Budget Predictor</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-value">${ds.total_transactions || 0}</div>
+      <div class="metric-label">Total Transactions</div>
+      <div class="metric-sub">${ds.synthetic_customers || 0} customers</div>
+    </div>`;
+  document.getElementById('evalDetailsCard').innerHTML = `
+    <div class="card-header"><span class="card-title">📊 ML Performance Summary</span></div>
+    <div style="font-size:13px;line-height:1.8;color:var(--text-secondary);">
+      <div>🤖 <strong>Anomaly Detector:</strong> IsolationForest — Recall ${(anomaly.recall||0).toFixed(2)}, F1 ${(anomaly.f1_score||0).toFixed(2)}</div>
+      <div>📈 <strong>Budget Forecaster:</strong> MAE ৳${fmt(forecast.mae||0)}, RMSE ৳${fmt(forecast.rmse||0)}</div>
+      <div>🔐 <strong>Privacy:</strong> ${data.responsible_ai_summary?.privacy || 'Synthetic data only'}</div>
+      <div>👁 <strong>Transparency:</strong> ${data.responsible_ai_summary?.transparency || 'Explainable AI'}</div>
+      <div>✋ <strong>Control:</strong> ${data.responsible_ai_summary?.human_control || 'Human-in-the-loop'}</div>
+    </div>`;
+}
+
+async function loadReport(period) {
+  const data = await apiGet(`/api/reports/?period=${period}`);
+  if (!data) return;
+  const el = document.getElementById('reportContent');
+  const stats = data.overview || {};
+  const byCategory = data.by_category || {};
+  const categories = Object.entries(byCategory).sort((a,b) => b[1]-a[1]);
+  const maxVal = categories.length > 0 ? categories[0][1] : 1;
+
+  el.innerHTML = `
+    <div class="report-stat-grid">
+      <div class="report-stat">
+        <div class="report-stat-val">৳${fmt(stats.total_spent || 0)}</div>
+        <div class="report-stat-label">Total Spent</div>
+      </div>
+      <div class="report-stat">
+        <div class="report-stat-val">${stats.total_transactions || 0}</div>
+        <div class="report-stat-label">Transactions</div>
+      </div>
+      <div class="report-stat">
+        <div class="report-stat-val">৳${fmt(stats.average_transaction || 0)}</div>
+        <div class="report-stat-label">Avg Transaction</div>
+      </div>
+      <div class="report-stat">
+        <div class="report-stat-val">${stats.savings_rate ? (stats.savings_rate * 100).toFixed(1) + '%' : 'N/A'}</div>
+        <div class="report-stat-label">Savings Rate</div>
+      </div>
+    </div>
+    ${categories.length > 0 ? `
+    <div class="report-bar-chart">
+      <div class="card-title" style="margin-bottom:14px;">Spending by Category</div>
+      ${categories.map(([cat, amt]) => `
+        <div class="bar-row">
+          <div class="bar-label">${CATEGORY_ICONS[cat] || '📦'} ${cat}</div>
+          <div class="bar-bg"><div class="bar-fill" style="width:${(amt/maxVal)*100}%;background:${CATEGORY_COLORS[cat]||'var(--primary)'};"></div></div>
+          <div class="bar-value">৳${fmt(amt)}</div>
+        </div>`).join('')}
+    </div>` : ''}`;
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+async function loadNotifications() {
+  const data = await apiGet('/api/notifications/');
+  if (!data) return;
+  state.notifications = data;
+  renderNotifications();
+}
+
+function renderNotifications() {
+  const el = document.getElementById('notifList');
+  if (!state.notifications || state.notifications.length === 0) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">🔔</div><div class="empty-title">No notifications</div></div>';
+    return;
+  }
+  el.innerHTML = state.notifications.map(n => `
+    <div class="notif-item ${!n.is_read ? 'unread' : ''}" onclick="markNotifRead(${n.id})">
+      <div class="notif-item-title">${n.title}</div>
+      <div class="notif-item-msg">${n.message}</div>
+      <div class="notif-item-time">${timeAgo(n.created_at)}</div>
+    </div>`).join('');
+}
+
+async function markNotifRead(id) {
+  await apiPost(`/api/notifications/${id}/read/`, {});
+  const notif = state.notifications.find(n => n.id === id);
+  if (notif) notif.is_read = true;
+  renderNotifications();
+}
+
+function openNotifications() {
+  document.getElementById('notifPanel').classList.add('open');
+  document.getElementById('notifOverlay').classList.add('show');
+  document.getElementById('notifCount').style.display = 'none';
+  loadNotifications();
+}
+
+function closeNotifications() {
+  document.getElementById('notifPanel').classList.remove('open');
+  document.getElementById('notifOverlay').classList.remove('show');
+}
+
+// ============================================================
+// AI COACH
+// ============================================================
+let aiInitialized = false;
+
+function initAiChat() {
+  if (aiInitialized) return;
+  aiInitialized = true;
+  // Check if Gemini key is available
+  const storedKey = localStorage.getItem('gemini_api_key');
+  const badge = document.getElementById('aiInitBadge');
+  if (badge) {
+    badge.textContent = storedKey ? 'Gemini 2.0 Flash' : 'Offline AI Engine';
+    badge.className = `ai-source-badge ${storedKey ? 'ai-powered-badge' : ''}`;
+  }
+}
+
+function sendQuickPrompt(prompt) {
+  const input = document.getElementById('chatInput');
+  if (input) input.value = prompt;
+  sendAiMessage();
+}
+
+async function sendAiMessage() {
+  const input = document.getElementById('chatInput');
+  const question = input?.value?.trim();
+  if (!question) return;
+  input.value = '';
+
+  const container = document.getElementById('chatContainer');
+  // Add user message
+  container.innerHTML += `<div class="chat-msg user">
+    <div class="chat-bubble">${question}</div>
+    <div class="chat-time">${new Date().toLocaleTimeString('en-BD', {hour:'2-digit',minute:'2-digit',hour12:true})}</div>
+  </div>`;
+
+  // Add loading
+  const loadId = 'loading_' + Date.now();
+  container.innerHTML += `<div class="chat-msg ai" id="${loadId}">
+    <div class="chat-bubble">🤔 Analyzing your financial data...</div>
+  </div>`;
+  container.scrollTop = container.scrollHeight;
+
+  const result = await apiPost('/api/ai/query/', { question, lang: 'en' });
+  document.getElementById(loadId)?.remove();
+
+  if (!result || !result.data) {
+    container.innerHTML += `<div class="chat-msg ai"><div class="chat-bubble">⚠️ Could not get AI response. Please try again.</div></div>`;
+    container.scrollTop = container.scrollHeight;
+    return;
+  }
+
+  const resp = result.data;
+  const answer = resp.answer || resp.error || 'No response';
+  const source = resp.source || 'AI Engine';
+  const isGemini = resp.ai_powered;
+  const formattedAnswer = answer.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>').replace(/•/g, '<br>•');
+
+  container.innerHTML += `<div class="chat-msg ai">
+    <div class="chat-bubble">${formattedAnswer}</div>
+    <div class="chat-time">
+      ${new Date().toLocaleTimeString('en-BD', {hour:'2-digit',minute:'2-digit',hour12:true})}
+      <span class="ai-source-badge ${isGemini ? 'ai-powered-badge' : ''}">${source}</span>
+    </div>
+  </div>`;
+  container.scrollTop = container.scrollHeight;
+}
+
+// ============================================================
+// TRANSACTIONS (ACTIONS)
+// ============================================================
+async function doCashIn() {
+  const amount = document.getElementById('cashInAmount').value;
+  const ref = document.getElementById('cashInRef').value;
+  if (!amount || amount <= 0) { showToast('error', 'Enter a valid amount'); return; }
+  const r = await apiPost('/api/wallet/cash-in/', { amount, reference: ref });
+  if (!r) return;
+  if (r.ok) {
+    showToast('success', r.data.message || 'Money added successfully!');
+    closeModal('cashInModal');
+    document.getElementById('cashInAmount').value = '';
+    state.wallet = r.data.new_balance;
+    document.getElementById('walletBalance').textContent = fmt(state.wallet);
+    loadDashboard();
+  } else {
+    showToast('error', r.data.error || 'Failed to add money');
+  }
+}
+
+async function doSendMoney() {
+  const receiver = document.getElementById('sendReceiver').value;
+  const amount = document.getElementById('sendAmount').value;
+  const ref = document.getElementById('sendRef').value;
+  if (!receiver) { showToast('error', 'Enter recipient phone or username'); return; }
+  if (!amount || amount <= 0) { showToast('error', 'Enter a valid amount'); return; }
+  const r = await apiPost('/api/wallet/send/', { receiver, amount, reference: ref });
+  if (!r) return;
+  if (r.ok) {
+    showToast('success', r.data.message || 'Money sent!');
+    closeModal('sendMoneyModal');
+    document.getElementById('sendAmount').value = '';
+    document.getElementById('sendReceiver').value = '';
+    loadDashboard();
+  } else {
+    showToast('error', r.data.error || 'Transfer failed');
+  }
+}
+
+async function doUtility(type, amountId, refId) {
+  const amount = document.getElementById(amountId)?.value;
+  const refEl = document.getElementById(refId);
+  const ref = refEl ? refEl.value : '';
+  if (!amount || amount <= 0) { showToast('error', 'Enter a valid amount'); return; }
+  const r = await apiPost('/api/wallet/utility/', { action_type: type, amount, reference: ref });
+  if (!r) return;
+  const modalMap = { RECHARGE: 'rechargeModal', BILL: 'billModal', CASHOUT: 'cashOutModal' };
+  if (r.ok) {
+    showToast('success', r.data.message || 'Transaction successful!');
+    closeModal(modalMap[type]);
+    document.getElementById(amountId).value = '';
+    loadDashboard();
+  } else {
+    showToast('error', r.data.error || 'Transaction failed');
+  }
+}
+
+async function doCreateFund() {
+  const name = document.getElementById('fundName').value.trim();
+  const category = document.getElementById('fundCategory').value;
+  const allocation = document.getElementById('fundAllocation').value;
+  const budget = document.getElementById('fundBudget').value;
+  if (!name) { showToast('error', 'Enter a fund name'); return; }
+  if (!category) { showToast('error', 'Select a category'); return; }
+  const r = await apiPost('/api/funds/', {
+    name, category,
+    allocated_amount: allocation || '0',
+    monthly_budget: budget || allocation || '0'
+  });
+  if (!r) return;
+  if (r.ok) {
+    showToast('success', `✅ ${name} Fund created!`);
+    closeModal('createFundModal');
+    document.getElementById('fundName').value = '';
+    document.getElementById('fundCategory').value = '';
+    document.getElementById('fundAllocation').value = '';
+    document.getElementById('fundBudget').value = '';
+    loadFunds();
+    loadDashboard();
+  } else {
+    showToast('error', r.data.error || 'Failed to create fund');
+  }
+}
+
+function populateFundSelects() {
+  const src = document.getElementById('transferSource');
+  const dst = document.getElementById('transferDest');
+  const opts = state.funds.map(f => `<option value="${f.id}">${CATEGORY_ICONS[f.category]||'💰'} ${f.name} (৳${fmt(f.current_balance)})</option>`).join('');
+  if (src) src.innerHTML = opts;
+  if (dst) dst.innerHTML = opts;
+}
+
+async function doFundTransfer() {
+  const srcId = document.getElementById('transferSource').value;
+  const dstId = document.getElementById('transferDest').value;
+  const amount = document.getElementById('transferAmount').value;
+  const reason = document.getElementById('transferReason').value;
+  if (!srcId || !dstId) { showToast('error', 'Select source and destination funds'); return; }
+  if (srcId === dstId) { showToast('error', 'Source and destination cannot be the same'); return; }
+  if (!amount || amount <= 0) { showToast('error', 'Enter a valid amount'); return; }
+  const r = await apiPost('/api/funds/transfer/', { source_fund_id: srcId, destination_fund_id: dstId, amount, reason });
+  if (!r) return;
+  if (r.ok) {
+    showToast('success', r.data.message || 'Transfer successful!');
+    closeModal('transferFundModal');
+    document.getElementById('transferAmount').value = '';
+    loadFunds();
+  } else {
+    showToast('error', r.data.error || 'Transfer failed');
+  }
+}
+
+async function doPayMerchant() {
+  const amount = document.getElementById('payAmount').value;
+  const selector = document.getElementById('paySourceSelector');
+  const source = selector.dataset.source || 'NORMAL_WALLET';
+  const fundId = selector.dataset.fundId;
+  const fpId = selector.dataset.fpId;
+  const merchant = state.selectedMerchant;
+  if (!merchant) { showToast('error', 'No merchant selected'); return; }
+  if (!amount || amount <= 0) { showToast('error', 'Enter a valid amount'); return; }
+
+  const payload = {
+    merchant_id: merchant.id,
+    amount,
+    payment_source: source,
+    ...(fundId ? { purpose_fund_id: fundId } : {}),
+    ...(fpId ? { family_pass_id: fpId } : {})
+  };
+
+  const r = await apiPost('/api/pay/', payload);
+  if (!r) return;
+  if (r.ok) {
+    showToast('success', r.data.message || 'Payment successful!');
+    closeModal('payMerchantModal');
+    document.getElementById('payAmount').value = '';
+    loadDashboard();
+    if (state.currentTab === 'funds') loadFunds();
+  } else {
+    const err = r.data;
+    if (err.is_category_mismatch) {
+      showToast('error', `🚫 Category Restriction: Cannot pay ${merchant.category} merchant using this fund`, 6000);
+    } else if (err.is_family_pass_error) {
+      showToast('error', `🚫 FamilyPass Error: ${err.error}`, 6000);
+    } else {
+      showToast('error', err.error || 'Payment failed');
+    }
+  }
+}
+
+async function doCreateFamilyPass() {
+  const member = document.getElementById('fpMember').value;
+  const limit = document.getElementById('fpLimit').value;
+  const duration = document.getElementById('fpDuration').value;
+  const purpose = document.getElementById('fpPurpose').value;
+  if (!member) { showToast('error', 'Enter member phone or username'); return; }
+  if (!limit || limit <= 0) { showToast('error', 'Enter a valid spending limit'); return; }
+  const r = await apiPost('/api/family-pass/', {
+    member, limit_amount: limit, duration_days: duration,
+    purpose_label: purpose || 'Family Spending'
+  });
+  if (!r) return;
+  if (r.ok) {
+    showToast('success', `✅ FamilyPass granted to ${member}!`);
+    closeModal('createFPModal');
+    document.getElementById('fpMember').value = '';
+    document.getElementById('fpLimit').value = '';
+    document.getElementById('fpPurpose').value = '';
+    loadFamilyPass();
+  } else {
+    showToast('error', r.data.error || 'Failed to create FamilyPass');
+  }
+}
+
+async function revokeFP(id) {
+  if (!confirm('Revoke this FamilyPass? This cannot be undone.')) return;
+  const r = await apiPost(`/api/family-pass/${id}/revoke/`, {});
+  if (!r) return;
+  if (r.ok) {
+    showToast('success', 'FamilyPass revoked successfully');
+    loadFamilyPass();
+  } else {
+    showToast('error', r.data.error || 'Failed to revoke');
+  }
+}
+
+async function viewFPActivity(id) {
+  const data = await apiGet(`/api/family-pass/${id}/activity/`);
+  if (!data) return;
+  const fp = data.family_pass;
+  const activities = data.activities || [];
+  showToast('info', `📋 ${fp.member_name || 'Member'}: ${activities.length} transaction(s) recorded`);
+}
+
+// ============================================================
+// FAMILYPASS MEMBER PAYMENT
+// ============================================================
+function openFPMemberPay(fpId, ownerName, remaining) {
+  state.selectedFamilyPass = { id: fpId, ownerName, remaining };
+  document.getElementById('fpMemberPaySub').textContent = `Using FamilyPass from: ${ownerName}`;
+  document.getElementById('fpPayLimitInfo').innerHTML = `<div style="font-size:12px;color:var(--primary-dark);">Remaining limit: <strong>৳${fmt(remaining)}</strong></div>`;
+  populateFPMerchantSelect();
+  openModal('fpMemberPayModal');
+}
+
+function populateFPMerchantSelect() {
+  const el = document.getElementById('fpMerchantSelect');
+  if (!el) return;
+  const merchants = allMerchants.length > 0 ? allMerchants : state.merchants;
+  el.innerHTML = merchants.map(m => `<option value="${m.id}">${CATEGORY_ICONS[m.category]||'🏪'} ${m.business_name} (${m.category})</option>`).join('');
+}
+
+async function doFPMemberPay() {
+  const merchantId = document.getElementById('fpMerchantSelect').value;
+  const amount = document.getElementById('fpPayAmount').value;
+  if (!merchantId) { showToast('error', 'Select a merchant'); return; }
+  if (!amount || amount <= 0) { showToast('error', 'Enter a valid amount'); return; }
+  if (!state.selectedFamilyPass) { showToast('error', 'No FamilyPass selected'); return; }
+  const r = await apiPost('/api/pay/', {
+    merchant_id: merchantId,
+    amount,
+    payment_source: 'FAMILY_PASS',
+    family_pass_id: state.selectedFamilyPass.id
+  });
+  if (!r) return;
+  if (r.ok) {
+    showToast('success', r.data.message || 'FamilyPass payment successful!');
+    closeModal('fpMemberPayModal');
+    document.getElementById('fpPayAmount').value = '';
+    loadFamilyPass();
+  } else {
+    showToast('error', r.data.error || 'Payment failed');
+  }
+}
+
+// ============================================================
+// GEMINI KEY MANAGEMENT
+// ============================================================
+async function saveGeminiKey() {
+  const key = document.getElementById('geminiKeyInput').value.trim();
+  if (!key) { showToast('error', 'Enter a valid API key'); return; }
+  // Save to localStorage (in production, would save to server settings)
+  localStorage.setItem('gemini_api_key', key);
+  // Send to backend to update env
+  const r = await apiPost('/api/ai/set-key/', { gemini_api_key: key });
+  updateGeminiStatus(true);
+  showToast('success', '✅ Gemini API key saved! AI responses now powered by Gemini 2.0 Flash');
+  aiInitialized = false;
+  initAiChat();
+}
+
+function updateGeminiStatus(active) {
+  const el = document.getElementById('geminiKeyStatus');
+  if (el) {
+    el.textContent = active ? '✅ Gemini 2.0 Flash — Active' : 'Not configured — using offline AI';
+    el.style.color = active ? 'var(--primary)' : '';
+  }
+}
+
+// ============================================================
+// SEED DATA
+// ============================================================
+async function doSeedData() {
+  const r = await apiPost('/api/seed/', { wipe: true });
+  if (!r) return;
+  if (r.ok) {
+    showToast('success', '✅ Demo data reset! Refreshing...');
+    setTimeout(() => location.reload(), 2000);
+  } else {
+    showToast('error', r.data?.error || 'Failed to reset data');
+  }
+}
+
+// ============================================================
+// PROFILE / LOGOUT
+// ============================================================
+function showProfile() {
+  navigateTo('more');
+}
+
+async function doLogout() {
+  try {
+    const csrfToken = getCsrfToken();
+    const r = await fetch('/logout/', {
+      method: 'GET',
+      credentials: 'same-origin',
+      headers: { 'X-CSRFToken': csrfToken }
+    });
+    window.location.href = '/login/';
+  } catch (e) {
+    window.location.href = '/login/';
+  }
+}
+
+// ============================================================
+// INIT ON DOM READY
+// ============================================================
 document.addEventListener('DOMContentLoaded', () => {
   initApp();
 });
-
-async function initApp() {
-  await fetchCurrentUser();
-  await Promise.all([
-    fetchWalletSummary(),
-    fetchFunds(),
-    fetchMerchants(),
-    fetchFamilyPasses(),
-    fetchNotifications(),
-    fetchAnomalies(),
-    fetchEvaluationMetrics(),
-    fetchExperimentSummary()
-  ]);
-  loadReport('monthly');
-  lucide.createIcons();
-}
-
-// ==================== AUTH & DEMO ROLE SWITCHER ====================
-
-async function fetchCurrentUser() {
-  try {
-    const res = await fetch('/api/auth/me/');
-    if (res.ok) {
-      const data = await res.json();
-      state.currentUser = data.user;
-      state.walletBalance = data.wallet_balance;
-      updateUserUI();
-    }
-  } catch (e) {
-    console.error("Auth fetch failed:", e);
-  }
-}
-
-function updateUserUI() {
-  if (!state.currentUser) return;
-  const nameEl = document.getElementById('user-display-name');
-  const roleEl = document.getElementById('user-role-badge');
-  const avatarEl = document.getElementById('user-avatar');
-  const roleSelect = document.getElementById('role-switcher-select');
-
-  if (nameEl) nameEl.textContent = state.currentUser.full_name || state.currentUser.username;
-  if (roleEl) roleEl.textContent = formatRole(state.currentUser.role);
-  if (avatarEl) {
-    const initials = (state.currentUser.full_name || state.currentUser.username)
-      .split(' ')
-      .map(n => n[0])
-      .join('')
-      .substring(0, 2)
-      .toUpperCase();
-    avatarEl.textContent = initials;
-  }
-  if (roleSelect) {
-    roleSelect.value = state.currentUser.username;
-  }
-}
-
-function formatRole(role) {
-  switch (role) {
-    case 'CUSTOMER': return 'Wallet Owner';
-    case 'MEMBER': return 'FamilyPass Member';
-    case 'MERCHANT': return 'Registered Merchant';
-    case 'ADMIN': return 'Hackathon Evaluator';
-    default: return role;
-  }
-}
-
-async function switchDemoRole(username) {
-  try {
-    const res = await fetch('/api/auth/switch-role/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username })
-    });
-    if (res.ok) {
-      const data = await res.json();
-      state.currentUser = data.user;
-      state.walletBalance = data.wallet_balance;
-      updateUserUI();
-      await fetchWalletSummary();
-      await fetchFunds();
-      await fetchFamilyPasses();
-      await fetchNotifications();
-
-      // Show toast
-      showToast(`Switched role to: ${data.user.full_name || data.user.username} (${formatRole(data.user.role)})`);
-
-      // Switch to dashboard
-      switchTab('dashboard');
-    }
-  } catch (e) {
-    console.error("Role switch error:", e);
-  }
-}
-
-// ==================== NAVIGATION TABS ====================
-
-function switchTab(tabId) {
-  state.activeTab = tabId;
-  document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
-  document.querySelectorAll('.nav-tab').forEach(el => {
-    el.classList.remove('text-emerald-800', 'bg-emerald-50');
-    el.classList.add('text-slate-600');
-  });
-
-  const targetPane = document.getElementById(`tab-${tabId}`);
-  if (targetPane) targetPane.classList.remove('hidden');
-
-  const targetBtn = document.getElementById(`tab-btn-${tabId}`);
-  if (targetBtn) {
-    targetBtn.classList.add('text-emerald-800', 'bg-emerald-50');
-    targetBtn.classList.remove('text-slate-600');
-  }
-
-  lucide.createIcons();
-}
-
-// ==================== WALLET DATA ====================
-
-async function fetchWalletSummary() {
-  try {
-    const res = await fetch('/api/wallet/summary/');
-    if (res.ok) {
-      const data = await res.json();
-      state.walletBalance = data.wallet_balance;
-
-      const wb = document.getElementById('dashboard-wallet-balance');
-      const ft = document.getElementById('dashboard-funds-total');
-      const tl = document.getElementById('dashboard-total-liquid');
-      const pw = document.getElementById('pay-source-wallet-bal');
-
-      if (wb) wb.textContent = `৳${data.wallet_balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
-      if (ft) ft.textContent = `৳${data.funds_total_balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
-      if (tl) tl.textContent = `৳${data.total_liquid_wealth.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
-      if (pw) pw.textContent = `৳${data.wallet_balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
-
-      renderRecentTransactions(data.recent_transactions || []);
-    }
-  } catch (e) {
-    console.error("Wallet summary fetch failed:", e);
-  }
-}
-
-function renderRecentTransactions(txns) {
-  const container = document.getElementById('dashboard-transactions-list');
-  if (!container) return;
-
-  if (txns.length === 0) {
-    container.innerHTML = `<div class="p-6 text-center text-xs text-slate-400">No transactions recorded yet.</div>`;
-    return;
-  }
-
-  container.innerHTML = txns.map(t => {
-    const isCredit = t.transaction_type === 'CASH_IN' || t.transaction_type === 'RECEIVE_MONEY';
-    const isRejected = t.status === 'REJECTED';
-    const sign = isCredit ? '+' : '-';
-    const color = isRejected ? 'text-rose-600' : (isCredit ? 'text-emerald-600' : 'text-slate-900');
-    const badgeBg = isRejected ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-slate-100 text-slate-600';
-
-    let icon = 'arrow-down-left';
-    if (t.transaction_type === 'MERCHANT_PAYMENT') icon = 'shopping-bag';
-    else if (t.transaction_type === 'BILL_PAYMENT') icon = 'zap';
-    else if (t.transaction_type === 'CASH_IN') icon = 'plus-circle';
-
-    return `
-      <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50/70 hover:bg-slate-100/80 transition border border-slate-100">
-        <div class="flex items-center space-x-3">
-          <div class="w-9 h-9 rounded-xl ${isCredit ? 'bg-emerald-100 text-emerald-700' : (isRejected ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 text-slate-700')} flex items-center justify-center">
-            <i data-lucide="${icon}" class="w-4 h-4"></i>
-          </div>
-          <div>
-            <div class="flex items-center gap-1.5">
-              <span class="text-xs font-bold text-slate-900">${t.merchant_name || t.reference || t.transaction_type}</span>
-              ${t.category ? `<span class="text-[10px] px-1.5 py-0.2 rounded font-semibold ${badgeBg}">${t.category}</span>` : ''}
-              ${t.has_anomaly ? `<span class="text-[9px] px-1.5 py-0.5 rounded font-bold bg-amber-100 text-amber-900 border border-amber-300">⚠️ Unusual</span>` : ''}
-            </div>
-            <p class="text-[10px] text-slate-400 mt-0.5">${new Date(t.timestamp).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} • ${t.payment_source.replace('_', ' ')}</p>
-          </div>
-        </div>
-        <div class="text-right">
-          <span class="text-xs font-bold ${color}">${isRejected ? 'REJECTED' : `${sign}৳${parseFloat(t.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}`}</span>
-          ${isRejected ? `<p class="text-[9px] text-rose-600 font-semibold max-w-[140px] truncate" title="${t.rejection_reason}">${t.rejection_reason}</p>` : ''}
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  lucide.createIcons();
-}
-
-// ==================== PURPOSE FUNDS ====================
-
-async function fetchFunds() {
-  try {
-    const res = await fetch('/api/funds/');
-    if (res.ok) {
-      const funds = await res.json();
-      state.funds = funds;
-      renderDashboardFunds(funds);
-      renderFullFundsGrid(funds);
-      populateFundDropdowns(funds);
-    }
-  } catch (e) {
-    console.error("Funds fetch failed:", e);
-  }
-}
-
-function renderDashboardFunds(funds) {
-  const container = document.getElementById('dashboard-funds-grid');
-  if (!container) return;
-
-  container.innerHTML = funds.slice(0, 5).map(f => {
-    const isOverrun = f.forecast && f.forecast.potential_overrun > 0;
-    const badgeColor = isOverrun ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800';
-    const statusText = isOverrun ? 'Overrun Risk' : 'On Track';
-
-    return `
-      <div class="p-4 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition">
-        <div>
-          <div class="flex justify-between items-start">
-            <span class="text-xs font-bold text-slate-900">${f.name}</span>
-            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded ${badgeColor}">${statusText}</span>
-          </div>
-          <p class="text-[11px] text-slate-400 mt-0.5">${f.category}</p>
-        </div>
-
-        <div class="my-3">
-          <div class="flex justify-between text-xs mb-1">
-            <span class="text-slate-500 font-semibold">Remaining</span>
-            <span class="font-extrabold text-slate-900">৳${parseFloat(f.current_balance).toLocaleString()}</span>
-          </div>
-          <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-            <div class="h-full rounded-full transition-all duration-500 ${isOverrun ? 'bg-rose-500' : 'bg-emerald-600'}" style="width: ${f.utilization_pct}%"></div>
-          </div>
-        </div>
-
-        <div class="flex justify-between items-center text-[10px] text-slate-400 border-t border-slate-100 pt-2">
-          <span>Alloc: ৳${parseFloat(f.allocated_amount).toLocaleString()}</span>
-          <span class="font-bold ${isOverrun ? 'text-rose-600' : 'text-slate-600'}">${f.utilization_pct}% Used</span>
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-
-function renderFullFundsGrid(funds) {
-  const container = document.getElementById('full-funds-grid');
-  if (!container) return;
-
-  container.innerHTML = funds.map(f => {
-    const isOverrun = f.forecast && f.forecast.potential_overrun > 0;
-    const overrunAmt = f.forecast ? f.forecast.potential_overrun : 0;
-    const predAmt = f.forecast ? f.forecast.predicted_amount : f.allocated_amount;
-
-    return `
-      <div class="bg-white rounded-2xl p-6 shadow-sm border ${isOverrun ? 'border-rose-200 ring-1 ring-rose-200' : 'border-slate-200'} flex flex-col justify-between hover:shadow-md transition">
-        <div>
-          <!-- Header -->
-          <div class="flex justify-between items-start">
-            <div class="flex items-center space-x-3">
-              <div class="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700">
-                <i data-lucide="${f.icon || 'pie-chart'}" class="w-5 h-5"></i>
-              </div>
-              <div>
-                <h3 class="text-base font-bold text-slate-900">${f.name} Fund</h3>
-                <span class="text-[11px] font-semibold text-slate-500 px-2 py-0.5 bg-slate-100 rounded">${f.category}</span>
-              </div>
-            </div>
-            <span class="text-xs font-bold px-2 py-0.5 rounded-full ${isOverrun ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}">
-              ${isOverrun ? '⚠️ Potential Overrun' : 'Safe / On Track'}
-            </span>
-          </div>
-
-          <!-- Numbers Grid -->
-          <div class="grid grid-cols-2 gap-3 my-5 p-3.5 bg-slate-50 rounded-xl">
-            <div>
-              <p class="text-[11px] text-slate-500">Allocated</p>
-              <p class="text-sm font-extrabold text-slate-900">৳${parseFloat(f.allocated_amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
-            </div>
-            <div>
-              <p class="text-[11px] text-slate-500">Spent So Far</p>
-              <p class="text-sm font-extrabold text-slate-900">৳${parseFloat(f.spent_amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
-            </div>
-            <div>
-              <p class="text-[11px] text-slate-500">Remaining Balance</p>
-              <p class="text-base font-extrabold text-emerald-700">৳${parseFloat(f.current_balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
-            </div>
-            <div>
-              <p class="text-[11px] text-slate-500">Usage</p>
-              <p class="text-base font-extrabold ${isOverrun ? 'text-rose-600' : 'text-slate-900'}">${f.utilization_pct}%</p>
-            </div>
-          </div>
-
-          <!-- Progress Bar -->
-          <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden mb-4">
-            <div class="h-full rounded-full transition-all duration-500 ${isOverrun ? 'bg-rose-500' : 'bg-emerald-600'}" style="width: ${f.utilization_pct}%"></div>
-          </div>
-
-          <!-- AI Forecast Callout -->
-          <div class="p-3 ${isOverrun ? 'bg-rose-50/70 border border-rose-100 text-rose-950' : 'bg-slate-50 text-slate-700'} rounded-xl text-xs space-y-1">
-            <div class="flex justify-between font-bold">
-              <span>Predicted Month-End Spend:</span>
-              <span>৳${parseFloat(predAmt).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-            </div>
-            ${isOverrun ? `<p class="text-[11px] text-rose-700 font-semibold">⚠️ Potential deficit: ৳${parseFloat(overrunAmt).toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>` : ''}
-          </div>
-        </div>
-
-        <!-- Action Buttons -->
-        <div class="mt-5 pt-4 border-t border-slate-100 flex gap-2">
-          <button onclick="openInterfundTransferModal(${f.id})" class="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition">
-            <i data-lucide="arrow-left-right" class="w-3.5 h-3.5"></i> Transfer
-          </button>
-          <button onclick="promptAllocateToFund(${f.id}, '${f.name}')" class="flex-1 py-2 px-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition shadow-sm">
-            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add ৳
-          </button>
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  lucide.createIcons();
-}
-
-function populateFundDropdowns(funds) {
-  const payFundSelect = document.getElementById('pay-purpose-fund-select');
-  const transferSrc = document.getElementById('transfer-source-fund');
-  const transferDst = document.getElementById('transfer-dest-fund');
-
-  const options = funds.map(f => `<option value="${f.id}" data-category="${f.category}">${f.name} Fund (${f.category}) — Avail: ৳${parseFloat(f.current_balance).toLocaleString()}</option>`).join('');
-
-  if (payFundSelect) payFundSelect.innerHTML = options;
-  if (transferSrc) transferSrc.innerHTML = options;
-  if (transferDst) transferDst.innerHTML = options;
-}
-
-// ==================== MERCHANTS & PAYMENTS ====================
-
-async function fetchMerchants() {
-  try {
-    const res = await fetch('/api/merchants/');
-    if (res.ok) {
-      const merchants = await res.json();
-      state.merchants = merchants;
-      const select = document.getElementById('pay-merchant-select');
-      if (select) {
-        select.innerHTML = merchants.map(m => `
-          <option value="${m.id}" data-category="${m.category}">${m.business_name} [${m.category}]</option>
-        `).join('');
-        onPaymentMerchantChange(merchants[0].id);
-      }
-    }
-  } catch (e) {
-    console.error("Merchants fetch failed:", e);
-  }
-}
-
-function onPaymentMerchantChange(merchantId) {
-  const merchant = state.merchants.find(m => m.id == merchantId);
-  const badge = document.getElementById('selected-merchant-category');
-  if (merchant && badge) {
-    badge.textContent = merchant.category;
-  }
-}
-
-function onPaymentSourceChange(source) {
-  state.selectedPaymentSource = source;
-  const fundContainer = document.getElementById('purpose-fund-select-container');
-  const fpContainer = document.getElementById('familypass-select-container');
-
-  if (source === 'PURPOSE_FUND') {
-    if (fundContainer) fundContainer.classList.remove('hidden');
-    if (fpContainer) fpContainer.classList.add('hidden');
-  } else if (source === 'FAMILY_PASS') {
-    if (fundContainer) fundContainer.classList.add('hidden');
-    if (fpContainer) fpContainer.classList.remove('hidden');
-  } else {
-    if (fundContainer) fundContainer.classList.add('hidden');
-    if (fpContainer) fpContainer.classList.add('hidden');
-  }
-}
-
-function setPayAmount(amt) {
-  const input = document.getElementById('pay-amount-input');
-  if (input) input.value = amt;
-}
-
-async function executePayment() {
-  const merchantId = document.getElementById('pay-merchant-select').value;
-  const amount = parseFloat(document.getElementById('pay-amount-input').value || 0);
-  const source = state.selectedPaymentSource;
-  const purposeFundId = document.getElementById('pay-purpose-fund-select').value;
-  const familyPassId = document.getElementById('pay-familypass-select').value;
-
-  const resultBox = document.getElementById('payment-result-box');
-  const btn = document.getElementById('btn-execute-payment');
-  btn.disabled = true;
-  btn.textContent = "Validating with FundShare Engine...";
-
-  try {
-    const res = await fetch('/api/payments/merchant/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        merchant_id: merchantId,
-        amount: amount,
-        payment_source: source,
-        purpose_fund_id: source === 'PURPOSE_FUND' ? purposeFundId : null,
-        family_pass_id: source === 'FAMILY_PASS' ? familyPassId : null,
-      })
-    });
-
-    const data = await res.json();
-    resultBox.classList.remove('hidden');
-
-    if (res.ok && data.success) {
-      // SUCCESS
-      resultBox.className = "mt-6 rounded-2xl p-6 bg-emerald-50 border border-emerald-300 text-emerald-950 shadow-sm space-y-3";
-      resultBox.innerHTML = `
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold">
-            <i data-lucide="check" class="w-6 h-6"></i>
-          </div>
-          <div>
-            <h4 class="text-base font-bold text-emerald-900">Payment Authorized & Executed!</h4>
-            <p class="text-xs text-emerald-700">${data.message}</p>
-          </div>
-        </div>
-        <div class="p-3 bg-white/80 rounded-xl text-xs space-y-1">
-          <div class="flex justify-between">
-            <span class="text-slate-500">Transaction ID:</span>
-            <span class="font-mono font-bold">${data.transaction.transaction_id}</span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-slate-500">Payment Source:</span>
-            <span class="font-bold">${data.transaction.payment_source.replace('_', ' ')}</span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-slate-500">Merchant Category:</span>
-            <span class="font-bold text-emerald-700">${data.transaction.category}</span>
-          </div>
-        </div>
-      `;
-      confetti({ particleCount: 50, spread: 60, origin: { y: 0.8 } });
-
-      // Refresh balances
-      await fetchWalletSummary();
-      await fetchFunds();
-      await fetchFamilyPasses();
-      await fetchNotifications();
-    } else {
-      // REJECTED (e.g. Category Mismatch or Limit Error)
-      resultBox.className = "mt-6 rounded-2xl p-6 bg-rose-50 border-2 border-rose-400 text-rose-950 shadow-md space-y-3";
-      resultBox.innerHTML = `
-        <div class="flex items-start gap-3">
-          <div class="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center font-bold flex-shrink-0 mt-0.5">
-            <i data-lucide="shield-alert" class="w-6 h-6"></i>
-          </div>
-          <div>
-            <h4 class="text-base font-bold text-rose-900 flex items-center gap-2">
-              Transaction Denied by FundShare Rule Engine
-              <span class="text-[10px] uppercase font-mono px-2 py-0.5 bg-rose-200 text-rose-900 rounded">${data.code || 'POLICY_REJECTION'}</span>
-            </h4>
-            <p class="text-xs text-rose-800 mt-1.5 leading-relaxed font-medium">${data.error}</p>
-          </div>
-        </div>
-
-        <div class="p-3.5 bg-white/90 rounded-xl text-xs space-y-1.5 border border-rose-200">
-          <p class="font-bold text-slate-800">Deterministic Guardrail Enforced:</p>
-          <p class="text-[11px] text-slate-600">
-            ${data.is_category_mismatch ?
-              'Purpose Funds are mathematically restricted to their specified business category to maintain strict spending discipline.' :
-              'FamilyPass transactions undergo strict 7-point authorization to protect wallet owners.'}
-          </p>
-        </div>
-      `;
-    }
-  } catch (err) {
-    resultBox.classList.remove('hidden');
-    resultBox.className = "mt-6 rounded-2xl p-4 bg-rose-50 border border-rose-300 text-rose-900 text-xs";
-    resultBox.textContent = `Execution failed: ${err.message}`;
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4"></i> Authorize & Execute Payment`;
-    lucide.createIcons();
-  }
-}
-
-// ==================== FAMILYPASS ====================
-
-async function fetchFamilyPasses() {
-  try {
-    const res = await fetch('/api/familypass/');
-    if (res.ok) {
-      const data = await res.json();
-      state.familyPasses = {
-        issued: data.issued_passes || [],
-        received: data.received_passes || []
-      };
-      renderDashboardFamilyPass(data.issued_passes || []);
-      renderFullFamilyPassGrid(data.issued_passes || []);
-      populateFamilyPassDropdown(data.issued_passes || data.received_passes || []);
-
-      if (data.issued_passes && data.issued_passes.length > 0) {
-        fetchFamilyPassActivity(data.issued_passes[0].id);
-      }
-    }
-  } catch (e) {
-    console.error("FamilyPass fetch failed:", e);
-  }
-}
-
-function renderDashboardFamilyPass(passes) {
-  const container = document.getElementById('dashboard-familypass-list');
-  if (!container) return;
-
-  if (passes.length === 0) {
-    container.innerHTML = `<p class="text-xs text-slate-400 p-4 text-center">No active FamilyPass permissions.</p>`;
-    return;
-  }
-
-  container.innerHTML = passes.map(fp => {
-    const rem = parseFloat(fp.remaining_limit);
-    const limit = parseFloat(fp.limit_amount);
-    const used = parseFloat(fp.used_amount);
-
-    return `
-      <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 flex items-center justify-between">
-        <div>
-          <div class="flex items-center gap-2">
-            <span class="text-xs font-bold text-slate-900">${fp.member_name || fp.member_username}</span>
-            <span class="text-[9px] font-bold px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded">Active</span>
-          </div>
-          <p class="text-[11px] text-slate-400 mt-0.5">${fp.purpose_label} • Expires in ${Math.max(1, Math.round((new Date(fp.expiry_date) - new Date()) / (1000 * 60 * 60 * 24)))} days</p>
-        </div>
-        <div class="text-right">
-          <p class="text-xs font-bold text-slate-900">৳${rem.toLocaleString()} <span class="text-slate-400 text-[10px]">left</span></p>
-          <p class="text-[10px] text-slate-500">Limit: ৳${limit.toLocaleString()}</p>
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-
-function renderFullFamilyPassGrid(passes) {
-  const container = document.getElementById('familypass-cards-grid');
-  if (!container) return;
-
-  container.innerHTML = passes.map(fp => {
-    const isRevoked = fp.status === 'REVOKED';
-    const rem = parseFloat(fp.remaining_limit);
-    const limit = parseFloat(fp.limit_amount);
-    const used = parseFloat(fp.used_amount);
-
-    return `
-      <div class="bg-white rounded-2xl p-6 shadow-sm border ${isRevoked ? 'border-slate-200 bg-slate-50/50' : 'border-slate-200'} space-y-4">
-        <div class="flex justify-between items-start">
-          <div class="flex items-center space-x-3">
-            <div class="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-sm">
-              ${(fp.member_name || fp.member_username).substring(0, 2).toUpperCase()}
-            </div>
-            <div>
-              <h3 class="text-base font-bold text-slate-900">${fp.member_name || fp.member_username}</h3>
-              <p class="text-xs text-slate-500">${fp.purpose_label}</p>
-            </div>
-          </div>
-          <span class="text-xs font-bold px-2.5 py-1 rounded-full ${isRevoked ? 'bg-slate-200 text-slate-600' : 'bg-emerald-100 text-emerald-800'}">
-            ${fp.status}
-          </span>
-        </div>
-
-        <div class="grid grid-cols-3 gap-2 p-3 bg-slate-50 rounded-xl text-center">
-          <div>
-            <p class="text-[10px] text-slate-500 uppercase">Limit</p>
-            <p class="text-xs font-bold text-slate-800">৳${limit.toLocaleString()}</p>
-          </div>
-          <div>
-            <p class="text-[10px] text-slate-500 uppercase">Used</p>
-            <p class="text-xs font-bold text-rose-600">৳${used.toLocaleString()}</p>
-          </div>
-          <div>
-            <p class="text-[10px] text-slate-500 uppercase">Remaining</p>
-            <p class="text-xs font-bold text-emerald-700">৳${rem.toLocaleString()}</p>
-          </div>
-        </div>
-
-        <!-- Usage Bar -->
-        <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-          <div class="h-full rounded-full bg-indigo-600 transition-all duration-500" style="width: ${fp.usage_pct}%"></div>
-        </div>
-
-        <div class="flex justify-between items-center text-xs text-slate-500 pt-2 border-t border-slate-100">
-          <span>Expires: ${new Date(fp.expiry_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-          <div class="flex gap-2">
-            <button onclick="fetchFamilyPassActivity(${fp.id})" class="px-2.5 py-1 text-slate-700 hover:text-slate-900 bg-slate-100 rounded-lg font-semibold text-xs">
-              View Activity
-            </button>
-            ${!isRevoked ? `
-              <button onclick="revokeFamilyPass(${fp.id})" class="px-2.5 py-1 text-rose-700 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 rounded-lg font-bold text-xs">
-                Revoke
-              </button>
-            ` : ''}
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-
-async function fetchFamilyPassActivity(passId) {
-  try {
-    const res = await fetch(`/api/familypass/${passId}/activity/`);
-    if (res.ok) {
-      const data = await res.json();
-      renderFamilyPassActivityTable(data.activities);
-    }
-  } catch (e) {
-    console.error("FamilyPass activity fetch failed:", e);
-  }
-}
-
-function renderFamilyPassActivityTable(activities) {
-  const container = document.getElementById('familypass-activity-table-container');
-  if (!container) return;
-
-  if (activities.length === 0) {
-    container.innerHTML = `<p class="text-xs text-slate-400 p-6 text-center">No spending activity recorded for this FamilyPass yet.</p>`;
-    return;
-  }
-
-  container.innerHTML = `
-    <table class="min-w-full divide-y divide-slate-200 text-xs">
-      <thead>
-        <tr class="text-slate-500 font-semibold text-left">
-          <th class="py-2.5 px-3">Member</th>
-          <th class="py-2.5 px-3">Merchant</th>
-          <th class="py-2.5 px-3">Category</th>
-          <th class="py-2.5 px-3">Amount</th>
-          <th class="py-2.5 px-3">Remaining Limit After</th>
-          <th class="py-2.5 px-3">Timestamp</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-slate-100">
-        ${activities.map(a => `
-          <tr class="hover:bg-slate-50">
-            <td class="py-2.5 px-3 font-bold text-slate-900">${a.member_name}</td>
-            <td class="py-2.5 px-3 font-semibold text-slate-800">${a.merchant_name}</td>
-            <td class="py-2.5 px-3"><span class="px-2 py-0.5 bg-slate-100 rounded text-[10px] font-semibold">${a.category}</span></td>
-            <td class="py-2.5 px-3 font-extrabold text-slate-900">৳${parseFloat(a.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
-            <td class="py-2.5 px-3 font-semibold text-emerald-700">৳${parseFloat(a.remaining_limit_after).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
-            <td class="py-2.5 px-3 text-slate-400">${new Date(a.timestamp).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  `;
-}
-
-function populateFamilyPassDropdown(passes) {
-  const select = document.getElementById('pay-familypass-select');
-  if (!select) return;
-  select.innerHTML = passes.map(fp => `
-    <option value="${fp.id}">${fp.member_name || fp.member_username} (${fp.purpose_label}) — Limit Rem: ৳${parseFloat(fp.remaining_limit).toLocaleString()}</option>
-  `).join('');
-}
-
-async function revokeFamilyPass(passId) {
-  if (!confirm("Are you sure you want to revoke this FamilyPass? The member will no longer be able to spend immediately.")) return;
-  try {
-    const res = await fetch(`/api/familypass/${passId}/revoke/`, { method: 'POST' });
-    if (res.ok) {
-      showToast("FamilyPass revoked immediately.");
-      await fetchFamilyPasses();
-    }
-  } catch (e) {
-    console.error("Revoke failed:", e);
-  }
-}
-
-// ==================== AI COACH & INTELLIGENCE ====================
-
-function setCoachLanguage(lang) {
-  state.coachLanguage = lang;
-  const enBtn = document.getElementById('lang-en');
-  const bnBtn = document.getElementById('lang-bn');
-  if (lang === 'bn') {
-    bnBtn.className = "px-3 py-1 rounded-lg bg-white shadow-sm text-emerald-800";
-    enBtn.className = "px-3 py-1 rounded-lg text-slate-600 hover:text-slate-900";
-  } else {
-    enBtn.className = "px-3 py-1 rounded-lg bg-white shadow-sm text-emerald-800";
-    bnBtn.className = "px-3 py-1 rounded-lg text-slate-600 hover:text-slate-900";
-  }
-}
-
-function askCoachPrompt(question) {
-  const input = document.getElementById('chat-input');
-  if (input) input.value = question;
-  sendChatMessage();
-}
-
-async function sendChatMessage() {
-  const input = document.getElementById('chat-input');
-  const question = input.value.trim();
-  if (!question) return;
-
-  const container = document.getElementById('chat-messages-container');
-
-  // Render User Message
-  container.innerHTML += `
-    <div class="flex items-start justify-end gap-3">
-      <div class="bg-emerald-700 text-white p-4 rounded-2xl rounded-tr-none max-w-xl text-xs leading-relaxed shadow">
-        ${question}
-      </div>
-      <div class="w-8 h-8 rounded-full bg-slate-700 text-white flex items-center justify-center text-xs font-bold flex-shrink-0">
-        You
-      </div>
-    </div>
-  `;
-  input.value = '';
-  container.scrollTop = container.scrollHeight;
-
-  // Typing indicator
-  const typingId = `typing-${Date.now()}`;
-  container.innerHTML += `
-    <div id="${typingId}" class="flex items-start gap-3">
-      <div class="w-8 h-8 rounded-full bg-emerald-700 text-white flex items-center justify-center text-xs font-bold flex-shrink-0">
-        AI
-      </div>
-      <div class="bg-slate-100 text-slate-500 p-3 rounded-2xl text-xs flex items-center gap-1.5">
-        <span class="w-2 h-2 rounded-full bg-slate-400 animate-bounce"></span>
-        <span class="w-2 h-2 rounded-full bg-slate-400 animate-bounce delay-100"></span>
-        <span class="w-2 h-2 rounded-full bg-slate-400 animate-bounce delay-200"></span>
-      </div>
-    </div>
-  `;
-  container.scrollTop = container.scrollHeight;
-
-  try {
-    const res = await fetch('/api/intelligence/coach/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question, lang: state.coachLanguage })
-    });
-
-    const typingEl = document.getElementById(typingId);
-    if (typingEl) typingEl.remove();
-
-    if (res.ok) {
-      const data = await res.json();
-      const formattedAnswer = data.answer.replace(/\n/g, '<br/>');
-
-      container.innerHTML += `
-        <div class="flex items-start gap-3">
-          <div class="w-8 h-8 rounded-full bg-emerald-700 text-white flex items-center justify-center text-xs font-bold flex-shrink-0 shadow">
-            AI
-          </div>
-          <div class="bg-slate-100 text-slate-800 p-4 rounded-2xl rounded-tl-none max-w-xl text-xs leading-relaxed space-y-2">
-            <div>${formattedAnswer}</div>
-            <div class="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px] text-slate-500">
-              <span>Source: ${data.source}</span>
-              <span class="font-semibold text-emerald-800">100% Grounded in Structured Facts</span>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-  } catch (e) {
-    console.error("Chat error:", e);
-  }
-  container.scrollTop = container.scrollHeight;
-}
-
-// ==================== ANOMALIES AUDIT ====================
-
-async function fetchAnomalies() {
-  try {
-    const res = await fetch('/api/intelligence/dashboard/');
-    if (res.ok) {
-      const data = await res.json();
-      renderAnomaliesAudit(data.recent_anomalies || []);
-    }
-  } catch (e) {
-    console.error("Anomalies fetch failed:", e);
-  }
-}
-
-function renderAnomaliesAudit(anomalies) {
-  const container = document.getElementById('anomalies-audit-container');
-  if (!container) return;
-
-  if (anomalies.length === 0) {
-    container.innerHTML = `<p class="text-xs text-slate-400 p-4 text-center">No spending anomalies detected.</p>`;
-    return;
-  }
-
-  container.innerHTML = anomalies.map(a => `
-    <div class="p-4 bg-amber-50/60 border border-amber-200/80 rounded-xl space-y-2">
-      <div class="flex justify-between items-start">
-        <div>
-          <span class="text-xs font-bold text-slate-900">${a.category} Transaction Flagged</span>
-          <p class="text-[11px] text-slate-500">Txn: ${a.transaction_id} • Score: <strong class="text-amber-800">${a.anomaly_score}</strong> (Isolation Forest)</p>
-        </div>
-        <span class="text-sm font-extrabold text-slate-900">৳${parseFloat(a.amount).toLocaleString()}</span>
-      </div>
-      <div class="text-xs text-slate-700 bg-white/70 p-2.5 rounded-lg border border-amber-100 whitespace-pre-line leading-relaxed">
-        ${a.reason}
-      </div>
-    </div>
-  `).join('');
-}
-
-// ==================== FINANCIAL REPORTS ====================
-
-async function loadReport(period) {
-  ['weekly', 'monthly', 'yearly'].forEach(p => {
-    const b = document.getElementById(`report-btn-${p}`);
-    if (b) {
-      b.className = p === period ?
-        "px-3 py-1 rounded-lg bg-white shadow-sm text-emerald-800 font-bold" :
-        "px-3 py-1 rounded-lg text-slate-600 font-semibold";
-    }
-  });
-
-  const card = document.getElementById('report-content-card');
-  if (!card) return;
-  card.innerHTML = `<div class="p-12 text-center text-xs text-slate-400">Loading structured report...</div>`;
-
-  try {
-    const res = await fetch(`/api/reports/?period=${period}`);
-    if (res.ok) {
-      const r = await res.json();
-      card.innerHTML = `
-        <!-- Title & Subtitle -->
-        <div class="border-b border-slate-200 pb-6 flex justify-between items-start">
-          <div>
-            <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">upay FundShare Official Audit</span>
-            <h1 class="text-2xl font-extrabold text-slate-900 mt-1">${r.report_title}</h1>
-            <p class="text-xs text-slate-400 mt-0.5">Generated on ${r.generated_at} • Currency: ${r.currency}</p>
-          </div>
-          <div class="text-right">
-            <span class="text-xs text-slate-400">Total Recorded Outlay</span>
-            <p class="text-2xl font-extrabold text-slate-900">৳${r.total_spending.toLocaleString()}</p>
-          </div>
-        </div>
-
-        <!-- High-Level Financial Metrics -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div class="p-4 bg-slate-50 rounded-xl">
-            <p class="text-[10px] font-bold uppercase text-slate-500">Total Income</p>
-            <p class="text-lg font-bold text-slate-900 mt-0.5">৳${r.total_income.toLocaleString()}</p>
-          </div>
-          <div class="p-4 bg-slate-50 rounded-xl">
-            <p class="text-[10px] font-bold uppercase text-slate-500">Total Spending</p>
-            <p class="text-lg font-bold text-rose-600 mt-0.5">৳${r.total_spending.toLocaleString()}</p>
-          </div>
-          <div class="p-4 bg-slate-50 rounded-xl">
-            <p class="text-[10px] font-bold uppercase text-slate-500">Net Savings</p>
-            <p class="text-lg font-bold text-emerald-700 mt-0.5">৳${r.net_savings.toLocaleString()}</p>
-          </div>
-          <div class="p-4 bg-slate-50 rounded-xl">
-            <p class="text-[10px] font-bold uppercase text-slate-500">Savings Rate</p>
-            <p class="text-lg font-bold text-emerald-700 mt-0.5">${r.savings_rate_pct}%</p>
-          </div>
-        </div>
-
-        <!-- AI Executive Summary Banner -->
-        <div class="p-5 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl space-y-2">
-          <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-950 flex items-center gap-1.5">
-            <i data-lucide="sparkles" class="w-4 h-4 text-emerald-700"></i> AI Executive Financial Synthesis
-          </h4>
-          <p class="text-xs text-emerald-900 leading-relaxed font-medium">
-            ${r.ai_summary}
-          </p>
-        </div>
-
-        <!-- Breakdown Tables -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <!-- Category Breakdown -->
-          <div>
-            <h4 class="text-sm font-bold text-slate-900 mb-3">Category-Wise Breakdown</h4>
-            <div class="space-y-2">
-              ${r.category_breakdown.map(c => `
-                <div class="flex justify-between items-center text-xs p-2 bg-slate-50 rounded-lg">
-                  <span class="font-semibold text-slate-800">${c.category}</span>
-                  <div class="flex items-center gap-3">
-                    <span class="text-slate-400">${c.percentage}%</span>
-                    <span class="font-bold text-slate-900">৳${c.amount.toLocaleString()}</span>
-                  </div>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-
-          <!-- Fund Performance -->
-          <div>
-            <h4 class="text-sm font-bold text-slate-900 mb-3">Purpose Fund Utilization</h4>
-            <div class="space-y-2">
-              ${r.fund_breakdown.map(f => `
-                <div class="p-2.5 bg-slate-50 rounded-lg text-xs space-y-1">
-                  <div class="flex justify-between font-semibold">
-                    <span>${f.fund_name} (${f.category})</span>
-                    <span class="${f.utilization_pct > 80 ? 'text-rose-600 font-bold' : 'text-slate-700'}">${f.utilization_pct}%</span>
-                  </div>
-                  <div class="flex justify-between text-[11px] text-slate-400">
-                    <span>Spent: ৳${f.spent.toLocaleString()}</span>
-                    <span>Rem: ৳${f.remaining.toLocaleString()}</span>
-                  </div>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        </div>
-      `;
-      lucide.createIcons();
-    }
-  } catch (e) {
-    console.error("Report fetch error:", e);
-  }
-}
-
-// ==================== EVALUATION & EXPERIMENTS ====================
-
-async function fetchEvaluationMetrics() {
-  try {
-    const res = await fetch('/api/evaluation/metrics/');
-    if (res.ok) {
-      const data = await res.json();
-      const stats = data.dataset_stats;
-      const txnsEl = document.getElementById('eval-stat-txns');
-      const anomEl = document.getElementById('eval-stat-anom');
-      const merchEl = document.getElementById('eval-stat-merch');
-      const fpsEl = document.getElementById('eval-stat-fps');
-
-      if (txnsEl) txnsEl.textContent = stats.total_transactions;
-      if (anomEl) anomEl.textContent = stats.injected_anomalies_count;
-      if (merchEl) merchEl.textContent = stats.merchants;
-      if (fpsEl) fpsEl.textContent = stats.family_passes;
-    }
-  } catch (e) {
-    console.error("Metrics fetch failed:", e);
-  }
-}
-
-async function fetchExperimentSummary() {
-  try {
-    const res = await fetch('/api/evaluation/experiments/');
-    if (res.ok) {
-      const data = await res.json();
-      // Render or log experiment telemetry
-    }
-  } catch (e) {
-    console.error("Experiment fetch failed:", e);
-  }
-}
-
-async function submitExperimentTrial() {
-  const participant = document.getElementById('exp-participant').value || `Judge-${Math.floor(Math.random() * 100)}`;
-  const condition = document.getElementById('exp-condition').value;
-  const time = parseFloat(document.getElementById('exp-time').value || 15.0);
-  const isCorrect = document.getElementById('exp-correct').value === 'true';
-
-  try {
-    const res = await fetch('/api/evaluation/experiments/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        participant_id: participant,
-        condition: condition,
-        task_index: 1,
-        task_description: "Identify whether Grocery fund will overrun monthly allocation",
-        completion_time_seconds: time,
-        is_correct: isCorrect,
-        confidence_rating: 5,
-        usability_score: condition === 'FUNDSHARE' ? 94.0 : 62.0,
-        notes: "Live recorded evaluation trial from Hackathon judging panel."
-      })
-    });
-    if (res.ok) {
-      showToast("Live evaluation trial recorded successfully!");
-      await fetchEvaluationMetrics();
-    }
-  } catch (e) {
-    console.error("Trial submission failed:", e);
-  }
-}
-
-async function reseedDemoData() {
-  if (!confirm("Reset database to clean initial Hackathon demo state?")) return;
-  try {
-    const res = await fetch('/api/admin/seed-data/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wipe: false })
-    });
-    if (res.ok) {
-      showToast("Demo data refreshed successfully.");
-      await initApp();
-    }
-  } catch (e) {
-    console.error("Reseed failed:", e);
-  }
-}
-
-// ==================== NOTIFICATIONS ====================
-
-async function fetchNotifications() {
-  try {
-    const res = await fetch('/api/notifications/');
-    if (res.ok) {
-      const notifs = await res.json();
-      state.notifications = notifs;
-      const unreadCount = notifs.filter(n => !n.is_read).length;
-      const badge = document.getElementById('notif-badge');
-      if (badge) {
-        if (unreadCount > 0) badge.classList.remove('hidden');
-        else badge.classList.add('hidden');
-      }
-      renderNotificationsDrawer(notifs);
-
-      // Also update dashboard simulated SMS alert if available
-      const fpNotif = notifs.find(n => n.notification_type === 'FAMILY_PASS');
-      const box = document.getElementById('dashboard-latest-fp-notif');
-      if (box && fpNotif) {
-        box.innerHTML = `<span class="font-bold">${fpNotif.title}</span>: ${fpNotif.message}`;
-      }
-    }
-  } catch (e) {
-    console.error("Notifications fetch failed:", e);
-  }
-}
-
-function renderNotificationsDrawer(notifs) {
-  const container = document.getElementById('notifications-drawer-list');
-  if (!container) return;
-
-  if (notifs.length === 0) {
-    container.innerHTML = `<p class="text-xs text-slate-400 p-6 text-center">No notifications yet.</p>`;
-    return;
-  }
-
-  container.innerHTML = notifs.map(n => `
-    <div class="p-3.5 rounded-xl border ${n.is_read ? 'bg-slate-50 border-slate-200' : 'bg-emerald-50/60 border-emerald-200'} space-y-1">
-      <div class="flex justify-between items-start">
-        <span class="text-xs font-bold text-slate-900">${n.title}</span>
-        <span class="text-[9px] text-slate-400">${new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-      </div>
-      <p class="text-xs text-slate-600 leading-relaxed">${n.message}</p>
-    </div>
-  `).join('');
-}
-
-function toggleNotificationDrawer() {
-  const drawer = document.getElementById('notification-drawer');
-  if (drawer.classList.contains('translate-x-full')) {
-    drawer.classList.remove('translate-x-full');
-  } else {
-    drawer.classList.add('translate-x-full');
-  }
-}
-
-// ==================== MODAL SUBMISSIONS ====================
-
-function openModal(modalId) {
-  const el = document.getElementById(modalId);
-  if (el) el.classList.remove('hidden');
-}
-
-function closeModal(modalId) {
-  const el = document.getElementById(modalId);
-  if (el) el.classList.add('hidden');
-}
-
-async function submitCashIn() {
-  const amount = parseFloat(document.getElementById('cashin-amount').value || 0);
-  try {
-    const res = await fetch('/api/wallet/cash-in/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount, reference: 'Bank Cash-In' })
-    });
-    if (res.ok) {
-      closeModal('modal-cashin');
-      showToast(`Successfully added ৳${amount.toLocaleString()} to wallet`);
-      await fetchWalletSummary();
-    }
-  } catch (e) {
-    console.error(e);
-  }
-}
-
-async function submitSendMoney() {
-  const receiver = document.getElementById('sendmoney-receiver').value;
-  const amount = parseFloat(document.getElementById('sendmoney-amount').value || 0);
-  try {
-    const res = await fetch('/api/wallet/send-money/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ receiver, amount })
-    });
-    const data = await res.json();
-    if (res.ok) {
-      closeModal('modal-sendmoney');
-      showToast(`Sent ৳${amount.toLocaleString()} to ${receiver}`);
-      await fetchWalletSummary();
-    } else {
-      alert(data.error || "Send money failed");
-    }
-  } catch (e) {
-    console.error(e);
-  }
-}
-
-async function submitUtilityService() {
-  const actionType = document.getElementById('utility-type').value;
-  const amount = parseFloat(document.getElementById('utility-amount').value || 0);
-  try {
-    const res = await fetch('/api/wallet/utility/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action_type: actionType, amount })
-    });
-    if (res.ok) {
-      closeModal('modal-utility');
-      showToast(`Payment of ৳${amount.toLocaleString()} processed successfully`);
-      await fetchWalletSummary();
-    }
-  } catch (e) {
-    console.error(e);
-  }
-}
-
-async function submitCreateFund() {
-  const name = document.getElementById('create-fund-name').value;
-  const category = document.getElementById('create-fund-category').value;
-  const budget = parseFloat(document.getElementById('create-fund-budget').value || 0);
-  const initial = parseFloat(document.getElementById('create-fund-initial').value || 0);
-
-  try {
-    const res = await fetch('/api/funds/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name,
-        category,
-        monthly_budget: budget,
-        allocated_amount: initial
-      })
-    });
-    if (res.ok) {
-      closeModal('modal-create-fund');
-      showToast(`Purpose Fund '${name}' created successfully!`);
-      await fetchFunds();
-      await fetchWalletSummary();
-    }
-  } catch (e) {
-    console.error(e);
-  }
-}
-
-function openInterfundTransferModal(srcId = null, dstId = null, amt = 1000) {
-  openModal('modal-interfund-transfer');
-  if (srcId) document.getElementById('transfer-source-fund').value = srcId;
-  if (dstId) document.getElementById('transfer-dest-fund').value = dstId;
-  if (amt) document.getElementById('transfer-amount').value = amt;
-}
-
-async function submitInterFundTransfer() {
-  const src = document.getElementById('transfer-source-fund').value;
-  const dst = document.getElementById('transfer-dest-fund').value;
-  const amount = parseFloat(document.getElementById('transfer-amount').value || 0);
-  const reason = document.getElementById('transfer-reason').value;
-
-  try {
-    const res = await fetch('/api/funds/transfer/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        source_fund_id: src,
-        destination_fund_id: dst,
-        amount,
-        reason
-      })
-    });
-    const data = await res.json();
-    if (res.ok) {
-      closeModal('modal-interfund-transfer');
-      showToast(data.message);
-      await fetchFunds();
-      await fetchWalletSummary();
-    } else {
-      alert(data.error || "Transfer failed");
-    }
-  } catch (e) {
-    console.error(e);
-  }
-}
-
-async function promptAllocateToFund(fundId, fundName) {
-  const amountStr = prompt(`Enter amount (৳) to allocate from your normal wallet to '${fundName}' Fund:`, "1000");
-  if (!amountStr) return;
-  const amount = parseFloat(amountStr);
-  if (isNaN(amount) || amount <= 0) return;
-
-  try {
-    const res = await fetch(`/api/funds/${fundId}/allocate/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount })
-    });
-    const data = await res.json();
-    if (res.ok) {
-      showToast(data.message);
-      await fetchFunds();
-      await fetchWalletSummary();
-    } else {
-      alert(data.error);
-    }
-  } catch (e) {
-    console.error(e);
-  }
-}
-
-async function submitCreateFamilyPass() {
-  const member = document.getElementById('fp-member-select').value;
-  const limit = parseFloat(document.getElementById('fp-limit-amount').value || 0);
-  const duration = parseInt(document.getElementById('fp-duration-days').value || 30);
-  const action = document.getElementById('fp-allowed-action').value;
-  const label = document.getElementById('fp-purpose-label').value;
-
-  try {
-    const res = await fetch('/api/familypass/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        member,
-        limit_amount: limit,
-        duration_days: duration,
-        allowed_action: action,
-        purpose_label: label
-      })
-    });
-    if (res.ok) {
-      closeModal('modal-create-familypass');
-      showToast(`FamilyPass issued for ${member}!`);
-      await fetchFamilyPasses();
-    }
-  } catch (e) {
-    console.error(e);
-  }
-}
-
-function showToast(message) {
-  const toast = document.createElement('div');
-  toast.className = "fixed bottom-5 right-5 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-semibold z-50 flex items-center gap-2 border border-slate-700 transition-all duration-300";
-  toast.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i> ${message}`;
-  document.body.appendChild(toast);
-  lucide.createIcons();
-  setTimeout(() => {
-    toast.remove();
-  }, 3500);
-}

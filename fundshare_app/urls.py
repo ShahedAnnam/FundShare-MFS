@@ -2,7 +2,7 @@ from django.urls import path
 from fundshare_app.views import api_views
 
 urlpatterns = [
-    # Auth & Demo Switcher
+    # Auth
     path('auth/login/', api_views.LoginView.as_view(), name='api-login'),
     path('auth/logout/', api_views.LogoutView.as_view(), name='api-logout'),
     path('auth/me/', api_views.MeView.as_view(), name='api-me'),
@@ -11,7 +11,8 @@ urlpatterns = [
     # Wallet
     path('wallet/summary/', api_views.WalletSummaryView.as_view(), name='api-wallet-summary'),
     path('wallet/cash-in/', api_views.CashInView.as_view(), name='api-cash-in'),
-    path('wallet/send-money/', api_views.SendMoneyView.as_view(), name='api-send-money'),
+    path('wallet/send/', api_views.SendMoneyView.as_view(), name='api-send-money'),       # JS uses /api/wallet/send/
+    path('wallet/send-money/', api_views.SendMoneyView.as_view(), name='api-send-money2'),
     path('wallet/utility/', api_views.UtilityServicesView.as_view(), name='api-utility'),
 
     # Purpose Funds
@@ -22,13 +23,17 @@ urlpatterns = [
 
     # Merchants & Payments
     path('merchants/', api_views.MerchantsListView.as_view(), name='api-merchants'),
+    path('pay/', api_views.PayMerchantView.as_view(), name='api-pay'),                    # JS uses /api/pay/
     path('payments/merchant/', api_views.PayMerchantView.as_view(), name='api-pay-merchant'),
     path('merchant/dashboard/', api_views.MerchantDashboardView.as_view(), name='api-merchant-dashboard'),
 
     # FamilyPass
-    path('familypass/', api_views.FamilyPassListView.as_view(), name='api-familypass-list'),
+    path('family-pass/', api_views.FamilyPassListView.as_view(), name='api-familypass-list'),   # JS uses /api/family-pass/
+    path('familypass/', api_views.FamilyPassListView.as_view(), name='api-familypass-list2'),
     path('familypass/members-list/', api_views.AvailableMembersView.as_view(), name='api-familypass-members'),
+    path('family-pass/<int:pk>/revoke/', api_views.FamilyPassRevokeView.as_view(), name='api-fp-revoke'),
     path('familypass/<int:pk>/revoke/', api_views.FamilyPassRevokeView.as_view(), name='api-familypass-revoke'),
+    path('family-pass/<int:pk>/activity/', api_views.FamilyPassActivityView.as_view(), name='api-fp-activity'),
     path('familypass/<int:pk>/activity/', api_views.FamilyPassActivityView.as_view(), name='api-familypass-activity'),
 
     # Transactions & Notifications
@@ -38,11 +43,14 @@ urlpatterns = [
 
     # AI & Intelligence
     path('intelligence/dashboard/', api_views.IntelligenceDashboardView.as_view(), name='api-intelligence-dashboard'),
-    path('intelligence/coach/', api_views.AICoachQueryView.as_view(), name='api-ai-coach'),
+    path('ai/query/', api_views.AICoachQueryView.as_view(), name='api-ai-coach'),         # JS uses /api/ai/query/
+    path('ai/set-key/', api_views.AISetKeyView.as_view(), name='api-ai-set-key'),
+    path('intelligence/coach/', api_views.AICoachQueryView.as_view(), name='api-ai-coach2'),
     path('reports/', api_views.ReportsView.as_view(), name='api-reports'),
 
     # Evaluations & Experiments (Admin / Judges)
     path('evaluation/metrics/', api_views.EvaluationMetricsView.as_view(), name='api-evaluation-metrics'),
     path('evaluation/experiments/', api_views.ExperimentRecordsView.as_view(), name='api-evaluation-experiments'),
-    path('admin/seed-data/', api_views.SeedDemoDataView.as_view(), name='api-seed-data'),
+    path('seed/', api_views.SeedDemoDataView.as_view(), name='api-seed-data'),             # JS uses /api/seed/
+    path('admin/seed-data/', api_views.SeedDemoDataView.as_view(), name='api-seed-data2'),
 ]

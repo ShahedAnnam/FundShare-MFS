@@ -11,9 +11,30 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
 from pathlib import Path
+import os
+
+try:
+    from decouple import config
+    def _config(key, default=''):
+        return config(key, default=default)
+except ImportError:
+    def _config(key, default=''):
+        return os.environ.get(key, default)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load .env file if it exists
+_env_file = BASE_DIR / '.env'
+if _env_file.exists():
+    try:
+        from decouple import Config, RepositoryEnv
+        _env_config = Config(RepositoryEnv(str(_env_file)))
+        GEMINI_API_KEY = _env_config('GEMINI_API_KEY', default='')
+    except Exception:
+        GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+else:
+    GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 
 
 # Quick-start development settings - unsuitable for production
@@ -130,7 +151,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Dhaka'
 
 USE_I18N = True
 
@@ -141,12 +162,20 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Authentication
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/login/'
+
+SESSION_COOKIE_AGE = 86400  # 24 hours
+SESSION_SAVE_EVERY_REQUEST = True
 
 # Email
-# https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
-
 MAILERS = {
     'default': {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
+

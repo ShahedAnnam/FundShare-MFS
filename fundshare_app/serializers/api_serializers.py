@@ -64,6 +64,7 @@ class FundTransferSerializer(serializers.ModelSerializer):
 
 class FamilyPassSerializer(serializers.ModelSerializer):
     owner_name = serializers.CharField(source='owner.full_name', read_only=True)
+    owner_username = serializers.CharField(source='owner.username', read_only=True)
     member_name = serializers.CharField(source='member.full_name', read_only=True)
     member_username = serializers.CharField(source='member.username', read_only=True)
     remaining_limit = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
@@ -73,7 +74,7 @@ class FamilyPassSerializer(serializers.ModelSerializer):
     class Meta:
         model = FamilyPass
         fields = [
-            'id', 'owner', 'owner_name', 'member', 'member_name', 'member_username',
+            'id', 'owner', 'owner_name', 'owner_username', 'member', 'member_name', 'member_username',
             'limit_amount', 'used_amount', 'remaining_limit', 'start_date', 'expiry_date',
             'allowed_action', 'status', 'purpose_label', 'is_valid', 'usage_pct', 'created_at'
         ]

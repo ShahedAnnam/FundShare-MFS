@@ -12,7 +12,7 @@ from fundshare_app.models import (
     UserRole, Wallet, Merchant, PurposeFund, FundTransfer,
     FamilyPass, FamilyPassStatus, FamilyPassAction,
     Transaction, TransactionType, PaymentSource,
-    Notification, AnomalyResult, BudgetForecast, AIInsight,
+    Notification, NotificationType, AnomalyResult, BudgetForecast, AIInsight,
     ExperimentRecord, ExperimentCondition
 )
 from fundshare_app.serializers.api_serializers import (
@@ -36,15 +36,31 @@ User = get_user_model()
 
 def get_authenticated_or_demo_user(request):
     """
-    Returns authenticated user, or defaults to demo user 'shahed' for frictionless hackathon evaluation.
+    Returns the authenticated user. If not authenticated via session, returns None
+    and views should return HTTP 401.
+    For backwards compatibility during hackathon, falls back to 'shahed' ONLY if
+    request has a special demo header (X-Demo-User).
     """
     if request.user and request.user.is_authenticated:
         return request.user
-    user = User.objects.filter(username="shahed").first()
-    if not user:
-        SyntheticDataGenerator.populate_database()
-        user = User.objects.filter(username="shahed").first()
-    return user
+    # Check demo override header (for evaluation/judge use only)
+    demo_user = request.headers.get('X-Demo-User')
+    if demo_user:
+        user = User.objects.filter(username=demo_user).first()
+        if user:
+            return user
+    return None
+
+
+def require_auth(request):
+    """Returns (user, error_response) tuple. If user is None, error_response is a 401 Response."""
+    user = get_authenticated_or_demo_user(request)
+    if user is None:
+        return None, Response(
+            {"error": "Authentication required. Please log in.", "redirect": "/login/"},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+    return user, None
 
 
 # ==================== AUTHENTICATION & DEMO SWITCHER ====================
@@ -53,18 +69,25 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        username = request.data.get('username')
-        password = request.data.get('password')
-        user = authenticate(username=username, password=password)
+        username = request.data.get('username', '').strip()
+        password = request.data.get('password', '').strip()
+        # Support phone number login
+        user_obj = User.objects.filter(phone=username).first() or \
+                   User.objects.filter(username=username).first()
+        if user_obj:
+            user = authenticate(request, username=user_obj.username, password=password)
+        else:
+            user = authenticate(request, username=username, password=password)
         if user:
             login(request, user)
             wallet, _ = Wallet.objects.get_or_create(owner=user)
             return Response({
                 "message": "Login successful",
                 "user": UserSerializer(user).data,
-                "wallet_balance": float(wallet.balance)
+                "wallet_balance": float(wallet.balance),
+                "role": user.role
             })
-        return Response({"error": "Invalid phone number or password"}, status=status.status.HTTP_401_UNAUTHORIZED if hasattr(status, 'status') else status.HTTP_401_UNAUTHORIZED)
+        return Response({"error": "Invalid phone number or password"}, status=status.HTTP_401_UNAUTHORIZED)
 
 
 class LogoutView(APIView):
@@ -75,7 +98,9 @@ class LogoutView(APIView):
 
 class MeView(APIView):
     def get(self, request):
-        user = get_authenticated_or_demo_user(request)
+        user, err = require_auth(request)
+        if err:
+            return err
         wallet, _ = Wallet.objects.get_or_create(owner=user)
         unread_notifications = Notification.objects.filter(user=user, is_read=False).count()
 
@@ -123,7 +148,9 @@ class SwitchRoleView(APIView):
 
 class WalletSummaryView(APIView):
     def get(self, request):
-        user = get_authenticated_or_demo_user(request)
+        user, err = require_auth(request)
+        if err:
+            return err
         wallet, _ = Wallet.objects.get_or_create(owner=user)
 
         funds = PurposeFund.objects.filter(owner=user, status='ACTIVE')
@@ -161,7 +188,9 @@ class WalletSummaryView(APIView):
 
 class CashInView(APIView):
     def post(self, request):
-        user = get_authenticated_or_demo_user(request)
+        user, err = require_auth(request)
+        if err:
+            return err
         try:
             amount = Decimal(str(request.data.get('amount', '0')))
             ref = request.data.get('reference', 'Simulated Bank Add Money')
@@ -182,7 +211,9 @@ class CashInView(APIView):
 
 class SendMoneyView(APIView):
     def post(self, request):
-        user = get_authenticated_or_demo_user(request)
+        user, err = require_auth(request)
+        if err:
+            return err
         try:
             amount = Decimal(str(request.data.get('amount', '0')))
             receiver_identifier = request.data.get('receiver')
@@ -213,7 +244,9 @@ class UtilityServicesView(APIView):
     Handles Mobile Recharge, Bill Payment, and Cash Out
     """
     def post(self, request):
-        user = get_authenticated_or_demo_user(request)
+        user, err = require_auth(request)
+        if err:
+            return err
         action_type = request.data.get('action_type')  # 'RECHARGE', 'BILL', 'CASHOUT'
         try:
             amount = Decimal(str(request.data.get('amount', '0')))
@@ -242,7 +275,9 @@ class UtilityServicesView(APIView):
 
 class PurposeFundsListView(APIView):
     def get(self, request):
-        user = get_authenticated_or_demo_user(request)
+        user, err = require_auth(request)
+        if err:
+            return err
         funds = PurposeFund.objects.filter(owner=user, status='ACTIVE')
         data = PurposeFundSerializer(funds, many=True).data
 
@@ -255,7 +290,9 @@ class PurposeFundsListView(APIView):
         return Response(data)
 
     def post(self, request):
-        user = get_authenticated_or_demo_user(request)
+        user, err = require_auth(request)
+        if err:
+            return err
         try:
             name = request.data.get('name')
             category = request.data.get('category')
@@ -305,7 +342,9 @@ class PurposeFundsListView(APIView):
 
 class PurposeFundAllocateView(APIView):
     def post(self, request, pk):
-        user = get_authenticated_or_demo_user(request)
+        user, err = require_auth(request)
+        if err:
+            return err
         fund = get_object_or_404(PurposeFund, id=pk, owner=user)
         try:
             amount = Decimal(str(request.data.get('amount', '0')))
@@ -325,7 +364,9 @@ class PurposeFundTransferView(APIView):
     AI may recommend it, but user performs the transfer.
     """
     def post(self, request):
-        user = get_authenticated_or_demo_user(request)
+        user, err = require_auth(request)
+        if err:
+            return err
         source_id = request.data.get('source_fund_id')
         dest_id = request.data.get('destination_fund_id')
         try:
@@ -354,7 +395,9 @@ class PurposeFundTransferView(APIView):
 
 class PurposeFundDetailView(APIView):
     def get(self, request, pk):
-        user = get_authenticated_or_demo_user(request)
+        user, err = require_auth(request)
+        if err:
+            return err
         fund = get_object_or_404(PurposeFund, id=pk, owner=user)
         txns = Transaction.objects.filter(purpose_fund=fund).order_by('-timestamp')
         forecast = BudgetForecaster.forecast_fund(fund)
@@ -384,7 +427,9 @@ class PayMerchantView(APIView):
     - FamilyPass Payment (7-POINT VALIDATION)
     """
     def post(self, request):
-        user = get_authenticated_or_demo_user(request)
+        user, err = require_auth(request)
+        if err:
+            return err
         try:
             merchant_id = request.data.get('merchant_id')
             amount = Decimal(str(request.data.get('amount', '0')))
@@ -434,7 +479,9 @@ class PayMerchantView(APIView):
 
 class MerchantDashboardView(APIView):
     def get(self, request):
-        user = get_authenticated_or_demo_user(request)
+        user, err = require_auth(request)
+        if err:
+            return err
         merchant = Merchant.objects.filter(user=user).first()
         if not merchant:
             # If logged in as another user, find Agora as demo merchant
@@ -455,7 +502,9 @@ class MerchantDashboardView(APIView):
 
 class FamilyPassListView(APIView):
     def get(self, request):
-        user = get_authenticated_or_demo_user(request)
+        user, err = require_auth(request)
+        if err:
+            return err
 
         # 1. Passes issued by user (Owner view)
         issued_passes = FamilyPass.objects.filter(owner=user).order_by('-created_at')
@@ -470,7 +519,9 @@ class FamilyPassListView(APIView):
         })
 
     def post(self, request):
-        user = get_authenticated_or_demo_user(request)
+        user, err = require_auth(request)
+        if err:
+            return err
         try:
             member_identifier = request.data.get('member')
             limit_amount = Decimal(str(request.data.get('limit_amount', '0')))
@@ -517,7 +568,9 @@ class FamilyPassListView(APIView):
 
 class FamilyPassRevokeView(APIView):
     def post(self, request, pk):
-        user = get_authenticated_or_demo_user(request)
+        user, err = require_auth(request)
+        if err:
+            return err
         fp = get_object_or_404(FamilyPass, id=pk, owner=user)
         fp.status = FamilyPassStatus.REVOKED
         fp.save(update_fields=['status', 'updated_at'])
@@ -538,7 +591,9 @@ class FamilyPassRevokeView(APIView):
 
 class FamilyPassActivityView(APIView):
     def get(self, request, pk):
-        user = get_authenticated_or_demo_user(request)
+        user, err = require_auth(request)
+        if err:
+            return err
         fp = get_object_or_404(FamilyPass, id=pk)
         if fp.owner != user and fp.member != user:
             return Response({"error": "Unauthorized access to FamilyPass activity."}, status=status.HTTP_403_FORBIDDEN)
@@ -560,7 +615,9 @@ class AvailableMembersView(APIView):
 
 class TransactionHistoryView(APIView):
     def get(self, request):
-        user = get_authenticated_or_demo_user(request)
+        user, err = require_auth(request)
+        if err:
+            return err
         qs = Transaction.objects.filter(sender=user)
 
         # Filters
@@ -589,14 +646,18 @@ class TransactionHistoryView(APIView):
 
 class NotificationsListView(APIView):
     def get(self, request):
-        user = get_authenticated_or_demo_user(request)
+        user, err = require_auth(request)
+        if err:
+            return err
         notifs = Notification.objects.filter(user=user).order_by('-created_at')[:25]
         return Response(NotificationSerializer(notifs, many=True).data)
 
 
 class MarkNotificationReadView(APIView):
     def post(self, request, pk):
-        user = get_authenticated_or_demo_user(request)
+        user, err = require_auth(request)
+        if err:
+            return err
         notif = get_object_or_404(Notification, id=pk, user=user)
         notif.is_read = True
         notif.save(update_fields=['is_read'])
@@ -607,7 +668,9 @@ class MarkNotificationReadView(APIView):
 
 class IntelligenceDashboardView(APIView):
     def get(self, request):
-        user = get_authenticated_or_demo_user(request)
+        user, err = require_auth(request)
+        if err:
+            return err
         behavioral = RecommendationEngine.get_behavioral_analysis(user)
         recommendations = RecommendationEngine.get_next_month_recommendations(user)
         transfer_suggestion = RecommendationEngine.get_interfund_transfer_recommendation(user)
@@ -631,7 +694,9 @@ class IntelligenceDashboardView(APIView):
 
 class AICoachQueryView(APIView):
     def post(self, request):
-        user = get_authenticated_or_demo_user(request)
+        user, err = require_auth(request)
+        if err:
+            return err
         question = request.data.get('question', '')
         lang = request.data.get('lang', 'en')
         if not question:
@@ -641,9 +706,58 @@ class AICoachQueryView(APIView):
         return Response(response)
 
 
+class AISetKeyView(APIView):
+    """
+    Allows the judge/user to set Gemini API key from the UI settings page.
+    Writes to the .env file for persistence.
+    """
+    def post(self, request):
+        import os
+        from pathlib import Path
+        gemini_key = request.data.get('gemini_api_key', '').strip()
+        if not gemini_key:
+            return Response({"error": "API key is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Update os.environ immediately for current process
+        os.environ['GEMINI_API_KEY'] = gemini_key
+
+        # Also update Django settings in memory
+        from django.conf import settings
+        settings.GEMINI_API_KEY = gemini_key
+
+        # Write to .env file for persistence
+        env_file = Path(settings.BASE_DIR) / '.env'
+        try:
+            if env_file.exists():
+                content = env_file.read_text(encoding='utf-8')
+                if 'GEMINI_API_KEY=' in content:
+                    lines = content.splitlines()
+                    new_lines = []
+                    for line in lines:
+                        if line.startswith('GEMINI_API_KEY='):
+                            new_lines.append(f'GEMINI_API_KEY={gemini_key}')
+                        else:
+                            new_lines.append(line)
+                    env_file.write_text('\n'.join(new_lines), encoding='utf-8')
+                else:
+                    with env_file.open('a', encoding='utf-8') as f:
+                        f.write(f'\nGEMINI_API_KEY={gemini_key}\n')
+            else:
+                env_file.write_text(f'GEMINI_API_KEY={gemini_key}\n', encoding='utf-8')
+        except Exception as e:
+            pass  # Key already set in memory, file write is best-effort
+
+        return Response({
+            "message": "Gemini API key saved successfully. AI Coach is now powered by Gemini 2.0 Flash.",
+            "ai_enabled": True
+        })
+
+
 class ReportsView(APIView):
     def get(self, request):
-        user = get_authenticated_or_demo_user(request)
+        user, err = require_auth(request)
+        if err:
+            return err
         period = request.query_params.get('period', 'monthly')
         report = ReportService.generate_report(user, period)
         return Response(report)

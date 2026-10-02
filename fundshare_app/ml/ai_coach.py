@@ -1,6 +1,7 @@
 import os
 from decimal import Decimal
 from django.utils import timezone
+from django.conf import settings
 from fundshare_app.models import PurposeFund, Transaction, FamilyPass, FamilyPassTransaction, AnomalyResult
 
 
@@ -99,29 +100,34 @@ class AICoach:
         facts = cls.get_grounded_context(user)
         q_lower = question.lower().strip()
 
-        # Check for Gemini API key if present
-        gemini_key = os.getenv("GEMINI_API_KEY")
+        # Check for Gemini API key from Django settings first, then env
+        gemini_key = getattr(settings, 'GEMINI_API_KEY', '') or os.environ.get('GEMINI_API_KEY', '')
+
         if gemini_key:
             try:
-                import google.generativeai as genai
-                genai.configure(api_key=gemini_key)
-                model = genai.GenerativeModel("gemini-1.5-flash")
+                from google import genai as google_genai
+                client = google_genai.Client(api_key=gemini_key)
                 prompt = (
-                    f"You are the AI Financial Coach for FundShare, an MFS wallet innovation for Bangladesh.\n"
+                    f"You are the AI Financial Coach for FundShare, an MFS (Mobile Financial Services) wallet innovation for Bangladesh.\n"
                     f"Answer the user's question using ONLY the provided structured financial data.\n"
                     f"Do NOT make up any numbers or transactions.\n"
                     f"Currency is Bangladeshi Taka (৳).\n"
-                    f"Structured facts: {facts}\n"
-                    f"User question: {question}\n"
-                    f"Keep your response concise, empathetic, and actionable."
+                    f"Structured financial facts about the user:\n{facts}\n\n"
+                    f"User question: {question}\n\n"
+                    f"Keep your response concise, empathetic, and actionable. Use bullet points and bold text for clarity.\n"
+                    f"If you see purpose funds, family pass data, or anomalies in the facts, reference them specifically."
                 )
-                response = model.generate_content(prompt)
+                response = client.models.generate_content(
+                    model='gemini-2.0-flash',
+                    contents=prompt
+                )
                 if response and response.text:
                     return {
                         "question": question,
                         "answer": response.text,
-                        "source": "Gemini-1.5-Flash (Grounded)",
-                        "grounded_facts": facts
+                        "source": "Gemini 2.0 Flash (AI-Grounded)",
+                        "grounded_facts": facts,
+                        "ai_powered": True
                     }
             except Exception as e:
                 # Fallback smoothly to deterministic grounded responder
