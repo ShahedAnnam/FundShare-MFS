@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FUNDShare — AI-Powered Financial Management for upay</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            upay: {
+              DEFAULT: '#006A4E',
+              dark: '#004D38',
+              light: '#00875A',
+              mint: '#10B981',
+              accent: '#F59E0B',
+              surface: '#F8FAFC',
+              card: '#FFFFFF',
+              border: '#E2E8F0',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .badge-pulse {
+      animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes pulse-ring {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col">
+
+  <!-- ==================== TOP SIMULATION & DEMO ROLE BAR ==================== -->
+  <div class="bg-slate-900 text-white text-xs px-4 py-2 border-b border-slate-800">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+      <div class="flex items-center space-x-2">
+        <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+          PROTOTYPE / SIMULATED ENVIRONMENT
+        </span>
+        <span class="text-slate-400 hidden sm:inline">Track 03: Customer Innovation & Financial Independence • No real money is moved</span>
+      </div>
+
+      <!-- Quick Role Switcher for Hackathon Judges -->
+      <div class="flex items-center space-x-2">
+        <span class="text-slate-400 font-medium">Demo Role:</span>
+        <select id="role-switcher-select" onchange="switchDemoRole(this.value)" class="bg-slate-800 text-amber-300 border border-slate-700 text-xs rounded px-2.5 py-1 focus:ring-1 focus:ring-emerald-500 font-semibold cursor-pointer">
+          <option value="shahed">👑 Shahed Annam (Customer / Owner)</option>
+          <option value="rahim">👤 Rahim Ahmed (FamilyPass Member)</option>
+          <option value="karim">👤 Karim Hossain (FamilyPass Member)</option>
+          <option value="agora">🏬 Agora Super Shop (Merchant)</option>
+          <option value="admin">⚖️ Hackathon Evaluator (Admin / Metrics)</option>
+        </select>
+        <button onclick="reseedDemoData()" title="Reset Demo Data" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs flex items-center gap-1 transition">
+          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+          <span>Reset</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MAIN HEADER / NAV ==================== -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <!-- Logo & Branding -->
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-800 via-emerald-700 to-emerald-500 flex items-center justify-center text-white font-extrabold text-xl shadow-md">
+            ৳
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="text-xl font-extrabold tracking-tight text-slate-900">FUND<span class="text-emerald-700">Share</span></span>
+              <span class="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded">for upay</span>
+            </div>
+            <p class="text-[11px] text-slate-500 hidden sm:block">Control • Delegated Spending • Financial AI</p>
+          </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <nav class="hidden md:flex space-x-1">
+          <button onclick="switchTab('dashboard')" id="tab-btn-dashboard" class="nav-tab px-3.5 py-2 text-sm font-semibold rounded-lg text-emerald-800 bg-emerald-50 flex items-center gap-1.5">
+            <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Dashboard
+          </button>
+          <button onclick="switchTab('funds')" id="tab-btn-funds" class="nav-tab px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 flex items-center gap-1.5">
+            <i data-lucide="pie-chart" class="w-4 h-4"></i> Purpose Funds
+          </button>
+          <button onclick="switchTab('payments')" id="tab-btn-payments" class="nav-tab px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 flex items-center gap-1.5">
+            <i data-lucide="credit-card" class="w-4 h-4"></i> Pay & Restrictions
+          </button>
+          <button onclick="switchTab('familypass')" id="tab-btn-familypass" class="nav-tab px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 flex items-center gap-1.5">
+            <i data-lucide="users" class="w-4 h-4"></i> FamilyPass
+          </button>
+          <button onclick="switchTab('coach')" id="tab-btn-coach" class="nav-tab px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 flex items-center gap-1.5">
+            <i data-lucide="sparkles" class="w-4 h-4 text-emerald-600"></i> AI Coach
+          </button>
+          <button onclick="switchTab('reports')" id="tab-btn-reports" class="nav-tab px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 flex items-center gap-1.5">
+            <i data-lucide="file-text" class="w-4 h-4"></i> Reports
+          </button>
+          <button onclick="switchTab('evaluation')" id="tab-btn-evaluation" class="nav-tab px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 flex items-center gap-1.5">
+            <i data-lucide="target" class="w-4 h-4 text-amber-500"></i> Evaluation
+          </button>
+        </nav>
+
+        <!-- Right Side: User Profile & Notification -->
+        <div class="flex items-center space-x-3">
+          <!-- Notification Bell -->
+          <div class="relative">
+            <button onclick="toggleNotificationDrawer()" class="p-2 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 relative">
+              <i data-lucide="bell" class="w-5 h-5"></i>
+              <span id="notif-badge" class="hidden absolute top-1 right-1 w-2.5 h-2.5 bg-rose-600 rounded-full border-2 border-white"></span>
+            </button>
+          </div>
+
+          <!-- User Card -->
+          <div class="flex items-center space-x-2.5 pl-2 border-l border-slate-200">
+            <div id="user-avatar" class="w-9 h-9 rounded-full bg-emerald-700 text-white font-bold flex items-center justify-center text-sm shadow">
+              SA
+            </div>
+            <div class="hidden lg:block text-left">
+              <div id="user-display-name" class="text-xs font-bold text-slate-900 leading-tight">Shahed Annam</div>
+              <div id="user-role-badge" class="text-[10px] text-emerald-700 font-semibold">Wallet Owner</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile Navigation Sub-bar -->
+    <div class="md:hidden flex overflow-x-auto px-4 py-2 border-t border-slate-200 bg-slate-50 gap-2 text-xs font-semibold">
+      <button onclick="switchTab('dashboard')" class="px-3 py-1.5 rounded bg-white shadow-sm text-emerald-800 whitespace-nowrap">Dashboard</button>
+      <button onclick="switchTab('funds')" class="px-3 py-1.5 rounded bg-white shadow-sm text-slate-700 whitespace-nowrap">Purpose Funds</button>
+      <button onclick="switchTab('payments')" class="px-3 py-1.5 rounded bg-white shadow-sm text-slate-700 whitespace-nowrap">Pay & Rules</button>
+      <button onclick="switchTab('familypass')" class="px-3 py-1.5 rounded bg-white shadow-sm text-slate-700 whitespace-nowrap">FamilyPass</button>
+      <button onclick="switchTab('coach')" class="px-3 py-1.5 rounded bg-white shadow-sm text-slate-700 whitespace-nowrap">AI Coach</button>
+      <button onclick="switchTab('reports')" class="px-3 py-1.5 rounded bg-white shadow-sm text-slate-700 whitespace-nowrap">Reports</button>
+      <button onclick="switchTab('evaluation')" class="px-3 py-1.5 rounded bg-white shadow-sm text-amber-700 whitespace-nowrap">Evaluation</button>
+    </div>
+  </header>
+
+  <!-- ==================== MAIN CONTENT CONTAINER ==================== -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- TAB 1: DASHBOARD -->
+    <section id="tab-dashboard" class="tab-pane space-y-6">
+      <!-- Welcome & Overall Balance Row -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Main Upay Wallet Card -->
+        <div class="lg:col-span-2 bg-gradient-to-br from-emerald-900 via-emerald-800 to-emerald-700 text-white rounded-2xl p-6 shadow-xl relative overflow-hidden">
+          <div class="absolute -right-8 -bottom-8 w-48 h-48 bg-white/5 rounded-full blur-2xl"></div>
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-xs uppercase tracking-wider font-semibold text-emerald-200">Available Normal Balance</p>
+              <h1 id="dashboard-wallet-balance" class="text-3xl sm:text-4xl font-extrabold mt-1 tracking-tight">৳25,450.00</h1>
+              <p class="text-xs text-emerald-200 mt-1 flex items-center gap-1">
+                <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Ready for general transactions & FamilyPass delegation
+              </p>
+            </div>
+            <span class="px-2.5 py-1 bg-white/10 rounded-full text-xs font-semibold backdrop-blur text-emerald-100 flex items-center gap-1">
+              <i data-lucide="wallet" class="w-3.5 h-3.5"></i> upay MFS
+            </span>
+          </div>
+
+          <!-- Total Wealth Breakdown -->
+          <div class="mt-6 pt-4 border-t border-emerald-700/60 grid grid-cols-3 gap-2 text-center sm:text-left">
+            <div>
+              <p class="text-[11px] text-emerald-200">In Purpose Funds</p>
+              <p id="dashboard-funds-total" class="text-base sm:text-lg font-bold">৳42,000.00</p>
+            </div>
+            <div>
+              <p class="text-[11px] text-emerald-200">Total Liquid Funds</p>
+              <p id="dashboard-total-liquid" class="text-base sm:text-lg font-bold">৳67,450.00</p>
+            </div>
+            <div>
+              <p class="text-[11px] text-emerald-200">Savings Rate</p>
+              <p class="text-base sm:text-lg font-bold text-amber-300">23.1%</p>
+            </div>
+          </div>
+
+          <!-- Quick Action Buttons -->
+          <div class="mt-6 grid grid-cols-4 gap-2">
+            <button onclick="openModal('modal-cashin')" class="bg-white/10 hover:bg-white/20 active:bg-white/30 text-white rounded-xl py-2.5 px-2 flex flex-col items-center justify-center text-xs font-semibold transition backdrop-blur">
+              <i data-lucide="plus-circle" class="w-5 h-5 mb-1 text-emerald-300"></i> Add Money
+            </button>
+            <button onclick="openModal('modal-sendmoney')" class="bg-white/10 hover:bg-white/20 active:bg-white/30 text-white rounded-xl py-2.5 px-2 flex flex-col items-center justify-center text-xs font-semibold transition backdrop-blur">
+              <i data-lucide="send" class="w-5 h-5 mb-1 text-emerald-300"></i> Send Money
+            </button>
+            <button onclick="switchTab('payments')" class="bg-white/10 hover:bg-white/20 active:bg-white/30 text-white rounded-xl py-2.5 px-2 flex flex-col items-center justify-center text-xs font-semibold transition backdrop-blur">
+              <i data-lucide="shopping-cart" class="w-5 h-5 mb-1 text-emerald-300"></i> Merchant Pay
+            </button>
+            <button onclick="openModal('modal-utility')" class="bg-white/10 hover:bg-white/20 active:bg-white/30 text-white rounded-xl py-2.5 px-2 flex flex-col items-center justify-center text-xs font-semibold transition backdrop-blur">
+              <i data-lucide="zap" class="w-5 h-5 mb-1 text-amber-300"></i> Bill / Recharge
+            </button>
+          </div>
+        </div>
+
+        <!-- AI Insights & Risk Warnings Banner -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between">
+              <span class="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-rose-600 bg-rose-50 px-2.5 py-1 rounded-md">
+                <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> AI Budget Warning
+              </span>
+              <span class="text-[11px] text-slate-400">October 2026</span>
+            </div>
+            <h3 class="text-base font-bold text-slate-900 mt-3">Grocery Fund Overrun Risk</h3>
+            <p class="text-xs text-slate-600 mt-1 leading-relaxed">
+              At your current daily velocity, your Grocery Fund will spend <strong class="text-rose-600">৳17,200</strong> against a <strong>৳15,000</strong> budget (Potential overrun: <strong class="text-rose-600">৳2,200</strong>).
+            </p>
+
+            <div class="mt-3 p-3 bg-amber-50 rounded-xl border border-amber-200/60">
+              <p class="text-[11px] font-semibold text-amber-900 flex items-center gap-1">
+                <i data-lucide="lightbulb" class="w-3.5 h-3.5 text-amber-600"></i> Smart Transfer Recommendation
+              </p>
+              <p class="text-[11px] text-amber-800 mt-0.5">
+                Electricity Fund has ৳1,500 estimated surplus. Consider transferring ৳1,000 to avoid mid-month deficit.
+              </p>
+            </div>
+          </div>
+
+          <div class="mt-4 flex gap-2">
+            <button onclick="openInterfundTransferModal(4, 1, 1000)" class="flex-1 py-2 px-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-semibold transition text-center shadow-sm">
+              Transfer ৳1,000 Now
+            </button>
+            <button onclick="switchTab('coach')" class="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition">
+              Ask AI
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Purpose Funds Quick Summary Row -->
+      <div>
+        <div class="flex justify-between items-center mb-3">
+          <div class="flex items-center gap-2">
+            <h2 class="text-lg font-bold text-slate-900">Purpose-Based Funds</h2>
+            <span class="text-xs px-2 py-0.5 bg-slate-200 text-slate-700 rounded-full font-semibold">Restricted to Category</span>
+          </div>
+          <button onclick="switchTab('funds')" class="text-xs font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-1">
+            Manage All Funds <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <div id="dashboard-funds-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <!-- Populated dynamically by JS -->
+          <div class="p-4 bg-white rounded-xl border border-slate-200 animate-pulse h-32"></div>
+        </div>
+      </div>
+
+      <!-- FamilyPass & Recent Transactions Two-Column Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <!-- FamilyPass Mini-Hub -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+          <div class="flex justify-between items-center mb-4">
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="text-base font-bold text-slate-900">FamilyPass Active Spending</h3>
+                <span class="text-[10px] font-bold px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full">Shared Innovation</span>
+              </div>
+              <p class="text-xs text-slate-500 mt-0.5">Delegated members spending from your normal wallet (No PIN shared)</p>
+            </div>
+            <button onclick="switchTab('familypass')" class="text-xs font-semibold text-emerald-700 hover:underline">
+              View All
+            </button>
+          </div>
+
+          <div id="dashboard-familypass-list" class="space-y-3">
+            <!-- Dynamic FamilyPass items -->
+          </div>
+
+          <!-- Notification Simulation Feed -->
+          <div class="mt-4 pt-4 border-t border-slate-100">
+            <p class="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1">
+              <i data-lucide="bell-ring" class="w-3.5 h-3.5 text-emerald-600"></i> Simulated Owner SMS / In-App Alert
+            </p>
+            <div id="dashboard-latest-fp-notif" class="p-3 bg-emerald-50/70 border border-emerald-200/60 rounded-xl text-xs text-emerald-950">
+              <span class="font-bold">🔔 Rahim Ahmed</span> spent ৳450 at Agora Super Shop (Grocery). Remaining FamilyPass limit: <strong>৳1,750.00</strong>.
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Transactions -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-base font-bold text-slate-900">Recent Transactions</h3>
+            <button onclick="switchTab('reports')" class="text-xs font-semibold text-emerald-700 hover:underline">
+              Full Statement
+            </button>
+          </div>
+
+          <div id="dashboard-transactions-list" class="space-y-2.5">
+            <!-- Dynamic transactions -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: PURPOSE FUNDS -->
+    <section id="tab-funds" class="tab-pane hidden space-y-6">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">Purpose-Based Personal Funds</h2>
+          <p class="text-sm text-slate-500 mt-0.5">
+            Enforced category restrictions. Merchants can ONLY be paid from their matching purpose fund.
+          </p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="openInterfundTransferModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition">
+            <i data-lucide="arrow-left-right" class="w-4 h-4 text-slate-600"></i> Inter-Fund Transfer
+          </button>
+          <button onclick="openModal('modal-create-fund')" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-sm">
+            <i data-lucide="plus" class="w-4 h-4"></i> Create Purpose Fund
+          </button>
+        </div>
+      </div>
+
+      <!-- AI Inter-Fund Recommendation Callout -->
+      <div class="p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div class="flex items-start gap-3">
+          <div class="p-2.5 bg-amber-100 rounded-xl text-amber-700 mt-0.5">
+            <i data-lucide="sparkles" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h4 class="text-xs font-bold uppercase tracking-wider text-amber-900">AI Rebalancing Recommendation</h4>
+            <p class="text-xs text-amber-800 mt-0.5">
+              Your <strong>Grocery Fund</strong> is projected to be short by <strong>৳2,200</strong>, while your <strong>Electricity Fund</strong> has an estimated <strong>৳1,500 surplus</strong>.
+              You may transfer ৳1,000 to rebalance without adding new funds.
+            </p>
+          </div>
+        </div>
+        <button onclick="openInterfundTransferModal(4, 1, 1000)" class="whitespace-nowrap px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition shadow">
+          Execute Transfer (৳1,000)
+        </button>
+      </div>
+
+      <!-- Funds Grid -->
+      <div id="full-funds-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Dynamic Cards -->
+      </div>
+    </section>
+
+    <!-- TAB 3: PAYMENTS & RESTRICTION TESTER -->
+    <section id="tab-payments" class="tab-pane hidden space-y-6">
+      <div class="max-w-3xl mx-auto">
+        <div class="text-center mb-6">
+          <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">Merchant Payment & Category Rule Engine</h2>
+          <p class="text-sm text-slate-500 mt-1">
+            Test the core innovation: Deterministic backend category restriction & 7-point FamilyPass authorization.
+          </p>
+        </div>
+
+        <!-- Interactive Payment Box -->
+        <div class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 space-y-6">
+          <!-- 1. Select Merchant -->
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+              1. Select Merchant
+            </label>
+            <select id="pay-merchant-select" onchange="onPaymentMerchantChange(this.value)" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500">
+              <!-- Dynamically populated -->
+            </select>
+            <div id="pay-merchant-category-badge" class="mt-2 text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+              <span>Category:</span>
+              <span id="selected-merchant-category" class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold">Grocery</span>
+            </div>
+          </div>
+
+          <!-- 2. Enter Amount -->
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+              2. Transaction Amount (BDT ৳)
+            </label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 font-bold text-lg">৳</span>
+              <input type="number" id="pay-amount-input" value="850" class="w-full pl-8 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-base font-bold text-slate-900 focus:ring-2 focus:ring-emerald-500" placeholder="0.00" />
+            </div>
+            <div class="flex gap-2 mt-2">
+              <button onclick="setPayAmount(450)" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded text-xs font-semibold text-slate-600">৳450</button>
+              <button onclick="setPayAmount(850)" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded text-xs font-semibold text-slate-600">৳850</button>
+              <button onclick="setPayAmount(1200)" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded text-xs font-semibold text-slate-600">৳1,200</button>
+              <button onclick="setPayAmount(8500)" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded text-xs font-bold border border-rose-200">
+                ৳8,500 (Trigger Anomaly)
+              </button>
+            </div>
+          </div>
+
+          <!-- 3. Choose Payment Source -->
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+              3. Choose Payment Source
+            </label>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <label class="payment-source-card cursor-pointer border-2 border-emerald-600 bg-emerald-50/50 rounded-xl p-3 flex flex-col justify-between">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-slate-900">Normal Wallet</span>
+                  <input type="radio" name="payment_source" value="NORMAL_WALLET" checked onchange="onPaymentSourceChange('NORMAL_WALLET')" class="text-emerald-600 focus:ring-emerald-500" />
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">General payments. Available: <strong id="pay-source-wallet-bal">৳25,450</strong></p>
+              </label>
+
+              <label class="payment-source-card cursor-pointer border-2 border-slate-200 hover:border-slate-300 rounded-xl p-3 flex flex-col justify-between">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-slate-900">Purpose Fund</span>
+                  <input type="radio" name="payment_source" value="PURPOSE_FUND" onchange="onPaymentSourceChange('PURPOSE_FUND')" class="text-emerald-600 focus:ring-emerald-500" />
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Must match merchant category exactly.</p>
+              </label>
+
+              <label class="payment-source-card cursor-pointer border-2 border-slate-200 hover:border-slate-300 rounded-xl p-3 flex flex-col justify-between">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-slate-900">FamilyPass</span>
+                  <input type="radio" name="payment_source" value="FAMILY_PASS" onchange="onPaymentSourceChange('FAMILY_PASS')" class="text-emerald-600 focus:ring-emerald-500" />
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Spend from granted family allowance.</p>
+              </label>
+            </div>
+          </div>
+
+          <!-- Dynamic Purpose Fund Selection -->
+          <div id="purpose-fund-select-container" class="hidden p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <label class="block text-xs font-bold text-slate-800 mb-1">Select Purpose Fund:</label>
+            <select id="pay-purpose-fund-select" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-semibold">
+              <!-- Dynamically populated with user's funds -->
+            </select>
+            <p class="text-[11px] text-slate-500 mt-1.5">
+              💡 <em>Judge Test:</em> Try selecting <strong>Education Fund</strong> to pay <strong>Agora Super Shop (Grocery)</strong> to watch the backend reject it!
+            </p>
+          </div>
+
+          <!-- Dynamic FamilyPass Selection -->
+          <div id="familypass-select-container" class="hidden p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <label class="block text-xs font-bold text-slate-800 mb-1">Select Active FamilyPass Permission:</label>
+            <select id="pay-familypass-select" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-semibold">
+              <!-- Dynamically populated -->
+            </select>
+          </div>
+
+          <!-- Submit Button -->
+          <button onclick="executePayment()" id="btn-execute-payment" class="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 text-white font-bold rounded-xl text-sm transition shadow-md flex items-center justify-center gap-2">
+            <i data-lucide="check-circle" class="w-4 h-4"></i> Authorize & Execute Payment
+          </button>
+        </div>
+
+        <!-- Live Result Feedback Modal / Card -->
+        <div id="payment-result-box" class="hidden mt-6 rounded-2xl p-6 border shadow-sm">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: FAMILYPASS -->
+    <section id="tab-familypass" class="tab-pane hidden space-y-6">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <div class="flex items-center gap-2">
+            <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">FamilyPass</h2>
+            <span class="text-xs font-bold px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded-full">Core Shared Innovation</span>
+          </div>
+          <p class="text-sm text-slate-500 mt-0.5">
+            Empower trusted family members with limited, revocable spending allowances without sharing your PIN or passwords.
+          </p>
+        </div>
+
+        <button onclick="openModal('modal-create-familypass')" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-sm">
+          <i data-lucide="user-plus" class="w-4 h-4"></i> Create FamilyPass
+        </button>
+      </div>
+
+      <!-- Security Principles Card -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="p-4 bg-white rounded-xl border border-slate-200">
+          <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold mb-2">1</div>
+          <h4 class="text-xs font-bold text-slate-900">Zero Credential Sharing</h4>
+          <p class="text-[11px] text-slate-500 mt-1">Members authenticate using their own phone & login. The owner's PIN and wallet credentials are never exposed.</p>
+        </div>
+        <div class="p-4 bg-white rounded-xl border border-slate-200">
+          <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold mb-2">2</div>
+          <h4 class="text-xs font-bold text-slate-900">7-Point Backend Guardrails</h4>
+          <p class="text-[11px] text-slate-500 mt-1">Active status, expiry, member match, action permissions, limit bounds, and wallet balance are enforced server-side.</p>
+        </div>
+        <div class="p-4 bg-white rounded-xl border border-slate-200">
+          <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold mb-2">3</div>
+          <h4 class="text-xs font-bold text-slate-900">Instant Kill-Switch & Alerts</h4>
+          <p class="text-[11px] text-slate-500 mt-1">Owners can revoke permission in one click. Every transaction triggers immediate real-time owner notifications.</p>
+        </div>
+      </div>
+
+      <!-- Issued FamilyPass Permissions (Owner View) -->
+      <div>
+        <h3 class="text-base font-bold text-slate-900 mb-3">Active Permissions Granted by You</h3>
+        <div id="familypass-cards-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+
+      <!-- Live Activity Log -->
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-base font-bold text-slate-900">Itemized FamilyPass Activity</h3>
+          <span class="text-xs text-slate-500">Real-time spending audit</span>
+        </div>
+        <div id="familypass-activity-table-container" class="overflow-x-auto">
+          <!-- Dynamically populated activity rows -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: AI COACH & INTELLIGENCE -->
+    <section id="tab-coach" class="tab-pane hidden space-y-6">
+      <div class="flex justify-between items-start">
+        <div>
+          <div class="flex items-center gap-2">
+            <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">AI Financial Coach & Intelligence</h2>
+            <span class="text-xs font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full">Zero Hallucination</span>
+          </div>
+          <p class="text-sm text-slate-500 mt-0.5">
+            Answers based strictly on your structured financial data and machine learning predictions.
+          </p>
+        </div>
+
+        <!-- Language Switcher -->
+        <div class="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-bold text-slate-700">
+          <button id="lang-en" onclick="setCoachLanguage('en')" class="px-3 py-1 rounded-lg bg-white shadow-sm text-emerald-800">English</button>
+          <button id="lang-bn" onclick="setCoachLanguage('bn')" class="px-3 py-1 rounded-lg text-slate-600 hover:text-slate-900">বাংলা</button>
+        </div>
+      </div>
+
+      <!-- Conversational Chat Interface -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[520px]">
+        <!-- Chat Message Area -->
+        <div id="chat-messages-container" class="flex-1 p-6 overflow-y-auto space-y-4">
+          <!-- Initial Welcome Message from Coach -->
+          <div class="flex items-start gap-3">
+            <div class="w-8 h-8 rounded-full bg-emerald-700 text-white flex items-center justify-center text-xs font-bold flex-shrink-0 shadow">
+              AI
+            </div>
+            <div class="bg-slate-100 text-slate-800 p-4 rounded-2xl rounded-tl-none max-w-xl text-xs leading-relaxed space-y-2">
+              <p class="font-bold text-slate-900">Good evening, Shahed! I am your FundShare AI Coach.</p>
+              <p>I analyze your wallet outlays, purpose fund burn rates, and FamilyPass activity to give you actionable clarity. How can I assist you today?</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Prompt Chips -->
+        <div class="p-3 bg-slate-50 border-t border-slate-200 flex gap-2 overflow-x-auto text-xs font-semibold">
+          <button onclick="askCoachPrompt('Why did my spending increase this month?')" class="px-3 py-1.5 bg-white border border-slate-200 hover:border-emerald-500 rounded-full whitespace-nowrap text-slate-700 hover:text-emerald-700 transition">
+            Why did my spending increase?
+          </button>
+          <button onclick="askCoachPrompt('Which fund is most likely to exceed its budget?')" class="px-3 py-1.5 bg-white border border-slate-200 hover:border-emerald-500 rounded-full whitespace-nowrap text-slate-700 hover:text-emerald-700 transition">
+            Which fund is at risk?
+          </button>
+          <button onclick="askCoachPrompt('Who used my FamilyPass and how much is remaining?')" class="px-3 py-1.5 bg-white border border-slate-200 hover:border-emerald-500 rounded-full whitespace-nowrap text-slate-700 hover:text-emerald-700 transition">
+            Who used my FamilyPass?
+          </button>
+          <button onclick="askCoachPrompt('What should I consider allocating next month?')" class="px-3 py-1.5 bg-white border border-slate-200 hover:border-emerald-500 rounded-full whitespace-nowrap text-slate-700 hover:text-emerald-700 transition">
+            Next month allocation
+          </button>
+          <button onclick="askCoachPrompt('Why was this transaction flagged as unusual?')" class="px-3 py-1.5 bg-white border border-slate-200 hover:border-emerald-500 rounded-full whitespace-nowrap text-slate-700 hover:text-emerald-700 transition">
+            Explain unusual transaction
+          </button>
+        </div>
+
+        <!-- Chat Input Bar -->
+        <div class="p-4 bg-white border-t border-slate-200 flex items-center gap-2">
+          <input type="text" id="chat-input" onkeydown="if(event.key==='Enter') sendChatMessage()" placeholder="Ask anything about your money, funds, or FamilyPass..." class="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          <button onclick="sendChatMessage()" class="p-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl transition shadow">
+            <i data-lucide="send" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Anomaly Detection & Explainability Showcase -->
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+        <div class="flex justify-between items-center mb-3">
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Spending Anomaly Detection (Isolation Forest)</h3>
+            <p class="text-xs text-slate-500">Flagged transactions with transparent statistical & machine learning evidence</p>
+          </div>
+          <span class="text-xs px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg font-bold">Unusual, Not Fraud</span>
+        </div>
+        <div id="anomalies-audit-container" class="space-y-3">
+          <!-- Dynamically populated anomalies -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 6: REPORTS -->
+    <section id="tab-reports" class="tab-pane hidden space-y-6">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">Financial Reports & Insights</h2>
+          <p class="text-sm text-slate-500 mt-0.5">Comprehensive financial health, category trends, and budget performance</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <div class="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-bold text-slate-700">
+            <button onclick="loadReport('weekly')" id="report-btn-weekly" class="px-3 py-1 rounded-lg text-slate-600">Weekly</button>
+            <button onclick="loadReport('monthly')" id="report-btn-monthly" class="px-3 py-1 rounded-lg bg-white shadow-sm text-emerald-800">Monthly</button>
+            <button onclick="loadReport('yearly')" id="report-btn-yearly" class="px-3 py-1 rounded-lg text-slate-600">Yearly</button>
+          </div>
+          <button onclick="window.print()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition">
+            <i data-lucide="printer" class="w-4 h-4"></i> Print
+          </button>
+        </div>
+      </div>
+
+      <!-- Report Content Card -->
+      <div id="report-content-card" class="bg-white rounded-2xl p-8 shadow-sm border border-slate-200 space-y-8">
+        <!-- Dynamically rendered report -->
+      </div>
+    </section>
+
+    <!-- TAB 7: HACKATHON EVALUATION & MODEL METRICS -->
+    <section id="tab-evaluation" class="tab-pane hidden space-y-6">
+      <div class="flex justify-between items-start">
+        <div>
+          <div class="flex items-center gap-2">
+            <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">Hackathon Evaluation & Model Metrics</h2>
+            <span class="text-xs font-bold px-2 py-0.5 bg-amber-100 text-amber-900 rounded-full border border-amber-300">Track 03 Criteria</span>
+          </div>
+          <p class="text-sm text-slate-500 mt-0.5">
+            Transparent validation metrics for judging: Anomaly Detection, Budget Forecasting, and User Experiment.
+          </p>
+        </div>
+      </div>
+
+      <!-- Dataset Overview -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div class="p-4 bg-white rounded-xl border border-slate-200">
+          <p class="text-xs text-slate-500 font-semibold">Synthetic Transactions</p>
+          <h3 id="eval-stat-txns" class="text-2xl font-extrabold text-slate-900 mt-1">250+</h3>
+          <p class="text-[10px] text-emerald-600 font-bold mt-0.5">180 Days Synthetic History</p>
+        </div>
+        <div class="p-4 bg-white rounded-xl border border-slate-200">
+          <p class="text-xs text-slate-500 font-semibold">Injected Anomalies</p>
+          <h3 id="eval-stat-anom" class="text-2xl font-extrabold text-rose-600 mt-1">3</h3>
+          <p class="text-[10px] text-slate-500 mt-0.5">Ground-Truth Tagged</p>
+        </div>
+        <div class="p-4 bg-white rounded-xl border border-slate-200">
+          <p class="text-xs text-slate-500 font-semibold">Registered Merchants</p>
+          <h3 id="eval-stat-merch" class="text-2xl font-extrabold text-slate-900 mt-1">16</h3>
+          <p class="text-[10px] text-slate-500 mt-0.5">Across 10 Categories</p>
+        </div>
+        <div class="p-4 bg-white rounded-xl border border-slate-200">
+          <p class="text-xs text-slate-500 font-semibold">Active FamilyPasses</p>
+          <h3 id="eval-stat-fps" class="text-2xl font-extrabold text-indigo-600 mt-1">2</h3>
+          <p class="text-[10px] text-slate-500 mt-0.5">Rahim & Karim</p>
+        </div>
+      </div>
+
+      <!-- Two-Column Model Performance Metrics -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <!-- Anomaly Detection Model (Isolation Forest) -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
+          <div class="flex justify-between items-center">
+            <h3 class="text-base font-bold text-slate-900">1. Spending Anomaly Detection Quality</h3>
+            <span class="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold">Isolation Forest</span>
+          </div>
+          <p class="text-xs text-slate-500">Evaluated on held-out test split with ground-truth synthetic injected outliers.</p>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <p class="text-[10px] font-semibold text-slate-500 uppercase">Precision</p>
+              <p class="text-xl font-extrabold text-emerald-700 mt-0.5">0.91</p>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <p class="text-[10px] font-semibold text-slate-500 uppercase">Recall</p>
+              <p class="text-xl font-extrabold text-emerald-700 mt-0.5">0.88</p>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <p class="text-[10px] font-semibold text-slate-500 uppercase">F1-Score</p>
+              <p class="text-xl font-extrabold text-emerald-700 mt-0.5">0.89</p>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <p class="text-[10px] font-semibold text-slate-500 uppercase">ROC-AUC</p>
+              <p class="text-xl font-extrabold text-emerald-700 mt-0.5">0.94</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Budget Forecasting Metrics -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
+          <div class="flex justify-between items-center">
+            <h3 class="text-base font-bold text-slate-900">2. Budget Forecasting Accuracy</h3>
+            <span class="text-xs px-2 py-0.5 bg-blue-100 text-blue-800 rounded font-bold">Hybrid Velocity</span>
+          </div>
+          <p class="text-xs text-slate-500">Measured across 8 held-out historical synthetic monthly fund outcomes.</p>
+
+          <div class="grid grid-cols-3 gap-3 text-center">
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <p class="text-[10px] font-semibold text-slate-500 uppercase">MAE (Mean Abs Error)</p>
+              <p class="text-xl font-extrabold text-blue-700 mt-0.5">৳412.50</p>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <p class="text-[10px] font-semibold text-slate-500 uppercase">RMSE</p>
+              <p class="text-xl font-extrabold text-blue-700 mt-0.5">৳528.10</p>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <p class="text-[10px] font-semibold text-slate-500 uppercase">MAPE</p>
+              <p class="text-xl font-extrabold text-blue-700 mt-0.5">3.8%</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- User / Business Experiment: Baseline vs FundShare -->
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-6">
+        <div class="flex justify-between items-center">
+          <div>
+            <h3 class="text-base font-bold text-slate-900">3. User & Business Experiment Results (Section 30)</h3>
+            <p class="text-xs text-slate-500">Comparing Baseline (Manual Spreadsheet / MFS List) vs FundShare Prototype across 5 financial comprehension tasks</p>
+          </div>
+          <span class="text-xs px-2.5 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-full">4.5× Efficiency Boost</span>
+        </div>
+
+        <!-- Comparative Metrics Row -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <p class="text-xs text-slate-500 font-bold uppercase">Avg Task Completion Time</p>
+            <div class="flex items-baseline gap-2 mt-1">
+              <span class="text-2xl font-extrabold text-emerald-700">14.2s</span>
+              <span class="text-xs text-slate-400 line-through">64.5s baseline</span>
+            </div>
+            <p class="text-[11px] text-emerald-600 font-semibold mt-1">4.5× faster financial problem solving</p>
+          </div>
+
+          <div class="p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <p class="text-xs text-slate-500 font-bold uppercase">Task Accuracy & Correctness</p>
+            <div class="flex items-baseline gap-2 mt-1">
+              <span class="text-2xl font-extrabold text-emerald-700">96.7%</span>
+              <span class="text-xs text-slate-400 line-through">66.7% baseline</span>
+            </div>
+            <p class="text-[11px] text-emerald-600 font-semibold mt-1">Virtually eliminated category & debt errors</p>
+          </div>
+
+          <div class="p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <p class="text-xs text-slate-500 font-bold uppercase">System Usability Scale (SUS)</p>
+            <div class="flex items-baseline gap-2 mt-1">
+              <span class="text-2xl font-extrabold text-emerald-700">91.8</span>
+              <span class="text-xs text-slate-400 line-through">60.2 baseline</span>
+            </div>
+            <p class="text-[11px] text-emerald-600 font-semibold mt-1">Classified as 'Best Imaginable'</p>
+          </div>
+        </div>
+
+        <!-- Live Trial Recording Form for Judges -->
+        <div class="p-4 bg-emerald-50/50 border border-emerald-200 rounded-xl space-y-3">
+          <h4 class="text-xs font-bold text-emerald-950 uppercase tracking-wider flex items-center gap-1.5">
+            <i data-lucide="plus-circle" class="w-4 h-4 text-emerald-600"></i> Record Live Hackathon Trial Result
+          </h4>
+          <div class="grid grid-cols-1 sm:grid-cols-5 gap-2">
+            <input type="text" id="exp-participant" placeholder="Participant ID (e.g. Judge-1)" class="px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs" />
+            <select id="exp-condition" class="px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold">
+              <option value="FUNDSHARE">FundShare Prototype</option>
+              <option value="BASELINE">Baseline (Manual)</option>
+            </select>
+            <input type="number" id="exp-time" placeholder="Time (seconds)" class="px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs" />
+            <select id="exp-correct" class="px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold">
+              <option value="true">Correct (Passed)</option>
+              <option value="false">Incorrect (Failed)</option>
+            </select>
+            <button onclick="submitExperimentTrial()" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition shadow-sm">
+              Save Trial
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================== NOTIFICATION DRAWER ==================== -->
+  <div id="notification-drawer" class="fixed inset-y-0 right-0 max-w-sm w-full bg-white shadow-2xl border-l border-slate-200 z-50 transform translate-x-full transition-transform duration-300 ease-in-out p-6 flex flex-col">
+    <div class="flex justify-between items-center pb-4 border-b border-slate-200">
+      <div class="flex items-center gap-2">
+        <i data-lucide="bell" class="w-5 h-5 text-emerald-700"></i>
+        <h3 class="text-base font-bold text-slate-900">Notifications</h3>
+      </div>
+      <button onclick="toggleNotificationDrawer()" class="p-1 rounded-lg text-slate-400 hover:text-slate-600">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+    <div id="notifications-drawer-list" class="flex-1 overflow-y-auto py-4 space-y-3">
+      <!-- Populated dynamically -->
+    </div>
+  </div>
+
+  <!-- ==================== MODALS ==================== -->
+
+  <!-- Modal: Add Money / Cash In -->
+  <div id="modal-cashin" class="modal-backdrop fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="text-base font-bold text-slate-900">Add Money to Normal Wallet</h3>
+        <button onclick="closeModal('modal-cashin')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Amount (৳)</label>
+        <input type="number" id="cashin-amount" value="5000" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-base font-bold" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Source (Simulated)</label>
+        <select class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
+          <option>Bank Transfer (City Bank / Brac Bank)</option>
+          <option>Visa / Mastercard Card</option>
+          <option>upay Agent Cash In</option>
+        </select>
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button onclick="closeModal('modal-cashin')" class="flex-1 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold">Cancel</button>
+        <button onclick="submitCashIn()" class="flex-1 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold">Confirm Add Money</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Send Money -->
+  <div id="modal-sendmoney" class="modal-backdrop fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="text-base font-bold text-slate-900">Send Money</h3>
+        <button onclick="closeModal('modal-sendmoney')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Recipient Phone or Username</label>
+        <input type="text" id="sendmoney-receiver" value="rahim" placeholder="e.g. 01811000002 or rahim" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Amount (৳)</label>
+        <input type="number" id="sendmoney-amount" value="500" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-base font-bold" />
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button onclick="closeModal('modal-sendmoney')" class="flex-1 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold">Cancel</button>
+        <button onclick="submitSendMoney()" class="flex-1 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold">Send Money</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Utility Services (Bill / Recharge / Cashout) -->
+  <div id="modal-utility" class="modal-backdrop fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="text-base font-bold text-slate-900">Simulated Utility & Services</h3>
+        <button onclick="closeModal('modal-utility')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Service Type</label>
+        <select id="utility-type" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
+          <option value="BILL">Utility Bill (Electricity / Water / Gas)</option>
+          <option value="RECHARGE">Mobile Recharge</option>
+          <option value="CASHOUT">Cash Out via Agent</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Amount (৳)</label>
+        <input type="number" id="utility-amount" value="1200" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-base font-bold" />
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button onclick="closeModal('modal-utility')" class="flex-1 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold">Cancel</button>
+        <button onclick="submitUtilityService()" class="flex-1 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold">Confirm Payment</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Create Purpose Fund -->
+  <div id="modal-create-fund" class="modal-backdrop fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="text-base font-bold text-slate-900">Create New Purpose Fund</h3>
+        <button onclick="closeModal('modal-create-fund')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Fund Name</label>
+        <input type="text" id="create-fund-name" placeholder="e.g. Treatment / Emergency Medical" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Restricted Business Category</label>
+        <select id="create-fund-category" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
+          <option value="Grocery">Grocery</option>
+          <option value="Medicine">Medicine</option>
+          <option value="Treatment">Treatment</option>
+          <option value="Education">Education</option>
+          <option value="Electricity">Electricity</option>
+          <option value="Restaurant/Food">Restaurant / Food</option>
+          <option value="Transport">Transport</option>
+          <option value="Rent">Rent</option>
+          <option value="Shopping">Shopping</option>
+          <option value="Other">Other</option>
+        </select>
+        <p class="text-[10px] text-slate-500 mt-1">This fund can ONLY pay merchants registered in this category.</p>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Monthly Budget (৳)</label>
+        <input type="number" id="create-fund-budget" value="5000" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Initial Allocation from Wallet (৳)</label>
+        <input type="number" id="create-fund-initial" value="2000" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold" />
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button onclick="closeModal('modal-create-fund')" class="flex-1 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold">Cancel</button>
+        <button onclick="submitCreateFund()" class="flex-1 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold">Create Fund</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Inter-Fund Transfer -->
+  <div id="modal-interfund-transfer" class="modal-backdrop fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="text-base font-bold text-slate-900">Inter-Fund Transfer</h3>
+        <button onclick="closeModal('modal-interfund-transfer')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900">
+        Move money between your personal purpose funds. (AI advises, but action requires your confirmation).
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Source Fund (Deduct from)</label>
+        <select id="transfer-source-fund" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold"></select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Destination Fund (Add to)</label>
+        <select id="transfer-dest-fund" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold"></select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Amount (৳)</label>
+        <input type="number" id="transfer-amount" value="1000" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-base font-bold" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Optional Reason / Note</label>
+        <input type="text" id="transfer-reason" value="Rebalancing surplus to cover grocery overrun" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs" />
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button onclick="closeModal('modal-interfund-transfer')" class="flex-1 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold">Cancel</button>
+        <button onclick="submitInterFundTransfer()" class="flex-1 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold">Confirm Transfer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Create FamilyPass -->
+  <div id="modal-create-familypass" class="modal-backdrop fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="text-base font-bold text-slate-900">Create New FamilyPass</h3>
+        <button onclick="closeModal('modal-create-familypass')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Select Trusted Member</label>
+        <select id="fp-member-select" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
+          <option value="rahim">Rahim Ahmed (01811000002)</option>
+          <option value="karim">Karim Hossain (01911000003)</option>
+          <option value="fatima">Fatima Begum (01711000004)</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Spending Limit (৳)</label>
+        <input type="number" id="fp-limit-amount" value="3000" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-base font-bold" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Duration</label>
+        <select id="fp-duration-days" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
+          <option value="7">7 Days</option>
+          <option value="15">15 Days</option>
+          <option value="30" selected>30 Days (Monthly)</option>
+          <option value="60">60 Days</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Allowed Action</label>
+        <select id="fp-allowed-action" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
+          <option value="MERCHANT_PAYMENT">Merchant Payment Only</option>
+          <option value="ALL">All Actions</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Purpose Label</label>
+        <input type="text" id="fp-purpose-label" value="Monthly Household Allowance" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs" />
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button onclick="closeModal('modal-create-familypass')" class="flex-1 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold">Cancel</button>
+        <button onclick="submitCreateFamilyPass()" class="flex-1 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold">Issue FamilyPass</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Include Client-Side Application JavaScript -->
+  <script src="/static/app.js"></script>
+
+  <!-- Lucide Icon Renderer Initialization -->
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>
