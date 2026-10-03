@@ -56,7 +56,6 @@ urlpatterns = [
     # AI & Intelligence
     path('intelligence/dashboard/', api_views.IntelligenceDashboardView.as_view(), name='api-intelligence-dashboard'),
     path('ai/query/', api_views.AICoachQueryView.as_view(), name='api-ai-coach'),         # JS uses /api/ai/query/
-    path('ai/set-key/', api_views.AISetKeyView.as_view(), name='api-ai-set-key'),
     path('intelligence/coach/', api_views.AICoachQueryView.as_view(), name='api-ai-coach2'),
     path('reports/', api_views.ReportsView.as_view(), name='api-reports'),
 

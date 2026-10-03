@@ -185,14 +185,6 @@ async function initApp() {
   loadNotifications();
   loadContacts();
   initAiChat();
-
-  // Check for stored Gemini key
-  const storedKey = localStorage.getItem('gemini_api_key');
-  if (storedKey) {
-    const input = document.getElementById('geminiKeyInput');
-    if (input) input.value = storedKey;
-    updateGeminiStatus(true);
-  }
 }
 
 // ============================================================
@@ -1234,12 +1226,10 @@ let aiInitialized = false;
 function initAiChat() {
   if (aiInitialized) return;
   aiInitialized = true;
-  // Check if Gemini key is available
-  const storedKey = localStorage.getItem('gemini_api_key');
   const badge = document.getElementById('aiInitBadge');
   if (badge) {
-    badge.textContent = storedKey ? 'Gemini 2.0 Flash' : 'Offline AI Engine';
-    badge.className = `ai-source-badge ${storedKey ? 'ai-powered-badge' : ''}`;
+    badge.textContent = 'Ready';
+    badge.className = 'ai-source-badge ai-powered-badge';
   }
 }
 
@@ -1280,8 +1270,19 @@ async function sendAiMessage() {
 
   const resp = result.data;
   const answer = resp.answer || resp.error || 'No response';
-  const source = resp.source || 'AI Engine';
+  const source = resp.source || (resp.ai_powered ? 'Gemini 3.8 Flash' : 'Offline Engine');
   const isGemini = resp.ai_powered;
+
+  const statusText = document.getElementById('aiStatusText');
+  if (statusText) {
+    statusText.textContent = isGemini ? 'Online (Gemini)' : 'Offline Engine';
+  }
+  const initBadge = document.getElementById('aiInitBadge');
+  if (initBadge) {
+    initBadge.textContent = isGemini ? 'Gemini 3.8 Flash' : 'Offline Engine';
+    initBadge.className = `ai-source-badge ${isGemini ? 'ai-powered-badge' : ''}`;
+  }
+
   const formattedAnswer = answer.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>').replace(/•/g, '<br>•');
 
   container.innerHTML += `<div class="chat-msg ai">
@@ -2139,25 +2140,12 @@ async function doFPMemberPay() {
 }
 
 // ============================================================
-// GEMINI KEY MANAGEMENT
+// AI SERVICE STATUS
 // ============================================================
-async function saveGeminiKey() {
-  const key = document.getElementById('geminiKeyInput').value.trim();
-  if (!key) { showToast('error', 'Enter a valid API key'); return; }
-  // Save to localStorage (in production, would save to server settings)
-  localStorage.setItem('gemini_api_key', key);
-  // Send to backend to update env
-  const r = await apiPost('/api/ai/set-key/', { gemini_api_key: key });
-  updateGeminiStatus(true);
-  showToast('success', '✅ Gemini API key saved! AI responses now powered by Gemini 2.0 Flash');
-  aiInitialized = false;
-  initAiChat();
-}
-
 function updateGeminiStatus(active) {
   const el = document.getElementById('geminiKeyStatus');
   if (el) {
-    el.textContent = active ? '✅ Gemini 2.0 Flash — Active' : 'Not configured — using offline AI';
+    el.textContent = active ? '✅ Gemini Online AI Active' : 'Offline AI Engine';
     el.style.color = active ? 'var(--primary)' : '';
   }
 }

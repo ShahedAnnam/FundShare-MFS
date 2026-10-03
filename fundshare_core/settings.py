@@ -13,14 +13,6 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 from pathlib import Path
 import os
 
-try:
-    from decouple import config
-    def _config(key, default=''):
-        return config(key, default=default)
-except ImportError:
-    def _config(key, default=''):
-        return os.environ.get(key, default)
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -28,13 +20,24 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 _env_file = BASE_DIR / '.env'
 if _env_file.exists():
     try:
-        from decouple import Config, RepositoryEnv
-        _env_config = Config(RepositoryEnv(str(_env_file)))
-        GEMINI_API_KEY = _env_config('GEMINI_API_KEY', default='')
+        from dotenv import load_dotenv
+        load_dotenv(_env_file)
     except Exception:
-        GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
-else:
-    GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+        pass
+    # Manual fallback parser ensuring .env is always loaded even without packages
+    try:
+        with open(_env_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    k, v = line.split('=', 1)
+                    k, v = k.strip(), v.strip()
+                    if k and k not in os.environ:
+                        os.environ[k] = v
+    except Exception:
+        pass
+
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 
 
 # Quick-start development settings - unsuitable for production

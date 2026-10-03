@@ -1,291 +1,565 @@
 import os
+import re
+import datetime
 from decimal import Decimal
 from django.utils import timezone
 from django.conf import settings
 from fundshare_app.models import PurposeFund, Transaction, FamilyPass, FamilyPassTransaction, AnomalyResult
+from fundshare_app.services.report_service import ReportService
+from fundshare_app.ml.budget_forecaster import BudgetForecaster
 
 
-class AICoach:
+class FinancialAIService:
     """
-    AI Financial Coach grounded strictly in structured backend facts.
-    Ensures zero hallucination:
-    - Backend calculates financial facts
-    - AI provides clear, human-understandable explanations
-    - Supports optional Gemini API integration via GEMINI_API_KEY environment variable
+    Centralized Financial AI Service for FundShare:
+    - Detects user intent (General Conversation vs Structured Financial Query)
+    - Retrieves authoritative, grounded financial context from the active user's ledger
+    - Invokes Gemini Online AI (using gemini-3.8-flash / gemini-3.7-flash with strict timeout)
+    - Falls back smoothly to authoritative Deterministic Local Analytics on network failure or offline mode
+    - Zero static mock values, zero hardcoded placeholders
     """
 
     @classmethod
-    def get_grounded_context(cls, user) -> dict:
-        """
-        Gathers structured ground-truth facts about the user's financial status.
-        """
+    def detect_intent(cls, question: str) -> str:
+        q = (question or "").strip().lower()
+        if not q:
+            return "GENERAL"
+
+        # Specific financial intents
+        spending_keywords = [
+            "how much did i spend", "total spend", "my expense", "how much spent",
+            "how much i spent", "spent this month", "total expenditure", "spending overview",
+            "how much have i spent", "what did i spend", "my spending"
+        ]
+        category_keywords = [
+            "where did i spend", "where i spent", "top category", "spend most",
+            "spent most", "category breakdown", "breakdown of spend", "highest expense",
+            "highest spending", "which category", "what category"
+        ]
+        savings_keywords = [
+            "how can i save", "how to save", "save money", "savings rate",
+            "how much did i save", "savings advice", "save more", "increase savings",
+            "save next month", "how to save money"
+        ]
+        overrun_keywords = [
+            "risk", "overrun", "exceed", "which fund", "budget limit",
+            "budget status", "at risk", "fund risk", "fund risks", "over budget"
+        ]
+        familypass_keywords = [
+            "familypass", "family pass", "who spent", "member spending",
+            "delegation", "family spending", "pass status"
+        ]
+        recommend_keywords = [
+            "next month", "recommend", "allocation", "allocate",
+            "suggestion", "suggested fund", "budget recommendation"
+        ]
+        anomaly_keywords = [
+            "unusual", "anomaly", "anomalies", "flagged",
+            "suspicious", "fraud", "irregular"
+        ]
+
+        if any(k in q for k in spending_keywords):
+            return "SPENDING_SUMMARY"
+        if any(k in q for k in category_keywords):
+            return "CATEGORY_SPENDING"
+        if any(k in q for k in savings_keywords):
+            return "SAVINGS_ANALYSIS"
+        if any(k in q for k in overrun_keywords):
+            return "BUDGET_OVERRUN"
+        if any(k in q for k in familypass_keywords):
+            return "FAMILYPASS"
+        if any(k in q for k in recommend_keywords):
+            return "RECOMMENDATIONS"
+        if any(k in q for k in anomaly_keywords):
+            return "ANOMALY"
+
+        # Broad financial terms
+        financial_terms = [
+            "spend", "spent", "balance", "wallet", "save", "saving", "savings", "budget",
+            "fund", "funds", "familypass", "family pass", "transaction", "transactions",
+            "income", "expense", "expenses", "taka", "bdt", "tk", "deposit", "transfer", "recharge",
+            "bill", "bills", "anomaly", "overrun", "allocation", "merchant", "limit",
+            "allowance", "finance", "finances", "financial", "money", "cost", "costs",
+            "খরচ", "টাকা", "ব্যালান্স", "সঞ্চয়", "বাজেট", "ফান্ড", "ফ্যামিলিপাস", "লেনদেন"
+        ]
+        if any(t in q for t in financial_terms):
+            return "FINANCIAL_GENERAL"
+
+        return "GENERAL"
+
+    @classmethod
+    def get_user_financial_context(cls, user) -> dict:
         wallet = getattr(user, 'wallet', None)
         wallet_bal = float(wallet.balance) if wallet else 0.0
 
+        # Authoritative monthly financial report from database
+        report = ReportService.generate_report(user, 'monthly')
+        overview = report.get('overview', {})
+        by_category = report.get('by_category', {})
+
+        # Active Purpose Funds
         funds = PurposeFund.objects.filter(owner=user, status='ACTIVE')
         funds_data = []
         for f in funds:
             alloc = float(f.allocated_amount)
             curr = float(f.current_balance)
             spent = max(0.0, alloc - curr)
+            fc = BudgetForecaster.forecast_fund(f)
             funds_data.append({
+                "id": f.id,
                 "name": f.name,
                 "category": f.category,
-                "allocated": alloc,
-                "spent": spent,
-                "remaining": curr,
+                "allocated_budget": alloc,
+                "current_spent": spent,
+                "current_balance": curr,
+                "burn_rate_predicted_spend": float(fc.get('predicted_amount', alloc)),
+                "potential_overrun": float(fc.get('potential_overrun', 0.0)),
+                "risk_level": fc.get('risk_level', 'SAFE'),
                 "pct_used": round((spent / alloc) * 100.0, 1) if alloc > 0 else 0.0
             })
 
-        # FamilyPass data
-        family_passes = FamilyPass.objects.filter(owner=user, status='ACTIVE')
-        fp_data = []
-        for fp in family_passes:
+        # FamilyPass data (Issued by user if owner)
+        family_passes_issued = FamilyPass.objects.filter(owner=user, status='ACTIVE')
+        fp_issued_data = []
+        for fp in family_passes_issued:
             limit = float(fp.limit_amount)
             used = float(fp.used_amount)
             rem = float(fp.remaining_limit)
-            recent_txns = []
-            for item in fp.activity_logs.all()[:3]:
-                recent_txns.append({
+            recent_logs = []
+            for item in fp.activity_logs.select_related('transaction', 'transaction__merchant').order_by('-timestamp')[:3]:
+                m_name = item.transaction.merchant.business_name if (item.transaction and item.transaction.merchant) else "Merchant"
+                recent_logs.append({
                     "amount": float(item.amount),
-                    "merchant": item.transaction.merchant.business_name if item.transaction.merchant else "Merchant",
+                    "merchant": m_name,
                     "time": item.timestamp.strftime("%d %b %I:%M %p")
                 })
-            fp_data.append({
-                "member": fp.member.full_name or fp.member.username,
+            fp_issued_data.append({
+                "member_name": fp.member.full_name or fp.member.username,
+                "purpose": fp.purpose_label or fp.purpose,
+                "allowed_categories": fp.get_allowed_categories(),
                 "limit": limit,
                 "used": used,
                 "remaining": rem,
-                "recent_activity": recent_txns
+                "recent_activity": recent_logs
             })
 
-        # Recent transactions
+        # FamilyPass data (Received by user if member)
+        family_passes_received = FamilyPass.objects.filter(member=user, status='ACTIVE')
+        fp_received_data = []
+        for fp in family_passes_received:
+            limit = float(fp.limit_amount)
+            used = float(fp.used_amount)
+            rem = float(fp.remaining_limit)
+            recent_logs = []
+            for item in fp.activity_logs.select_related('transaction', 'transaction__merchant').order_by('-timestamp')[:3]:
+                m_name = item.transaction.merchant.business_name if (item.transaction and item.transaction.merchant) else "Merchant"
+                recent_logs.append({
+                    "amount": float(item.amount),
+                    "merchant": m_name,
+                    "time": item.timestamp.strftime("%d %b %I:%M %p")
+                })
+            fp_received_data.append({
+                "owner_name": fp.owner.full_name or fp.owner.username,
+                "purpose": fp.purpose_label or fp.purpose,
+                "allowed_categories": fp.get_allowed_categories(),
+                "limit": limit,
+                "used": used,
+                "remaining": rem,
+                "recent_activity": recent_logs
+            })
+
+        # Recent completed transactions (last 8)
         recent_txns = []
         for t in Transaction.objects.filter(sender=user).order_by('-timestamp')[:8]:
+            m_name = t.merchant.business_name if t.merchant else (t.receiver.username if t.receiver else "N/A")
             recent_txns.append({
                 "id": t.transaction_id,
                 "amount": float(t.amount),
                 "type": t.transaction_type,
+                "source": t.payment_source,
                 "category": t.category,
-                "merchant": t.merchant.business_name if t.merchant else (t.receiver.username if t.receiver else "N/A"),
+                "target": m_name,
                 "status": t.status,
-                "timestamp": t.timestamp.strftime("%d %b %I:%M %p")
+                "time": t.timestamp.strftime("%d %b %I:%M %p")
             })
 
-        # Anomalies
+        # Real Anomalies
         anomalies = []
         for a in AnomalyResult.objects.filter(user=user, is_anomaly=True).order_by('-created_at')[:4]:
             anomalies.append({
-                "txn_id": a.transaction.transaction_id,
-                "amount": float(a.transaction.amount),
-                "category": a.transaction.category,
+                "txn_id": a.transaction.transaction_id if a.transaction else "TXN",
+                "amount": float(a.transaction.amount) if a.transaction else 0.0,
+                "category": a.transaction.category if a.transaction else "N/A",
                 "score": a.anomaly_score,
                 "reason": a.reason
             })
 
         return {
             "user_name": user.full_name or user.username,
+            "username": user.username,
+            "role": user.role,
             "wallet_balance": wallet_bal,
+            "monthly_report": {
+                "total_income": overview.get("total_income", 0.0),
+                "total_spent": overview.get("total_spent", 0.0),
+                "net_savings": overview.get("net_savings", 0.0),
+                "savings_rate": overview.get("savings_rate_pct", 0.0),
+                "total_transactions": overview.get("total_transactions", 0),
+                "average_transaction": overview.get("average_transaction", 0.0),
+                "by_category": by_category
+            },
             "purpose_funds": funds_data,
-            "family_pass": fp_data,
+            "family_passes_issued": fp_issued_data,
+            "family_passes_received": fp_received_data,
             "recent_transactions": recent_txns,
-            "anomalies": anomalies
+            "anomalies": anomalies,
+            "ml_forecasts_available": len(funds_data) > 0,
+            "market_signals": "Market signals unavailable (live external market feeds not connected)"
         }
+
+    @classmethod
+    def generate_online_response(cls, user, question: str, intent: str, facts: dict, lang: str = 'en') -> dict:
+        gemini_key = getattr(settings, 'GEMINI_API_KEY', '') or os.environ.get('GEMINI_API_KEY', '')
+        if not gemini_key:
+            return None
+
+        try:
+            from google import genai
+            from google.genai import types
+
+            client = genai.Client(api_key=gemini_key, http_options=types.HttpOptions(timeout=15000))
+
+            if intent == "GENERAL":
+                prompt = (
+                    f"You are the AI Financial Coach for FundShare, an innovative MFS (Mobile Financial Services) platform in Bangladesh.\n"
+                    f"The user is having a general conversation or asking a general question.\n"
+                    f"Answer politely, accurately, and naturally in {'Bengali' if lang == 'bn' else 'English'}.\n"
+                    f"Do NOT invent or inject unrequested financial summaries.\n\n"
+                    f"User question: {question}"
+                )
+            else:
+                mr = facts['monthly_report']
+                prompt = (
+                    f"You are the AI Financial Coach for FundShare, an innovative MFS (Mobile Financial Services) platform in Bangladesh.\n"
+                    f"Answer the user's financial question strictly grounded in the authoritative financial facts provided below.\n"
+                    f"Do NOT invent any transaction amounts, balances, savings rates, or member names that are not in the facts.\n"
+                    f"All financial amounts in Bangladeshi Taka (৳).\n"
+                    f"Language: {'Bengali' if lang == 'bn' else 'English'}.\n\n"
+                    f"AUTHORITATIVE USER FINANCIAL FACTS:\n"
+                    f"- User: {facts['user_name']} ({facts['username']}, role: {facts['role']})\n"
+                    f"- Normal Wallet Balance: ৳{facts['wallet_balance']:,.2f}\n"
+                    f"- This Month's Total Income: ৳{mr['total_income']:,.2f}\n"
+                    f"- This Month's Total Spent: ৳{mr['total_spent']:,.2f}\n"
+                    f"- This Month's Net Savings: ৳{mr['net_savings']:,.2f} (Savings Rate: {mr['savings_rate']}%)\n"
+                    f"- Total Completed Transactions: {mr['total_transactions']} (Average: ৳{mr['average_transaction']:,.2f})\n"
+                    f"- Category Spending Breakdown: {mr['by_category']}\n"
+                    f"- Active Purpose Funds: {facts['purpose_funds']}\n"
+                    f"- FamilyPass Issued (for family members): {facts['family_passes_issued']}\n"
+                    f"- FamilyPass Received (from family owners): {facts['family_passes_received']}\n"
+                    f"- Recent Transactions: {facts['recent_transactions']}\n"
+                    f"- Anomaly Alerts: {facts['anomalies']}\n"
+                    f"- Market Signals Status: {facts['market_signals']}\n\n"
+                    f"User question: {question}\n\n"
+                    f"Guidelines:\n"
+                    f"- Keep response concise, empathetic, and actionable with clean bullet points and bold numbers.\n"
+                    f"- Reference actual category numbers, fund balances, or FamilyPass limits accurately.\n"
+                    f"- If the user has 0 spending or 0 income, acknowledge it truthfully without inventing mock data."
+                )
+
+            # Try latest supported models
+            for model_name in ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-flash-latest']:
+                try:
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=prompt
+                    )
+                    if response and response.text:
+                        return {
+                            "question": question,
+                            "answer": response.text,
+                            "source": "Gemini 3.8 Flash (AI-Grounded)" if intent != "GENERAL" else "Gemini 3.8 Flash",
+                            "ai_powered": True,
+                            "online": True,
+                            "intent": intent,
+                            "grounded_facts": facts if intent != "GENERAL" else None,
+                            "suggested_actions": cls._suggest_actions_for_intent(intent, facts)
+                        }
+                except Exception:
+                    continue
+
+        except Exception:
+            pass
+
+        return None
+
+    @classmethod
+    def deterministic_offline_analysis(cls, user, question: str, intent: str, facts: dict, lang: str = 'en') -> dict:
+        mr = facts['monthly_report']
+
+        if intent == "GENERAL":
+            if lang == "bn":
+                text = (
+                    "👋 **হ্যালো!** আমি ফান্ডশেয়ার (FundShare) ফিনান্সিয়াল ইন্টেলিজেন্স কোচ।\n\n"
+                    "বর্তমানে অফলাইন ডিটারমিনিস্টিক ইঞ্জিন সক্রিয় রয়েছে। সাধারণ জ্ঞান বা সাধারণ আলোচনার জন্য অনলাইন কানেকশন প্রয়োজন, তবে আপনি আপনার **ওয়ালেট ব্যালান্স, খরচ বিবরণ, পারপাস ফান্ড, বাজেট এবং ফ্যামিলিপাস** সম্পর্কে যেকোনো হিসাব জানতে পারেন!"
+                )
+            else:
+                text = (
+                    "👋 **Hello!** I am your FundShare Financial Intelligence Coach.\n\n"
+                    "Currently, the offline deterministic financial engine is active. While open-ended general conversations require an active online Gemini connection, you can ask me anything about your **account balance, spending breakdown, budget forecasts, purpose funds, or FamilyPass delegations** based directly on your ledger."
+                )
+            return {
+                "question": question,
+                "answer": text,
+                "source": "Offline Financial Intelligence Engine",
+                "ai_powered": False,
+                "online": False,
+                "intent": intent,
+                "suggested_actions": []
+            }
+
+        elif intent == "SPENDING_SUMMARY":
+            total_spent = mr['total_spent']
+            txns_count = mr['total_transactions']
+            avg_txn = mr['average_transaction']
+            by_cat = mr['by_category']
+            cat_lines = "\n".join([f"  • **{cat}:** ৳{amt:,.2f}" for cat, amt in by_cat.items()]) if by_cat else "  • No category expenses recorded."
+
+            if lang == "bn":
+                text = (
+                    f"📊 **আপনার মাসিক খরচ সারসংক্ষেপ:**\n\n"
+                    f"• এই মাসে সর্বমোট খরচ: **৳{total_spent:,.2f}** ({txns_count} টি লেনদেন)\n"
+                    f"• গড়ে প্রতি লেনদেন: **৳{avg_txn:,.2f}**\n\n"
+                    f"**ক্যাটাগরি ভিত্তিক খরচ:**\n{cat_lines}"
+                )
+            else:
+                text = (
+                    f"📊 **Monthly Spending Overview:**\n\n"
+                    f"• **Total Spent This Month:** **৳{total_spent:,.2f}** across {txns_count} completed transactions.\n"
+                    f"• **Average Transaction Amount:** **৳{avg_txn:,.2f}**\n\n"
+                    f"**Category Breakdown:**\n{cat_lines}"
+                )
+            return {
+                "question": question,
+                "answer": text,
+                "source": "Offline Financial Intelligence Engine",
+                "ai_powered": False,
+                "online": False,
+                "intent": intent,
+                "suggested_actions": [{"type": "NAVIGATE_HISTORY", "label": "View Transactions"}]
+            }
+
+        elif intent == "CATEGORY_SPENDING":
+            by_cat = mr['by_category']
+            if by_cat:
+                top_cat, top_amt = list(by_cat.items())[0]
+                cat_lines = "\n".join([f"• **{cat}:** ৳{amt:,.2f}" for cat, amt in by_cat.items()])
+                if lang == "bn":
+                    text = (
+                        f"🏆 **সর্বোচ্চ খরচের খাত: {top_cat} (৳{top_amt:,.2f})**\n\n"
+                        f"**সম্পূর্ণ ক্যাটাগরি তালিকা:**\n{cat_lines}"
+                    )
+                else:
+                    text = (
+                        f"🏆 **Top Spending Category: {top_cat} (৳{top_amt:,.2f})**\n\n"
+                        f"**Full Category Breakdown:**\n{cat_lines}"
+                    )
+            else:
+                text = "📊 You have not recorded any category expenses for this period."
+
+            return {
+                "question": question,
+                "answer": text,
+                "source": "Offline Financial Intelligence Engine",
+                "ai_powered": False,
+                "online": False,
+                "intent": intent,
+                "suggested_actions": []
+            }
+
+        elif intent == "SAVINGS_ANALYSIS":
+            income = mr['total_income']
+            spent = mr['total_spent']
+            savings = mr['net_savings']
+            rate = mr['savings_rate']
+            by_cat = mr['by_category']
+            top_cat = list(by_cat.keys())[0] if by_cat else "discretionary spending"
+
+            if lang == "bn":
+                text = (
+                    f"💰 **সঞ্চয় ও আর্থিক শৃঙ্খলা বিশ্লেষণ:**\n\n"
+                    f"• মোট আয়: **৳{income:,.2f}**\n"
+                    f"• মোট ব্যয়: **৳{spent:,.2f}**\n"
+                    f"• নিট সঞ্চয়: **৳{savings:,.2f}**\n"
+                    f"• সঞ্চয়ের হার: **{rate}%**\n\n"
+                    f"💡 **সাশ্রয়ী পরামর্শ:** আগামী মাসে সঞ্চয় বৃদ্ধি করতে আপনার প্রধান খরচের খাত ({top_cat}) এর উপর নজর রাখুন এবং পারপাস ফান্ড বাজেটের অতিরিক্ত ব্যবহার পরিহার করুন।"
+                )
+            else:
+                text = (
+                    f"💰 **Savings & Financial Discipline Analysis:**\n\n"
+                    f"• **Total Income:** **৳{income:,.2f}**\n"
+                    f"• **Total Spent:** **৳{spent:,.2f}**\n"
+                    f"• **Net Savings:** **৳{savings:,.2f}**\n"
+                    f"• **Savings Rate:** **{rate}%**\n\n"
+                    f"💡 **Actionable Advice:** To maximize savings next month, focus on moderating outlays in your largest spending category (**{top_cat}**) and allocate a fixed portion of income to your Purpose Funds at the start of the month."
+                )
+            return {
+                "question": question,
+                "answer": text,
+                "source": "Offline Financial Intelligence Engine",
+                "ai_powered": False,
+                "online": False,
+                "intent": intent,
+                "suggested_actions": [{"type": "NAVIGATE_FUNDS", "label": "Review Funds"}]
+            }
+
+        elif intent == "BUDGET_OVERRUN":
+            funds = facts['purpose_funds']
+            at_risk = [f for f in funds if f['potential_overrun'] > 0]
+            if at_risk:
+                lines = []
+                for f in at_risk:
+                    lines.append(f"• **{f['name']} Fund:** Spent ৳{f['current_spent']:,.2f} / ৳{f['allocated_budget']:,.2f} (Projected: ৳{f['burn_rate_predicted_spend']:,.2f}, Overrun: ৳{f['potential_overrun']:,.2f})")
+                text = "⚠️ **Purpose Funds at Risk of Overrun:**\n\n" + "\n".join(lines)
+                actions = [{"type": "NAVIGATE_FUNDS", "label": "Manage Funds"}]
+            elif funds:
+                text = "✅ **All Purpose Funds are on track!** No projected budget overruns detected based on current burn rates."
+                actions = [{"type": "NAVIGATE_FUNDS", "label": "View Funds"}]
+            else:
+                text = "ℹ️ You do not have any active Purpose Funds configured yet. Create a Purpose Fund to track specific budgets."
+                actions = [{"type": "NAVIGATE_FUNDS", "label": "Create Fund"}]
+
+            return {
+                "question": question,
+                "answer": text,
+                "source": "Offline Financial Intelligence Engine",
+                "ai_powered": False,
+                "online": False,
+                "intent": intent,
+                "suggested_actions": actions
+            }
+
+        elif intent == "FAMILYPASS":
+            issued = facts['family_passes_issued']
+            received = facts['family_passes_received']
+
+            lines = []
+            if issued:
+                lines.append("👥 **Active FamilyPass Delegations (Issued by you):**")
+                for fp in issued:
+                    lines.append(f"• **{fp['member_name']}** ({fp['purpose']}): Limit ৳{fp['limit']:,.2f} | Spent ৳{fp['used']:,.2f} | Remaining **৳{fp['remaining']:,.2f}**")
+            if received:
+                lines.append("👥 **FamilyPass Allocations (Received from family):**")
+                for fp in received:
+                    lines.append(f"• From **{fp['owner_name']}** ({fp['purpose']}): Limit ৳{fp['limit']:,.2f} | Spent ৳{fp['used']:,.2f} | Remaining **৳{fp['remaining']:,.2f}**")
+
+            if lines:
+                text = "\n".join(lines)
+            else:
+                text = "👥 **FamilyPass Status:** No active FamilyPass delegations found for your account."
+
+            return {
+                "question": question,
+                "answer": text,
+                "source": "Offline Financial Intelligence Engine",
+                "ai_powered": False,
+                "online": False,
+                "intent": intent,
+                "suggested_actions": [{"type": "NAVIGATE_FAMILYPASS", "label": "FamilyPass Dashboard"}]
+            }
+
+        elif intent == "RECOMMENDATIONS":
+            funds = facts['purpose_funds']
+            if funds:
+                lines = []
+                for f in funds:
+                    rec_amt = f['burn_rate_predicted_spend'] if f['potential_overrun'] > 0 else f['allocated_budget']
+                    lines.append(f"• **{f['name']} Fund:** Current ৳{f['allocated_budget']:,.2f} → Recommended **৳{rec_amt:,.2f}** ({'adjust up to cover burn rate' if f['potential_overrun'] > 0 else 'maintain healthy baseline'})")
+                text = "🎯 **Recommended Fund Budget Allocations for Next Month:**\n\n" + "\n".join(lines) + "\n\n💡 *Note: Recommendations are advisory; you retain full control over fund transfers.*"
+            else:
+                text = "🎯 **Next Month Recommendations:** Start by creating Purpose Funds for your essential categories like Grocery, Medical, and Utilities to receive personalized budget optimizations."
+
+            return {
+                "question": question,
+                "answer": text,
+                "source": "Offline Financial Intelligence Engine",
+                "ai_powered": False,
+                "online": False,
+                "intent": intent,
+                "suggested_actions": [{"type": "NAVIGATE_FUNDS", "label": "Adjust Funds"}]
+            }
+
+        elif intent == "ANOMALY":
+            anomalies = facts['anomalies']
+            if anomalies:
+                lines = []
+                for a in anomalies:
+                    lines.append(f"• **{a['txn_id']}** (৳{a['amount']:,.2f}, {a['category']}): {a['reason']} (Score: {a['score']:.2f})")
+                text = "🔍 **Flagged Unusual Transactions:**\n\n" + "\n".join(lines)
+            else:
+                text = "🔍 **Anomaly Audit:** No unusual or outlier transactions have been flagged on your account."
+
+            return {
+                "question": question,
+                "answer": text,
+                "source": "Offline Financial Intelligence Engine",
+                "ai_powered": False,
+                "online": False,
+                "intent": intent,
+                "suggested_actions": [{"type": "NAVIGATE_HISTORY", "label": "Inspect History"}]
+            }
+
+        else:  # FINANCIAL_GENERAL / default
+            funds_count = len(facts['purpose_funds'])
+            passes_count = len(facts['family_passes_issued']) + len(facts['family_passes_received'])
+            text = (
+                f"📑 **Executive Financial Health Summary:**\n\n"
+                f"• Available Normal Wallet: **৳{facts['wallet_balance']:,.2f}**\n"
+                f"• This Month's Income: **৳{mr['total_income']:,.2f}** | Total Spent: **৳{mr['total_spent']:,.2f}**\n"
+                f"• Net Savings: **৳{mr['net_savings']:,.2f}** (Savings Rate: **{mr['savings_rate']}%**)\n"
+                f"• Active Purpose Funds: **{funds_count} categories**\n"
+                f"• Active FamilyPass Delegations: **{passes_count} active**\n\n"
+                f"**Advice:** Keep your spending disciplined and maintain emergency reserves in your Purpose Funds."
+            )
+            return {
+                "question": question,
+                "answer": text,
+                "source": "Offline Financial Intelligence Engine",
+                "ai_powered": False,
+                "online": False,
+                "intent": intent,
+                "suggested_actions": []
+            }
+
+    @classmethod
+    def _suggest_actions_for_intent(cls, intent: str, facts: dict) -> list:
+        if intent == "BUDGET_OVERRUN" or intent == "RECOMMENDATIONS":
+            return [{"type": "NAVIGATE_FUNDS", "label": "Manage Funds"}]
+        elif intent == "FAMILYPASS":
+            return [{"type": "NAVIGATE_FAMILYPASS", "label": "FamilyPass"}]
+        elif intent == "ANOMALY" or intent == "SPENDING_SUMMARY":
+            return [{"type": "NAVIGATE_HISTORY", "label": "Transactions"}]
+        return []
 
     @classmethod
     def answer_query(cls, user, question: str, lang: str = "en") -> dict:
         """
-        Answers user's financial question strictly grounded in backend facts.
+        Main query entry point:
+        1. Gathers ground-truth user financial facts
+        2. Detects intent (General vs Specific Financial)
+        3. Attempts Online Gemini Generation (with timeout)
+        4. Falls back seamlessly to Deterministic Offline Engine if offline or on error
         """
-        facts = cls.get_grounded_context(user)
-        q_lower = question.lower().strip()
+        facts = cls.get_user_financial_context(user)
+        intent = cls.detect_intent(question)
 
-        # Check for Gemini API key from Django settings first, then env
-        gemini_key = getattr(settings, 'GEMINI_API_KEY', '') or os.environ.get('GEMINI_API_KEY', '')
+        # Attempt Online Gemini call first
+        online_response = cls.generate_online_response(user, question, intent, facts, lang)
+        if online_response:
+            return online_response
 
-        if gemini_key:
-            try:
-                from google import genai as google_genai
-                client = google_genai.Client(api_key=gemini_key)
-                prompt = (
-                    f"You are the AI Financial Coach for FundShare, an MFS (Mobile Financial Services) wallet innovation for Bangladesh.\n"
-                    f"Answer the user's question using ONLY the provided structured financial data.\n"
-                    f"Do NOT make up any numbers or transactions.\n"
-                    f"Currency is Bangladeshi Taka (৳).\n"
-                    f"Structured financial facts about the user:\n{facts}\n\n"
-                    f"User question: {question}\n\n"
-                    f"Keep your response concise, empathetic, and actionable. Use bullet points and bold text for clarity.\n"
-                    f"If you see purpose funds, family pass data, or anomalies in the facts, reference them specifically."
-                )
-                response = client.models.generate_content(
-                    model='gemini-2.0-flash',
-                    contents=prompt
-                )
-                if response and response.text:
-                    return {
-                        "question": question,
-                        "answer": response.text,
-                        "source": "Gemini 2.0 Flash (AI-Grounded)",
-                        "grounded_facts": facts,
-                        "ai_powered": True
-                    }
-            except Exception as e:
-                # Fallback smoothly to deterministic grounded responder
-                pass
+        # Fallback to Deterministic Offline Analytics
+        return cls.deterministic_offline_analysis(user, question, intent, facts, lang)
 
-        # Deterministic Grounded Engine (Guaranteed zero hallucination & instant offline response)
-        answer = cls._deterministic_reasoning(q_lower, facts, lang)
 
-        return {
-            "question": question,
-            "answer": answer["text"],
-            "suggested_actions": answer.get("actions", []),
-            "source": "FundShare Deterministic Financial Intelligence Engine",
-            "grounded_facts": facts
-        }
-
-    @classmethod
-    def _deterministic_reasoning(cls, q: str, facts: dict, lang: str) -> dict:
-        """
-        Maps user query topics to structured financial computations.
-        """
-        # 1. Budget overrun / Fund at risk
-        if "risk" in q or "overrun" in q or "exceed" in q or "which fund" in q:
-            actions = [{"type": "NAVIGATE_FUND", "label": "Review Grocery Fund", "fund_name": "Grocery"}]
-            if lang == "bn":
-                text = (
-                    "⚠️ **মুদির খরচ (Grocery Fund) বাজেটের অতিরিক্ত হওয়ার ঝুঁকিতে রয়েছে।**\n\n"
-                    "• আপনার মুদি বরাদ্দ: ৳১৫,০০০\n"
-                    "• বর্তমান খরচ: ৳১২,৪০০ (৮২.৬% ব্যবহৃত)\n"
-                    "• মাস শেষ হতে এখনও ১০ দিন বাকি। বর্তমান গতি বজায় থাকলে মাস শেষে সম্ভাব্য খরচ দাঁড়াবে প্রায় **৳১৭,২০০**, যা বাজেটের চেয়ে ৳২,২০০ বেশি।\n\n"
-                    "💡 **সুপারিশ:** আপনার বিদ্যুৎ ফান্ডে প্রায় ৳১,৫০০ উদ্বৃত্ত রয়েছে। আপনি ফান্ড ব্যালান্স ঠিক রাখতে ৳১,০০০ মুদি ফান্ডে স্থানান্তর করতে পারেন।"
-                )
-            else:
-                text = (
-                    "⚠️ **Your Grocery Fund is currently at high risk of exceeding its monthly budget.**\n\n"
-                    "• Allocated Budget: **৳15,000**\n"
-                    "• Already Spent: **৳12,400** (82.6% consumed)\n"
-                    "• Remaining in Fund: **৳2,600** with 10 days remaining in the month\n"
-                    "• Predicted Month-End Spend: **৳17,200** (Potential overrun: **৳2,200**)\n\n"
-                    "💡 **Actionable Advice:** Your Electricity Fund has an estimated ৳1,500 surplus. You can initiate a **৳1,000 Inter-Fund Transfer** to balance your allocations without depositing new money."
-                )
-            return {"text": text, "actions": actions}
-
-        # 2. Why did spending increase?
-        elif "why" in q and ("increase" in q or "high" in q or "spending" in q):
-            if lang == "bn":
-                text = (
-                    "📊 **এই মাসে আপনার খরচ বৃদ্ধির প্রধান কারণসমূহ:**\n\n"
-                    "১. **মুদি খরচ বৃদ্ধি (+১৮.২%):** আগোরা সুপার শপে উৎসবের কেনাকাটায় একটি ৳৮,৫০০ টাকার অস্বাভাবিক লেনদেন হয়েছে।\n"
-                    "২. **শিক্ষা খরচ বৃদ্ধি (+৩০%):** স্কলাস্টিকা স্কুলের বার্ষিক সেশন ফি ও টিউশন খরচ বাবদ এককালীন ৳৬,৫০০ পরিশোধ করা হয়েছে।\n"
-                    "৩. **ফ্যামিলিপাস ব্যবহার:** রহিম ও করিম গৃহস্থালি ও প্রয়োজনীয় কাজে ৳১,৬৫০ খরচ করেছেন।\n\n"
-                    "তবে ওষুধের খরচ ২৫% কমে যাওয়ায় আপনার সামগ্রিক আর্থিক ভারসাম্য এখনো নিরাপদ রয়েছে।"
-                )
-            else:
-                text = (
-                    "📊 **Key drivers behind your increased spending this month:**\n\n"
-                    "1. **Grocery Surge (+18.2%):** Primarily driven by an unusually large ৳8,500 purchase at Agora Super Shop on festival preparations.\n"
-                    "2. **Education Expense (+30.0%):** Standard semester renewal and tuition payment of ৳6,500 to Scholastica School.\n"
-                    "3. **FamilyPass Delegation:** Rahim and Karim collectively utilized ৳1,650 across household groceries and meals.\n\n"
-                    "The good news: Medicine expenses decreased by 25%, partially offsetting these outlays."
-                )
-            return {"text": text, "actions": []}
-
-        # 3. FamilyPass queries
-        elif "familypass" in q or "rahim" in q or "karim" in q or "who spent" in q:
-            fp_lines = []
-            for fp in facts.get("family_pass", []):
-                fp_lines.append(f"• **{fp['member']}:** Limit ৳{fp['limit']:,.2f} | Spent ৳{fp['used']:,.2f} | Remaining **৳{fp['remaining']:,.2f}**")
-            fp_summary_str = "\n".join(fp_lines) if fp_lines else "No active FamilyPass permissions."
-
-            if lang == "bn":
-                text = (
-                    f"👥 **ফ্যামিলিপাস (FamilyPass) খরচ বিবরণ:**\n\n"
-                    f"{fp_summary_str}\n\n"
-                    f"**সাম্প্রতিক লেনদেন:**\n"
-                    f"• রহিম: ৳৪৫০ (আগোরা সুপার শপ - মুদি)\n"
-                    f"• রহিম: ৳৩২০ (স্বপ্ন সুপারস্টোর)\n"
-                    f"• করিম: ৳৪০০ (সুলতান'স ডাইন)\n\n"
-                    f"সর্বমোট ব্যবহৃত: ৳১,৬৫০ | সর্বমোট অবশিষ্ট সীমা: ৳২,৩৫০। পরিবারের সদস্যরা আপনার ওয়ালেটের মূল নিয়ন্ত্রণ বা পিন ছাড়াই অনুমোদিত সীমার মধ্যে খরচ করছেন।"
-                )
-            else:
-                text = (
-                    f"👥 **FamilyPass Active Spending & Limit Status:**\n\n"
-                    f"{fp_summary_str}\n\n"
-                    f"**Recent Member Transactions:**\n"
-                    f"• **Rahim:** ৳450.00 at Agora Super Shop (Grocery)\n"
-                    f"• **Rahim:** ৳320.00 at Shwapno Superstore (Grocery)\n"
-                    f"• **Karim:** ৳400.00 at Sultan's Dine (Food)\n\n"
-                    f"Total Delegated Spend: **৳1,650.00** | Combined Remaining Allowance: **৳2,350.00**.\n"
-                    f"Both members authenticate through their own accounts—your PIN/password is never shared."
-                )
-            return {"text": text, "actions": [{"type": "NAVIGATE_FAMILYPASS", "label": "Manage FamilyPass"}]}
-
-        # 4. Next month recommendation
-        elif "next month" in q or "allocate" in q or "recommend" in q or "suggestion" in q:
-            if lang == "bn":
-                text = (
-                    "🎯 **আগামী মাসের জন্য প্রস্তাবিত ফান্ড বাজেট:**\n\n"
-                    "• **মুদি (Grocery):** ৳১৩,০০০ (বর্তমান ৳১৫,০০০ থেকে হ্রাসকৃত কিন্তু বাস্তবানুগ)\n"
-                    "• **চিকিৎসা (Medicine):** ৳৫,০০০ (যথাযথ ইমার্জেন্সি বাফার বজায় রাখা হয়েছে)\n"
-                    "• **শিক্ষা (Education):** ৳১০,০০০ (স্কুল ফি ও বইপত্রের জন্য পর্যাপ্ত)\n"
-                    "• **বিদ্যুৎ (Electricity):** ৳৩,৫০০ (শীতকালের কারণে ৳৫০০ সাশ্রয় প্রস্তাবিত)\n"
-                    "• **সঞ্চয় (Savings):** ৳৮,৫০০ (অতিরিক্ত সঞ্চয় উদ্বৃত্ত)\n\n"
-                    "💡 *মনে রাখবেন: এআই শুধুমাত্র পরামর্শ দেয়; ফান্ড বরাদ্দ পরিবর্তন করার চূড়ান্ত সিদ্ধান্ত সম্পূর্ণ আপনার।*"
-                )
-            else:
-                text = (
-                    "🎯 **Recommended Purpose Fund Allocations for Next Month:**\n\n"
-                    "• **Grocery Fund:** **৳13,500** (Adjusted up to accommodate consistent 7.5% volume growth)\n"
-                    "• **Medicine Fund:** **৳5,000** (Maintain existing healthy safety buffer)\n"
-                    "• **Education Fund:** **৳10,000** (Covers fixed ৳6,500 tuition + study supplies)\n"
-                    "• **Electricity Fund:** **৳3,500** (Recommend reducing by ৳500 as weather cools)\n"
-                    "• **Savings Target:** **৳8,500** (Allocating surplus towards your emergency reserve)\n\n"
-                    "💡 *Note: Recommendations require your explicit approval. AI will never adjust your allocations autonomously.*"
-                )
-            return {"text": text, "actions": [{"type": "NAVIGATE_FUNDS", "label": "Adjust Fund Allocations"}]}
-
-        # 5. Unusual spending / anomaly
-        elif "unusual" in q or "anomaly" in q or "flagged" in q:
-            if lang == "bn":
-                text = (
-                    "🔍 **চিহ্নিত অস্বাভাবিক লেনদেন বিবরণ:**\n\n"
-                    "• **লেনদেন:** ৳৮,৫০০ (আগোরা সুপার শপ - গ্রোসারি)\n"
-                    "• **কেন চিহ্নিত হয়েছে:** এটি আপনার ঐতিহাসিক গড় মুদি খরচের (৳৮৫০) চেয়ে **৪.৩ গুণ বেশি** এবং সাধারণ লেনদেন পরিধির বাইরে।\n"
-                    "• **মডেল স্কোর:** ০.৮৪ (আইসোলেশন ফরেস্ট আউটলায়ার ডিটেক্টর)\n\n"
-                    "এটিকে সরাসরি জালিয়াতি বলা হচ্ছে না; এটি কেবল পর্যালোচনার জন্য চিহ্নিত করা হয়েছে যাতে আপনি নিশ্চিত হতে পারেন এটি সঠিক ছিল।"
-                )
-            else:
-                text = (
-                    "🔍 **Audit of Flagged Unusual Transaction:**\n\n"
-                    "• **Transaction:** **৳8,500.00** at Agora Super Shop\n"
-                    "• **Category:** Grocery\n"
-                    "• **Detection Evidence:**\n"
-                    "  - Amount is **4.3× higher** than your historical grocery average (৳850.00).\n"
-                    "  - Statistical Z-score is 3.8σ (well above the 99th percentile control limit).\n"
-                    "  - Machine Learning Anomaly Score: **0.84** (Threshold: 0.65).\n\n"
-                    "This is classified as **Unusual Spending**, not fraud. You can review and verify this transaction in your history."
-                )
-            return {"text": text, "actions": [{"type": "NAVIGATE_HISTORY", "label": "Inspect Transaction History"}]}
-
-        # 6. Monthly report summary
-        else:
-            if lang == "bn":
-                text = (
-                    f"📑 **আপনার বর্তমান আর্থিক সারসংক্ষেপ:**\n\n"
-                    f"• সাধারণ ওয়ালেট ব্যালান্স: **৳{facts['wallet_balance']:,.2f}**\n"
-                    f"• সক্রিয় পারপাস ফান্ড সংখ্যা: {len(facts['purpose_funds'])}\n"
-                    f"• মোট সঞ্চয় হার: ২৩.১% (চমৎকার আর্থিক শৃঙ্খলা)\n"
-                    f"• ফ্যামিলিপাস সক্রিয় সদস্য: ২ জন (রহিম ও করিম)\n\n"
-                    f"আপনার জন্য প্রধান করণীয়: মুদি ফান্ডের বাজেট ওভাররান ঠেকাতে বিদ্যুৎ ফান্ড থেকে ৳১,০০০ স্থানান্তর করার বিষয়টি বিবেচনা করুন।"
-                )
-            else:
-                text = (
-                    f"📑 **Executive Financial Health Summary:**\n\n"
-                    f"• Available Normal Wallet: **৳{facts['wallet_balance']:,.2f}**\n"
-                    f"• Active Purpose Funds: **{len(facts['purpose_funds'])} categories**\n"
-                    f"• Overall Savings Rate: **23.1%** (Financial Discipline Score: 88.5/100)\n"
-                    f"• FamilyPass Delegations: **2 active members** (Rahim & Karim)\n\n"
-                    f"**Primary AI Recommendation:** Review your Grocery Fund (projected ৳2,200 overrun) and consider balancing it via an Inter-Fund Transfer from your Electricity Fund surplus."
-                )
-            return {"text": text, "actions": []}
+# Backward-compatible alias for existing imports
+AICoach = FinancialAIService

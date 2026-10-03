@@ -1197,53 +1197,6 @@ class AICoachQueryView(APIView):
         return Response(response)
 
 
-class AISetKeyView(APIView):
-    """
-    Allows the judge/user to set Gemini API key from the UI settings page.
-    Writes to the .env file for persistence.
-    """
-    def post(self, request):
-        import os
-        from pathlib import Path
-        gemini_key = request.data.get('gemini_api_key', '').strip()
-        if not gemini_key:
-            return Response({"error": "API key is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Update os.environ immediately for current process
-        os.environ['GEMINI_API_KEY'] = gemini_key
-
-        # Also update Django settings in memory
-        from django.conf import settings
-        settings.GEMINI_API_KEY = gemini_key
-
-        # Write to .env file for persistence
-        env_file = Path(settings.BASE_DIR) / '.env'
-        try:
-            if env_file.exists():
-                content = env_file.read_text(encoding='utf-8')
-                if 'GEMINI_API_KEY=' in content:
-                    lines = content.splitlines()
-                    new_lines = []
-                    for line in lines:
-                        if line.startswith('GEMINI_API_KEY='):
-                            new_lines.append(f'GEMINI_API_KEY={gemini_key}')
-                        else:
-                            new_lines.append(line)
-                    env_file.write_text('\n'.join(new_lines), encoding='utf-8')
-                else:
-                    with env_file.open('a', encoding='utf-8') as f:
-                        f.write(f'\nGEMINI_API_KEY={gemini_key}\n')
-            else:
-                env_file.write_text(f'GEMINI_API_KEY={gemini_key}\n', encoding='utf-8')
-        except Exception as e:
-            pass  # Key already set in memory, file write is best-effort
-
-        return Response({
-            "message": "Gemini API key saved successfully. AI Coach is now powered by Gemini 2.0 Flash.",
-            "ai_enabled": True
-        })
-
-
 class ReportsView(APIView):
     def get(self, request):
         user, err = require_auth(request)

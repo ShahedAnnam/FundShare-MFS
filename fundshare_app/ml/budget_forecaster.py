@@ -41,8 +41,6 @@ class BudgetForecaster:
 
         spent_so_far = sum([float(t.amount) for t in txns])
 
-        # If it's the demo Grocery fund, ensure we match the hackathon scenario accurately
-        # Spent: ৳12,400, Budget: ৳15,000 -> Forecast: ৳17,200 (overrun ৳2,200)
         allocated = float(fund.monthly_budget or fund.allocated_amount)
 
         if spent_so_far == 0:
@@ -51,11 +49,6 @@ class BudgetForecaster:
         # Spending velocity
         daily_rate = spent_so_far / days_elapsed
         projected_spend = spent_so_far + (daily_rate * days_remaining)
-
-        # Ensure sensible boundary
-        if fund.name.lower() == 'grocery':
-            projected_spend = max(projected_spend, 17200.0)
-            spent_so_far = max(spent_so_far, 12400.0)
 
         potential_overrun = max(0.0, projected_spend - allocated)
 

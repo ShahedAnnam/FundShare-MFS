@@ -2882,3 +2882,161 @@ class FamilyPassBillPaymentCategoryTests(TestCase):
         self.assertIn('Successfully processed Bill', resp4.json().get('message'))
         self.assertEqual(resp4.json()['transaction']['status'], 'COMPLETED')
         self.assertEqual(resp4.json()['transaction']['payment_source'], 'FAMILY_PASS')
+
+
+# ==============================================================================
+# 8. AI FINANCIAL COACH & GEMINI INTEGRATION TESTS
+# ==============================================================================
+class AICoachServiceTests(TestCase):
+    """
+    Comprehensive tests for the AI Financial Coach:
+    - Intent detection (General vs Financial)
+    - Authoritative financial ledger context generation
+    - Strict multi-user financial context isolation
+    - Deterministic offline calculations (zero mock data)
+    - API endpoint integration
+    """
+
+    def setUp(self):
+        self.user_a = User.objects.create_user(
+            username='user_a',
+            phone='01711000001',
+            role=UserRole.CUSTOMER,
+            full_name='User Alpha'
+        )
+        self.user_b = User.objects.create_user(
+            username='user_b',
+            phone='01711000002',
+            role=UserRole.MEMBER,
+            full_name='User Beta'
+        )
+        self.wallet_a = Wallet.objects.create(owner=self.user_a, balance=Decimal('10000.00'))
+        self.wallet_b = Wallet.objects.create(owner=self.user_b, balance=Decimal('2000.00'))
+
+        # Create spending transactions for User A
+        self.txn_a1 = Transaction.objects.create(
+            sender=self.user_a,
+            amount=Decimal('3500.00'),
+            transaction_type=TransactionType.MERCHANT_PAYMENT,
+            payment_source=PaymentSource.NORMAL_WALLET,
+            status=TransactionStatus.COMPLETED,
+            category='Grocery',
+            reference='Shwapno Supershop'
+        )
+        self.txn_a2 = Transaction.objects.create(
+            sender=self.user_a,
+            amount=Decimal('1500.00'),
+            transaction_type=TransactionType.BILL_PAYMENT,
+            payment_source=PaymentSource.NORMAL_WALLET,
+            status=TransactionStatus.COMPLETED,
+            category='Electricity',
+            reference='DESCO'
+        )
+
+        # Create FamilyPass from User A to User B
+        self.fp = FamilyPass.objects.create(
+            owner=self.user_a,
+            member=self.user_b,
+            limit_amount=Decimal('5000.00'),
+            used_amount=Decimal('1200.00'),
+            start_date=timezone.now().date(),
+            expiry_date=timezone.now().date() + datetime.timedelta(days=30),
+            allowed_action=FamilyPassAction.MERCHANT_PAYMENT,
+            status=FamilyPassStatus.ACTIVE,
+            purpose='Grocery',
+            purpose_label='Grocery',
+            allowed_categories=['Grocery']
+        )
+
+        self.client_a = Client()
+        self.client_a.force_login(self.user_a)
+        self.client_b = Client()
+        self.client_b.force_login(self.user_b)
+
+    def test_intent_detection_routing(self):
+        """AI Coach accurately classifies general knowledge vs financial intents."""
+        from fundshare_app.ml.ai_coach import FinancialAIService
+
+        self.assertEqual(FinancialAIService.detect_intent('hi'), 'GENERAL')
+        self.assertEqual(FinancialAIService.detect_intent('hello there'), 'GENERAL')
+        self.assertEqual(FinancialAIService.detect_intent('write full name of Bangladesh'), 'GENERAL')
+        self.assertEqual(FinancialAIService.detect_intent('What is Python programming?'), 'GENERAL')
+
+        self.assertEqual(FinancialAIService.detect_intent('How much did I spend this month?'), 'SPENDING_SUMMARY')
+        self.assertEqual(FinancialAIService.detect_intent('Where did I spend most of my money?'), 'CATEGORY_SPENDING')
+        self.assertEqual(FinancialAIService.detect_intent('How can I save money next month?'), 'SAVINGS_ANALYSIS')
+        self.assertEqual(FinancialAIService.detect_intent('Which fund is at risk of overrun?'), 'BUDGET_OVERRUN')
+        self.assertEqual(FinancialAIService.detect_intent('Show FamilyPass spending status'), 'FAMILYPASS')
+        self.assertEqual(FinancialAIService.detect_intent('Recommend next month allocations'), 'RECOMMENDATIONS')
+        self.assertEqual(FinancialAIService.detect_intent('Explain unusual flagged transactions'), 'ANOMALY')
+
+    def test_financial_context_aggregation_and_isolation(self):
+        """User A context reflects 5000 total spend; User B context reflects 0 personal spend."""
+        from fundshare_app.ml.ai_coach import FinancialAIService
+
+        ctx_a = FinancialAIService.get_user_financial_context(self.user_a)
+        ctx_b = FinancialAIService.get_user_financial_context(self.user_b)
+
+        # User A ledger checks
+        self.assertEqual(ctx_a['username'], 'user_a')
+        self.assertEqual(ctx_a['wallet_balance'], 10000.0)
+        self.assertEqual(ctx_a['monthly_report']['total_spent'], 5000.0)
+        self.assertEqual(ctx_a['monthly_report']['total_transactions'], 2)
+        self.assertEqual(len(ctx_a['family_passes_issued']), 1)
+        self.assertEqual(ctx_a['family_passes_issued'][0]['limit'], 5000.0)
+        self.assertEqual(ctx_a['family_passes_issued'][0]['used'], 1200.0)
+
+        # User B ledger checks (Strict multi-user isolation)
+        self.assertEqual(ctx_b['username'], 'user_b')
+        self.assertEqual(ctx_b['wallet_balance'], 2000.0)
+        self.assertEqual(ctx_b['monthly_report']['total_spent'], 0.0)
+        self.assertEqual(ctx_b['monthly_report']['total_transactions'], 0)
+        self.assertEqual(len(ctx_b['family_passes_issued']), 0)
+        self.assertEqual(len(ctx_b['family_passes_received']), 1)
+        self.assertEqual(ctx_b['family_passes_received'][0]['limit'], 5000.0)
+        self.assertEqual(ctx_b['family_passes_received'][0]['used'], 1200.0)
+
+    def test_deterministic_offline_calculations_no_mock_data(self):
+        """Offline analysis computes real values with zero hardcoded mock statistics."""
+        from fundshare_app.ml.ai_coach import FinancialAIService
+
+        ctx_a = FinancialAIService.get_user_financial_context(self.user_a)
+        intent = FinancialAIService.detect_intent('How much did I spend?')
+        resp = FinancialAIService.deterministic_offline_analysis(
+            user=self.user_a,
+            question='How much did I spend?',
+            intent=intent,
+            facts=ctx_a
+        )
+
+        self.assertIn('5,000.00', resp['answer'])
+        self.assertIn('Grocery', resp['answer'])
+        self.assertIn('Electricity', resp['answer'])
+        # Ensure dummy strings do not appear
+        self.assertNotIn('23.1%', resp['answer'])
+        self.assertNotIn('Rahim & Karim', resp['answer'])
+
+    def test_api_query_endpoint_authenticated(self):
+        """Authenticated users receive valid structured AI responses."""
+        resp = self.client_a.post('/api/ai/query/', {
+            'question': 'How much did I spend?'
+        }, content_type='application/json')
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn('answer', data)
+        self.assertIn('source', data)
+        self.assertIn('ai_powered', data)
+        self.assertEqual(data['intent'], 'SPENDING_SUMMARY')
+        self.assertIn('5,000', data['answer'])
+
+    def test_api_query_endpoint_general_intent(self):
+        """General non-financial questions receive general answers without financial summaries."""
+        resp = self.client_a.post('/api/ai/query/', {
+            'question': 'hi'
+        }, content_type='application/json')
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data['intent'], 'GENERAL')
+        self.assertIn('answer', data)
