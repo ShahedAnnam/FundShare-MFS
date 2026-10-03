@@ -293,11 +293,45 @@ class UtilityServicesView(APIView):
                 'CASHOUT': TransactionType.CASH_OUT,
             }
             txn_type = type_map.get(action_type, TransactionType.BILL_PAYMENT)
+
+            payment_source = request.data.get('payment_source', PaymentSource.NORMAL_WALLET)
+            family_pass_id = request.data.get('family_pass_id')
+            family_pass = None
+
+            if txn_type == TransactionType.BILL_PAYMENT and payment_source == PaymentSource.FAMILY_PASS:
+                if not family_pass_id:
+                    return Response({
+                        "success": False,
+                        "error": "FamilyPass is required for FamilyPass payment.",
+                        "code": "FAMILYPASS_REQUIRED"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                try:
+                    family_pass = FamilyPass.objects.get(id=family_pass_id)
+                except (FamilyPass.DoesNotExist, ValueError):
+                    return Response({
+                        "success": False,
+                        "error": "Selected FamilyPass was not found or is invalid.",
+                        "code": "FAMILYPASS_NOT_FOUND"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            category = request.data.get('category')
+            provider = request.data.get('provider')
+            bill_type = request.data.get('bill_type')
+            metadata = {
+                'provider': provider,
+                'bill_type': bill_type,
+                'account_number': request.data.get('account_number', '')
+            }
+
             txn = TransactionService.execute_transaction(
                 sender=user,
                 transaction_type=txn_type,
                 amount=amount,
-                reference=request.data.get('reference', '')
+                payment_source=payment_source,
+                family_pass=family_pass,
+                category=category,
+                reference=request.data.get('reference', ''),
+                metadata=metadata
             )
             return Response({
                 "message": f"Successfully processed {action_type.title()} of ৳{amount:,.2f}",
@@ -305,7 +339,11 @@ class UtilityServicesView(APIView):
                 "remaining_balance": float(user.wallet.balance)
             })
         except TransactionValidationError as e:
-            return Response({"error": e.message, "code": e.code}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                "error": e.message,
+                "code": e.code,
+                "is_category_mismatch": e.code in ["CATEGORY_RESTRICTION_ERROR", "FAMILYPASS_CATEGORY_MISMATCH"]
+            }, status=status.HTTP_400_BAD_REQUEST)
 
 
 # ==================== PURPOSE FUNDS ====================
@@ -611,6 +649,20 @@ class PayMerchantView(APIView):
             if family_pass_id:
                 family_pass = FamilyPass.objects.filter(id=family_pass_id).first()
 
+            if payment_source == PaymentSource.FAMILY_PASS:
+                if not family_pass_id:
+                    return Response({
+                        "success": False,
+                        "error": "FamilyPass is required for FamilyPass payment.",
+                        "code": "FAMILYPASS_REQUIRED"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                if not family_pass:
+                    return Response({
+                        "success": False,
+                        "error": "Selected FamilyPass was not found or is invalid.",
+                        "code": "FAMILYPASS_NOT_FOUND"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
             # Execute transaction with deterministic business rule engine
             txn = TransactionService.execute_transaction(
                 sender=user,
@@ -636,7 +688,7 @@ class PayMerchantView(APIView):
                 "success": False,
                 "error": e.message,
                 "code": e.code,
-                "is_category_mismatch": e.code == "CATEGORY_RESTRICTION_ERROR"
+                "is_category_mismatch": e.code in ["CATEGORY_RESTRICTION_ERROR", "FAMILYPASS_CATEGORY_MISMATCH"]
             }, status=status.HTTP_400_BAD_REQUEST)
 
 

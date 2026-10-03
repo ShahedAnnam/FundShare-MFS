@@ -121,6 +121,8 @@ class FamilyPassSerializer(serializers.ModelSerializer):
     is_valid = serializers.BooleanField(source='is_valid_and_active', read_only=True)
     usage_pct = serializers.SerializerMethodField()
     purpose_display = serializers.CharField(source='purpose_label', read_only=True)
+    is_unrestricted = serializers.SerializerMethodField()
+    effective_allowed_categories = serializers.SerializerMethodField()
 
     class Meta:
         model = FamilyPass
@@ -128,9 +130,15 @@ class FamilyPassSerializer(serializers.ModelSerializer):
             'id', 'owner', 'owner_name', 'owner_username', 'member', 'member_name', 'member_username',
             'limit_amount', 'used_amount', 'remaining_limit', 'start_date', 'expiry_date',
             'allowed_action', 'status', 'purpose', 'custom_purpose', 'purpose_label', 'purpose_display',
-            'allowed_categories',
+            'allowed_categories', 'effective_allowed_categories', 'is_unrestricted',
             'is_valid', 'usage_pct', 'created_at'
         ]
+
+    def get_is_unrestricted(self, obj):
+        return not bool(obj.get_allowed_categories())
+
+    def get_effective_allowed_categories(self, obj):
+        return obj.get_allowed_categories()
 
     def get_usage_pct(self, obj):
         limit = float(obj.limit_amount)

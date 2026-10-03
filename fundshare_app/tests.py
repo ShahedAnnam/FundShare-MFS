@@ -2178,3 +2178,707 @@ class FamilyPassCategoryRestrictionTest(TestCase):
         self.grocery_pass.refresh_from_db()
         self.assertEqual(self.grocery_pass.allowed_categories, ['Grocery', 'Medicine'])
 
+    # ==================== 10. DYNAMIC CATEGORY FILTERING & API TESTS ====================
+    def test_education_pass_pays_education_merchant_success(self):
+        """Education FamilyPass must SUCCEED when paying an Education merchant."""
+        education_pass = FamilyPass.objects.create(
+            owner=self.owner, member=self.member,
+            limit_amount=Decimal('4000.00'), used_amount=Decimal('0.00'),
+            start_date=self.today - datetime.timedelta(days=1),
+            expiry_date=self.today + datetime.timedelta(days=30),
+            allowed_action=FamilyPassAction.MERCHANT_PAYMENT,
+            status=FamilyPassStatus.ACTIVE,
+            purpose='Education', purpose_label='Education',
+            allowed_categories=['Education']
+        )
+        amt = Decimal('1500.00')
+        owner_bal_before = self.owner_wallet.balance
+        txn = TransactionService.execute_transaction(
+            sender=self.member,
+            merchant=self.education_merchant,
+            amount=amt,
+            transaction_type=TransactionType.MERCHANT_PAYMENT,
+            payment_source=PaymentSource.FAMILY_PASS,
+            family_pass=education_pass
+        )
+        self.assertEqual(txn.status, TransactionStatus.COMPLETED)
+        self.owner_wallet.refresh_from_db()
+        self.assertEqual(self.owner_wallet.balance, owner_bal_before - amt)
+        education_pass.refresh_from_db()
+        self.assertEqual(education_pass.used_amount, amt)
+        self.assertEqual(education_pass.remaining_limit, Decimal('2500.00'))
+
+    def test_education_merchant_with_grocery_pass_rejected(self):
+        """Paying Education merchant with Grocery FamilyPass must be REJECTED with balances unchanged."""
+        owner_bal_before = self.owner_wallet.balance
+        member_bal_before = self.member_wallet.balance
+        merchant_bal_before = self.education_merchant.balance
+        with self.assertRaises(TransactionValidationError) as ctx:
+            TransactionService.execute_transaction(
+                sender=self.member,
+                merchant=self.education_merchant,
+                amount=Decimal('500.00'),
+                transaction_type=TransactionType.MERCHANT_PAYMENT,
+                payment_source=PaymentSource.FAMILY_PASS,
+                family_pass=self.grocery_pass
+            )
+        self.assertEqual(ctx.exception.code, "FAMILYPASS_CATEGORY_MISMATCH")
+        self.owner_wallet.refresh_from_db()
+        self.member_wallet.refresh_from_db()
+        self.education_merchant.refresh_from_db()
+        self.assertEqual(self.owner_wallet.balance, owner_bal_before)
+        self.assertEqual(self.member_wallet.balance, member_bal_before)
+        self.assertEqual(self.education_merchant.balance, merchant_bal_before)
+
+    def test_education_merchant_with_medicine_pass_rejected(self):
+        """Paying Education merchant with Medical FamilyPass must be REJECTED with balances unchanged."""
+        owner_bal_before = self.owner_wallet.balance
+        member_bal_before = self.member_wallet.balance
+        merchant_bal_before = self.education_merchant.balance
+        with self.assertRaises(TransactionValidationError) as ctx:
+            TransactionService.execute_transaction(
+                sender=self.member,
+                merchant=self.education_merchant,
+                amount=Decimal('500.00'),
+                transaction_type=TransactionType.MERCHANT_PAYMENT,
+                payment_source=PaymentSource.FAMILY_PASS,
+                family_pass=self.medical_pass
+            )
+        self.assertEqual(ctx.exception.code, "FAMILYPASS_CATEGORY_MISMATCH")
+        self.owner_wallet.refresh_from_db()
+        self.member_wallet.refresh_from_db()
+        self.education_merchant.refresh_from_db()
+        self.assertEqual(self.owner_wallet.balance, owner_bal_before)
+        self.assertEqual(self.member_wallet.balance, member_bal_before)
+        self.assertEqual(self.education_merchant.balance, merchant_bal_before)
+
+    def test_emergency_pass_unrestricted_policy(self):
+        """Unrestricted Emergency pass allows Education merchant, while restricted Emergency pass enforces restriction."""
+        # Unrestricted Emergency pass (allowed_categories=[]) succeeds at Education merchant
+        amt = Decimal('200.00')
+        txn = TransactionService.execute_transaction(
+            sender=self.member,
+            merchant=self.education_merchant,
+            amount=amt,
+            transaction_type=TransactionType.MERCHANT_PAYMENT,
+            payment_source=PaymentSource.FAMILY_PASS,
+            family_pass=self.emergency_pass
+        )
+        self.assertEqual(txn.status, TransactionStatus.COMPLETED)
+        self.assertTrue(txn.metadata.get('category_unrestricted', False))
+
+        # Configured restricted Emergency pass (e.g. allowed_categories=['Medicine']) must be REJECTED at Education merchant
+        restricted_emergency = FamilyPass.objects.create(
+            owner=self.owner, member=self.member,
+            limit_amount=Decimal('3000.00'), used_amount=Decimal('0.00'),
+            start_date=self.today - datetime.timedelta(days=1),
+            expiry_date=self.today + datetime.timedelta(days=30),
+            allowed_action=FamilyPassAction.MERCHANT_PAYMENT,
+            status=FamilyPassStatus.ACTIVE,
+            purpose='Emergency', purpose_label='Medical Emergency Only',
+            allowed_categories=['Medicine', 'Treatment']
+        )
+        with self.assertRaises(TransactionValidationError) as ctx:
+            TransactionService.execute_transaction(
+                sender=self.member,
+                merchant=self.education_merchant,
+                amount=amt,
+                transaction_type=TransactionType.MERCHANT_PAYMENT,
+                payment_source=PaymentSource.FAMILY_PASS,
+                family_pass=restricted_emergency
+            )
+        self.assertEqual(ctx.exception.code, "FAMILYPASS_CATEGORY_MISMATCH")
+
+    def test_direct_api_submission_invalid_or_mismatched_family_pass(self):
+        """Direct API call with invalid, missing, or mismatched FamilyPass must return 400 Bad Request."""
+        # Missing family_pass_id
+        resp1 = self.client_member.post('/api/pay/', {
+            'merchant_id': self.education_merchant.id,
+            'amount': '100.00',
+            'payment_source': 'FAMILY_PASS'
+        }, content_type='application/json')
+        self.assertEqual(resp1.status_code, 400)
+        self.assertEqual(resp1.json().get('code'), 'FAMILYPASS_REQUIRED')
+
+        # Invalid family_pass_id (non-existent)
+        resp2 = self.client_member.post('/api/pay/', {
+            'merchant_id': self.education_merchant.id,
+            'amount': '100.00',
+            'payment_source': 'FAMILY_PASS',
+            'family_pass_id': 99999
+        }, content_type='application/json')
+        self.assertEqual(resp2.status_code, 400)
+        self.assertEqual(resp2.json().get('code'), 'FAMILYPASS_NOT_FOUND')
+
+        # Mismatched category via direct API (Grocery pass sent to Education merchant)
+        resp3 = self.client_member.post('/api/pay/', {
+            'merchant_id': self.education_merchant.id,
+            'amount': '100.00',
+            'payment_source': 'FAMILY_PASS',
+            'family_pass_id': self.grocery_pass.id
+        }, content_type='application/json')
+        self.assertEqual(resp3.status_code, 400)
+        self.assertEqual(resp3.json().get('code'), 'FAMILYPASS_CATEGORY_MISMATCH')
+        self.assertTrue(resp3.json().get('is_category_mismatch'))
+
+    def test_family_pass_insufficient_quota_or_owner_balance(self):
+        """FamilyPass payment must fail cleanly when quota or owner balance is insufficient."""
+        # Limit exceeded
+        with self.assertRaises(TransactionValidationError) as ctx:
+            TransactionService.execute_transaction(
+                sender=self.member,
+                merchant=self.grocery_merchant,
+                amount=Decimal('6000.00'),  # limit is 5000.00
+                transaction_type=TransactionType.MERCHANT_PAYMENT,
+                payment_source=PaymentSource.FAMILY_PASS,
+                family_pass=self.grocery_pass
+            )
+        self.assertEqual(ctx.exception.code, "FAMILYPASS_LIMIT_EXCEEDED")
+
+        # Owner balance insufficient
+        self.owner_wallet.balance = Decimal('10.00')
+        self.owner_wallet.save()
+        with self.assertRaises(TransactionValidationError) as ctx:
+            TransactionService.execute_transaction(
+                sender=self.member,
+                merchant=self.grocery_merchant,
+                amount=Decimal('100.00'),
+                transaction_type=TransactionType.MERCHANT_PAYMENT,
+                payment_source=PaymentSource.FAMILY_PASS,
+                family_pass=self.grocery_pass
+            )
+        self.assertEqual(ctx.exception.code, "OWNER_BALANCE_INSUFFICIENT")
+
+    def test_normal_wallet_remains_selectable_and_succeeds(self):
+        """Normal wallet payment succeeds for any merchant category regardless of FamilyPass state."""
+        self.member_wallet.balance = Decimal('1000.00')
+        self.member_wallet.save()
+        amt = Decimal('250.00')
+        txn = TransactionService.execute_transaction(
+            sender=self.member,
+            merchant=self.education_merchant,
+            amount=amt,
+            transaction_type=TransactionType.MERCHANT_PAYMENT,
+            payment_source=PaymentSource.NORMAL_WALLET
+        )
+        self.assertEqual(txn.status, TransactionStatus.COMPLETED)
+        self.member_wallet.refresh_from_db()
+        self.assertEqual(self.member_wallet.balance, Decimal('750.00'))
+
+    def test_merchant_change_eligibility_logic(self):
+        """Verifies FamilyPass is_category_allowed accurately differentiates eligible vs ineligible merchants."""
+        education_pass = FamilyPass.objects.create(
+            owner=self.owner, member=self.member,
+            limit_amount=Decimal('2000.00'), used_amount=Decimal('0.00'),
+            start_date=self.today - datetime.timedelta(days=1),
+            expiry_date=self.today + datetime.timedelta(days=30),
+            allowed_action=FamilyPassAction.MERCHANT_PAYMENT,
+            status=FamilyPassStatus.ACTIVE,
+            purpose='Education', purpose_label='Education',
+            allowed_categories=['Education']
+        )
+        # Eligible for Education merchant
+        self.assertTrue(education_pass.is_category_allowed(self.education_merchant.category))
+        # When switching to Grocery merchant, Education pass is NOT eligible
+        self.assertFalse(education_pass.is_category_allowed(self.grocery_merchant.category))
+        # Grocery pass is eligible for Grocery merchant, but NOT Education merchant
+        self.assertTrue(self.grocery_pass.is_category_allowed(self.grocery_merchant.category))
+        self.assertFalse(self.grocery_pass.is_category_allowed(self.education_merchant.category))
+
+
+class FamilyPassBillPaymentCategoryTests(TestCase):
+    """
+    Tests for FamilyPass category-based Bill Payment source filtering and execution.
+    Covers:
+    - Eligible bill payments (Bills & Utilities pass paying Electricity / Gas / Rent, Education pass paying Tuition)
+    - Ineligible bill payments (Grocery/Medical pass paying Electricity, Bills pass paying Tuition)
+    - Balance integrity on rejection (owner and member balances untouched)
+    - Member authorization (unauthorized user cannot pay bills with another's pass)
+    - Active status, expiry, spending limit, and owner balance checks
+    - Unrestricted passes (Emergency & Other with empty allowed_categories)
+    - Restricted emergency passes (explicit allowed_categories=['Medicine'])
+    - Normal Wallet availability and success across bill categories
+    - Dynamic bill category resolution (DESCO, DPDC, WASA, Titas, Eastern Housing, Scholastica)
+    - Selection change eligibility recalculation
+    - Direct API endpoints validation (/api/wallet/utility/)
+    """
+
+    def setUp(self):
+        self.today = timezone.localdate() if timezone.is_aware(timezone.now()) else timezone.now().date()
+
+        # Owner
+        self.owner = User.objects.create_user(
+            username='bill_owner', phone='01711100001',
+            role=UserRole.CUSTOMER, password='pass123'
+        )
+        self.owner_wallet = Wallet.objects.create(owner=self.owner, balance=Decimal('50000.00'))
+
+        # Authorized Member
+        self.member = User.objects.create_user(
+            username='bill_member', full_name='Bill Member',
+            phone='01711100002', role=UserRole.MEMBER, password='pass123'
+        )
+        self.member_wallet = Wallet.objects.create(owner=self.member, balance=Decimal('1500.00'))
+
+        # Unauthorized Third Party User
+        self.stranger = User.objects.create_user(
+            username='bill_stranger', phone='01711100003',
+            role=UserRole.MEMBER, password='pass123'
+        )
+        self.stranger_wallet = Wallet.objects.create(owner=self.stranger, balance=Decimal('500.00'))
+
+        # FamilyPass instances
+        self.bills_pass = FamilyPass.objects.create(
+            owner=self.owner, member=self.member,
+            limit_amount=Decimal('10000.00'), used_amount=Decimal('0.00'),
+            start_date=self.today - datetime.timedelta(days=1),
+            expiry_date=self.today + datetime.timedelta(days=30),
+            allowed_action=FamilyPassAction.MERCHANT_PAYMENT,
+            status=FamilyPassStatus.ACTIVE,
+            purpose='Bills & Utilities', purpose_label='Bills & Utilities',
+            allowed_categories=['Electricity', 'Rent']
+        )
+
+        self.education_pass = FamilyPass.objects.create(
+            owner=self.owner, member=self.member,
+            limit_amount=Decimal('8000.00'), used_amount=Decimal('0.00'),
+            start_date=self.today - datetime.timedelta(days=1),
+            expiry_date=self.today + datetime.timedelta(days=30),
+            allowed_action=FamilyPassAction.MERCHANT_PAYMENT,
+            status=FamilyPassStatus.ACTIVE,
+            purpose='Education', purpose_label='Education',
+            allowed_categories=['Education']
+        )
+
+        self.grocery_pass = FamilyPass.objects.create(
+            owner=self.owner, member=self.member,
+            limit_amount=Decimal('5000.00'), used_amount=Decimal('0.00'),
+            start_date=self.today - datetime.timedelta(days=1),
+            expiry_date=self.today + datetime.timedelta(days=30),
+            allowed_action=FamilyPassAction.MERCHANT_PAYMENT,
+            status=FamilyPassStatus.ACTIVE,
+            purpose='Grocery', purpose_label='Grocery',
+            allowed_categories=['Grocery']
+        )
+
+        self.medical_pass = FamilyPass.objects.create(
+            owner=self.owner, member=self.member,
+            limit_amount=Decimal('5000.00'), used_amount=Decimal('0.00'),
+            start_date=self.today - datetime.timedelta(days=1),
+            expiry_date=self.today + datetime.timedelta(days=30),
+            allowed_action=FamilyPassAction.MERCHANT_PAYMENT,
+            status=FamilyPassStatus.ACTIVE,
+            purpose='Medical', purpose_label='Medical',
+            allowed_categories=['Medicine', 'Treatment']
+        )
+
+        self.emergency_unrestricted_pass = FamilyPass.objects.create(
+            owner=self.owner, member=self.member,
+            limit_amount=Decimal('6000.00'), used_amount=Decimal('0.00'),
+            start_date=self.today - datetime.timedelta(days=1),
+            expiry_date=self.today + datetime.timedelta(days=30),
+            allowed_action=FamilyPassAction.MERCHANT_PAYMENT,
+            status=FamilyPassStatus.ACTIVE,
+            purpose='Emergency', purpose_label='Emergency',
+            allowed_categories=[]
+        )
+
+        self.emergency_restricted_pass = FamilyPass.objects.create(
+            owner=self.owner, member=self.member,
+            limit_amount=Decimal('4000.00'), used_amount=Decimal('0.00'),
+            start_date=self.today - datetime.timedelta(days=1),
+            expiry_date=self.today + datetime.timedelta(days=30),
+            allowed_action=FamilyPassAction.MERCHANT_PAYMENT,
+            status=FamilyPassStatus.ACTIVE,
+            purpose='Emergency', purpose_label='Medical Emergency',
+            allowed_categories=['Medicine']
+        )
+
+        # Clients
+        self.client_member = Client()
+        self.client_member.force_login(self.member)
+        self.client_stranger = Client()
+        self.client_stranger.force_login(self.stranger)
+
+    # ==================== 1. ELIGIBLE BILL PAYMENTS ====================
+    def test_bills_pass_pays_electricity_bill_desco_success(self):
+        """Bills & Utilities FamilyPass must successfully pay a DESCO electricity bill."""
+        amt = Decimal('1200.00')
+        owner_bal_before = self.owner_wallet.balance
+        member_bal_before = self.member_wallet.balance
+
+        txn = TransactionService.execute_transaction(
+            sender=self.member,
+            amount=amt,
+            transaction_type=TransactionType.BILL_PAYMENT,
+            payment_source=PaymentSource.FAMILY_PASS,
+            family_pass=self.bills_pass,
+            category='Electricity',
+            metadata={'provider': 'DESCO', 'bill_type': 'Electricity', 'account_number': 'MTR-12345'}
+        )
+
+        self.assertEqual(txn.status, TransactionStatus.COMPLETED)
+        self.assertEqual(txn.payment_source, PaymentSource.FAMILY_PASS)
+        self.assertEqual(txn.category, 'Electricity')
+
+        # Balance check: Owner deducted, member untouched
+        self.owner_wallet.refresh_from_db()
+        self.assertEqual(self.owner_wallet.balance, owner_bal_before - amt)
+        self.member_wallet.refresh_from_db()
+        self.assertEqual(self.member_wallet.balance, member_bal_before)
+
+        # FamilyPass quota check
+        self.bills_pass.refresh_from_db()
+        self.assertEqual(self.bills_pass.used_amount, amt)
+        self.assertEqual(self.bills_pass.remaining_limit, Decimal('8800.00'))
+
+        # FamilyPass activity record check
+        fp_txn = FamilyPassTransaction.objects.filter(family_pass=self.bills_pass, transaction=txn).first()
+        self.assertIsNotNone(fp_txn)
+        self.assertEqual(fp_txn.amount, amt)
+        self.assertEqual(fp_txn.member, self.member)
+
+        # Notification checks for both owner and member
+        owner_notif = Notification.objects.filter(user=self.owner, notification_type='FAMILY_PASS').first()
+        self.assertIsNotNone(owner_notif)
+        self.assertIn('DESCO', owner_notif.message)
+
+        member_notif = Notification.objects.filter(user=self.member, title="Bill Payment Successful").first()
+        self.assertIsNotNone(member_notif)
+        self.assertIn('DESCO', member_notif.message)
+
+    def test_bills_pass_pays_rent_bill_eastern_housing_success(self):
+        """Bills & Utilities pass permits rent bill payments since Rent is in its allowed categories."""
+        amt = Decimal('3500.00')
+        owner_bal_before = self.owner_wallet.balance
+
+        txn = TransactionService.execute_transaction(
+            sender=self.member,
+            amount=amt,
+            transaction_type=TransactionType.BILL_PAYMENT,
+            payment_source=PaymentSource.FAMILY_PASS,
+            family_pass=self.bills_pass,
+            category='Rent',
+            metadata={'provider': 'Eastern Housing Rental', 'bill_type': 'Rent', 'account_number': 'APT-804'}
+        )
+
+        self.assertEqual(txn.status, TransactionStatus.COMPLETED)
+        self.assertEqual(txn.category, 'Rent')
+        self.owner_wallet.refresh_from_db()
+        self.assertEqual(self.owner_wallet.balance, owner_bal_before - amt)
+
+    def test_bills_pass_pays_gas_water_bill_wasa_success(self):
+        """Bills & Utilities pass successfully pays utility bills like WASA and Titas Gas."""
+        amt = Decimal('650.00')
+        owner_bal_before = self.owner_wallet.balance
+
+        # Provider: WASA, bill_type: Gas & Water -> resolved to Electricity/Utility category
+        txn = TransactionService.execute_transaction(
+            sender=self.member,
+            amount=amt,
+            transaction_type=TransactionType.BILL_PAYMENT,
+            payment_source=PaymentSource.FAMILY_PASS,
+            family_pass=self.bills_pass,
+            metadata={'provider': 'WASA', 'bill_type': 'Gas & Water', 'account_number': 'W-99182'}
+        )
+
+        self.assertEqual(txn.status, TransactionStatus.COMPLETED)
+        self.assertEqual(txn.category, 'Electricity')
+        self.owner_wallet.refresh_from_db()
+        self.assertEqual(self.owner_wallet.balance, owner_bal_before - amt)
+
+    def test_education_pass_pays_education_tuition_success(self):
+        """Education FamilyPass must allow paying education tuition bills."""
+        amt = Decimal('2500.00')
+        owner_bal_before = self.owner_wallet.balance
+
+        txn = TransactionService.execute_transaction(
+            sender=self.member,
+            amount=amt,
+            transaction_type=TransactionType.BILL_PAYMENT,
+            payment_source=PaymentSource.FAMILY_PASS,
+            family_pass=self.education_pass,
+            category='Education',
+            metadata={'provider': 'Scholastica School', 'bill_type': 'Education', 'account_number': 'STU-4412'}
+        )
+
+        self.assertEqual(txn.status, TransactionStatus.COMPLETED)
+        self.assertEqual(txn.category, 'Education')
+        self.owner_wallet.refresh_from_db()
+        self.assertEqual(self.owner_wallet.balance, owner_bal_before - amt)
+        self.education_pass.refresh_from_db()
+        self.assertEqual(self.education_pass.used_amount, amt)
+
+    def test_unrestricted_emergency_pass_pays_any_bill_success(self):
+        """Unrestricted Emergency pass (allowed_categories=[]) can pay any bill."""
+        amt = Decimal('1000.00')
+        txn = TransactionService.execute_transaction(
+            sender=self.member,
+            amount=amt,
+            transaction_type=TransactionType.BILL_PAYMENT,
+            payment_source=PaymentSource.FAMILY_PASS,
+            family_pass=self.emergency_unrestricted_pass,
+            category='Electricity',
+            metadata={'provider': 'DESCO', 'bill_type': 'Electricity'}
+        )
+        self.assertEqual(txn.status, TransactionStatus.COMPLETED)
+
+    # ==================== 2. INELIGIBLE BILL REJECTIONS ====================
+    def test_grocery_pass_cannot_pay_electricity_bill_rejected(self):
+        """Grocery FamilyPass must be rejected when attempting to pay an Electricity bill."""
+        amt = Decimal('800.00')
+        owner_bal_before = self.owner_wallet.balance
+        member_bal_before = self.member_wallet.balance
+
+        with self.assertRaises(TransactionValidationError) as ctx:
+            TransactionService.execute_transaction(
+                sender=self.member,
+                amount=amt,
+                transaction_type=TransactionType.BILL_PAYMENT,
+                payment_source=PaymentSource.FAMILY_PASS,
+                family_pass=self.grocery_pass,
+                category='Electricity',
+                metadata={'provider': 'DESCO', 'bill_type': 'Electricity'}
+            )
+
+        self.assertEqual(ctx.exception.code, "FAMILYPASS_CATEGORY_MISMATCH")
+
+        # Balance integrity: Balances must remain unchanged
+        self.owner_wallet.refresh_from_db()
+        self.assertEqual(self.owner_wallet.balance, owner_bal_before)
+        self.member_wallet.refresh_from_db()
+        self.assertEqual(self.member_wallet.balance, member_bal_before)
+        self.grocery_pass.refresh_from_db()
+        self.assertEqual(self.grocery_pass.used_amount, Decimal('0.00'))
+
+        # Rejected audit transaction must be recorded
+        rej_txn = Transaction.objects.filter(
+            sender=self.member,
+            status=TransactionStatus.REJECTED,
+            payment_source=PaymentSource.FAMILY_PASS,
+            category='Electricity'
+        ).first()
+        self.assertIsNotNone(rej_txn)
+        self.assertIn("Category Restriction Mismatch", rej_txn.rejection_reason)
+
+    def test_medical_pass_cannot_pay_electricity_bill_rejected(self):
+        """Medical FamilyPass must be rejected when attempting to pay a bill."""
+        with self.assertRaises(TransactionValidationError) as ctx:
+            TransactionService.execute_transaction(
+                sender=self.member,
+                amount=Decimal('500.00'),
+                transaction_type=TransactionType.BILL_PAYMENT,
+                payment_source=PaymentSource.FAMILY_PASS,
+                family_pass=self.medical_pass,
+                category='Electricity',
+                metadata={'provider': 'DPDC', 'bill_type': 'Electricity'}
+            )
+        self.assertEqual(ctx.exception.code, "FAMILYPASS_CATEGORY_MISMATCH")
+
+    def test_bills_pass_cannot_pay_education_tuition_rejected(self):
+        """Bills & Utilities pass must NOT be permitted to pay Education tuition bills."""
+        with self.assertRaises(TransactionValidationError) as ctx:
+            TransactionService.execute_transaction(
+                sender=self.member,
+                amount=Decimal('2000.00'),
+                transaction_type=TransactionType.BILL_PAYMENT,
+                payment_source=PaymentSource.FAMILY_PASS,
+                family_pass=self.bills_pass,
+                category='Education',
+                metadata={'provider': 'Scholastica School', 'bill_type': 'Education'}
+            )
+        self.assertEqual(ctx.exception.code, "FAMILYPASS_CATEGORY_MISMATCH")
+
+    def test_restricted_emergency_pass_rejects_electricity_bill(self):
+        """Emergency pass explicitly restricted to ['Medicine'] cannot pay an Electricity bill."""
+        with self.assertRaises(TransactionValidationError) as ctx:
+            TransactionService.execute_transaction(
+                sender=self.member,
+                amount=Decimal('500.00'),
+                transaction_type=TransactionType.BILL_PAYMENT,
+                payment_source=PaymentSource.FAMILY_PASS,
+                family_pass=self.emergency_restricted_pass,
+                category='Electricity',
+                metadata={'provider': 'DESCO', 'bill_type': 'Electricity'}
+            )
+        self.assertEqual(ctx.exception.code, "FAMILYPASS_CATEGORY_MISMATCH")
+
+    # ==================== 3. AUTHORIZATION & STATUS CHECKS ====================
+    def test_unauthorized_user_cannot_pay_bill_with_family_pass(self):
+        """A user who is not the designated member cannot use another's FamilyPass to pay a bill."""
+        with self.assertRaises(TransactionValidationError) as ctx:
+            TransactionService.execute_transaction(
+                sender=self.stranger,
+                amount=Decimal('300.00'),
+                transaction_type=TransactionType.BILL_PAYMENT,
+                payment_source=PaymentSource.FAMILY_PASS,
+                family_pass=self.bills_pass,
+                category='Electricity',
+                metadata={'provider': 'DESCO', 'bill_type': 'Electricity'}
+            )
+        self.assertEqual(ctx.exception.code, "FAMILYPASS_UNAUTHORIZED")
+
+    def test_inactive_and_expired_pass_rejected(self):
+        """Inactive or expired FamilyPass cannot be used for bill payment."""
+        # Inactive pass
+        self.bills_pass.status = FamilyPassStatus.REVOKED
+        self.bills_pass.save()
+        with self.assertRaises(TransactionValidationError) as ctx:
+            TransactionService.execute_transaction(
+                sender=self.member,
+                amount=Decimal('300.00'),
+                transaction_type=TransactionType.BILL_PAYMENT,
+                payment_source=PaymentSource.FAMILY_PASS,
+                family_pass=self.bills_pass,
+                category='Electricity',
+                metadata={'provider': 'DESCO'}
+            )
+        self.assertEqual(ctx.exception.code, "FAMILYPASS_INACTIVE")
+
+        # Expired pass
+        self.bills_pass.status = FamilyPassStatus.ACTIVE
+        self.bills_pass.expiry_date = self.today - datetime.timedelta(days=1)
+        self.bills_pass.save()
+        with self.assertRaises(TransactionValidationError) as ctx:
+            TransactionService.execute_transaction(
+                sender=self.member,
+                amount=Decimal('300.00'),
+                transaction_type=TransactionType.BILL_PAYMENT,
+                payment_source=PaymentSource.FAMILY_PASS,
+                family_pass=self.bills_pass,
+                category='Electricity',
+                metadata={'provider': 'DESCO'}
+            )
+        self.assertEqual(ctx.exception.code, "FAMILYPASS_EXPIRED")
+
+    def test_quota_exceeded_and_owner_balance_insufficient(self):
+        """FamilyPass bill payment fails cleanly when spending limit or owner balance is insufficient."""
+        # Limit exceeded
+        with self.assertRaises(TransactionValidationError) as ctx:
+            TransactionService.execute_transaction(
+                sender=self.member,
+                amount=Decimal('15000.00'),  # limit is 10000.00
+                transaction_type=TransactionType.BILL_PAYMENT,
+                payment_source=PaymentSource.FAMILY_PASS,
+                family_pass=self.bills_pass,
+                category='Electricity',
+                metadata={'provider': 'DESCO'}
+            )
+        self.assertEqual(ctx.exception.code, "FAMILYPASS_LIMIT_EXCEEDED")
+
+        # Owner balance insufficient
+        self.owner_wallet.balance = Decimal('50.00')
+        self.owner_wallet.save()
+        with self.assertRaises(TransactionValidationError) as ctx:
+            TransactionService.execute_transaction(
+                sender=self.member,
+                amount=Decimal('500.00'),
+                transaction_type=TransactionType.BILL_PAYMENT,
+                payment_source=PaymentSource.FAMILY_PASS,
+                family_pass=self.bills_pass,
+                category='Electricity',
+                metadata={'provider': 'DESCO'}
+            )
+        self.assertEqual(ctx.exception.code, "OWNER_BALANCE_INSUFFICIENT")
+
+    # ==================== 4. NORMAL WALLET BILL PAYMENT ====================
+    def test_normal_wallet_pays_bills_successfully(self):
+        """Normal wallet payment succeeds for any bill type and deducts sender's wallet balance."""
+        amt = Decimal('400.00')
+        member_bal_before = self.member_wallet.balance
+
+        txn = TransactionService.execute_transaction(
+            sender=self.member,
+            amount=amt,
+            transaction_type=TransactionType.BILL_PAYMENT,
+            payment_source=PaymentSource.NORMAL_WALLET,
+            category='Electricity',
+            metadata={'provider': 'DESCO', 'bill_type': 'Electricity'}
+        )
+
+        self.assertEqual(txn.status, TransactionStatus.COMPLETED)
+        self.assertEqual(txn.payment_source, PaymentSource.NORMAL_WALLET)
+        self.member_wallet.refresh_from_db()
+        self.assertEqual(self.member_wallet.balance, member_bal_before - amt)
+
+    # ==================== 5. BILL CATEGORY RESOLUTION ====================
+    def test_resolve_bill_category_mappings(self):
+        """TransactionService.resolve_bill_category properly maps providers and bill types."""
+        self.assertEqual(TransactionService.resolve_bill_category('DESCO', 'Electricity'), 'Electricity')
+        self.assertEqual(TransactionService.resolve_bill_category('DPDC', 'Electricity'), 'Electricity')
+        self.assertEqual(TransactionService.resolve_bill_category('Titas Gas', 'Gas & Water'), 'Electricity')
+        self.assertEqual(TransactionService.resolve_bill_category('WASA', 'Gas & Water'), 'Electricity')
+        self.assertEqual(TransactionService.resolve_bill_category('Link3 Internet', 'Internet'), 'Electricity')
+        self.assertEqual(TransactionService.resolve_bill_category('Eastern Housing Rental', 'Rent'), 'Rent')
+        self.assertEqual(TransactionService.resolve_bill_category('Apartment Rent', 'Rent'), 'Rent')
+        self.assertEqual(TransactionService.resolve_bill_category('Scholastica School', 'Education'), 'Education')
+        self.assertEqual(TransactionService.resolve_bill_category('Tuition Fee', 'Education'), 'Education')
+        self.assertEqual(TransactionService.resolve_bill_category('General Service', 'Other'), 'Other')
+
+    def test_selection_change_eligibility_logic(self):
+        """Recalculating eligibility on selection change correctly determines permitted passes."""
+        # Electricity bill: Bills & Utilities pass is eligible, Education and Grocery are NOT
+        self.assertTrue(self.bills_pass.is_category_allowed('Electricity'))
+        self.assertFalse(self.education_pass.is_category_allowed('Electricity'))
+        self.assertFalse(self.grocery_pass.is_category_allowed('Electricity'))
+
+        # Rent bill: Bills & Utilities pass is eligible, Education and Grocery are NOT
+        self.assertTrue(self.bills_pass.is_category_allowed('Rent'))
+        self.assertFalse(self.education_pass.is_category_allowed('Rent'))
+
+        # Education bill: Education pass is eligible, Bills & Utilities and Grocery are NOT
+        self.assertTrue(self.education_pass.is_category_allowed('Education'))
+        self.assertFalse(self.bills_pass.is_category_allowed('Education'))
+        self.assertFalse(self.grocery_pass.is_category_allowed('Education'))
+
+    # ==================== 6. API DIRECT SUBMISSION ====================
+    def test_api_utility_services_view_bill_payment_endpoints(self):
+        """Test API validation when paying bills via /api/wallet/utility/."""
+        # 1. Missing FamilyPass ID when payment_source is FAMILY_PASS
+        resp1 = self.client_member.post('/api/wallet/utility/', {
+            'action_type': 'BILL',
+            'amount': '300.00',
+            'payment_source': 'FAMILY_PASS',
+            'provider': 'DESCO'
+        }, content_type='application/json')
+        self.assertEqual(resp1.status_code, 400)
+        self.assertEqual(resp1.json().get('code'), 'FAMILYPASS_REQUIRED')
+
+        # 2. Invalid FamilyPass ID
+        resp2 = self.client_member.post('/api/wallet/utility/', {
+            'action_type': 'BILL',
+            'amount': '300.00',
+            'payment_source': 'FAMILY_PASS',
+            'family_pass_id': 999999,
+            'provider': 'DESCO'
+        }, content_type='application/json')
+        self.assertEqual(resp2.status_code, 400)
+        self.assertEqual(resp2.json().get('code'), 'FAMILYPASS_NOT_FOUND')
+
+        # 3. Category mismatch (Grocery pass used for DESCO bill)
+        resp3 = self.client_member.post('/api/wallet/utility/', {
+            'action_type': 'BILL',
+            'amount': '300.00',
+            'payment_source': 'FAMILY_PASS',
+            'family_pass_id': self.grocery_pass.id,
+            'provider': 'DESCO',
+            'bill_type': 'Electricity'
+        }, content_type='application/json')
+        self.assertEqual(resp3.status_code, 400)
+        self.assertEqual(resp3.json().get('code'), 'FAMILYPASS_CATEGORY_MISMATCH')
+        self.assertTrue(resp3.json().get('is_category_mismatch'))
+
+        # 4. Valid FamilyPass bill payment (Bills pass used for DESCO bill)
+        resp4 = self.client_member.post('/api/wallet/utility/', {
+            'action_type': 'BILL',
+            'amount': '500.00',
+            'payment_source': 'FAMILY_PASS',
+            'family_pass_id': self.bills_pass.id,
+            'provider': 'DESCO',
+            'bill_type': 'Electricity',
+            'account_number': 'MTR-8812'
+        }, content_type='application/json')
+        self.assertEqual(resp4.status_code, 200)
+        self.assertIn('Successfully processed Bill', resp4.json().get('message'))
+        self.assertEqual(resp4.json()['transaction']['status'], 'COMPLETED')
+        self.assertEqual(resp4.json()['transaction']['payment_source'], 'FAMILY_PASS')

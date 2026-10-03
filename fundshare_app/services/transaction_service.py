@@ -20,6 +20,61 @@ class TransactionValidationError(Exception):
 
 class TransactionService:
 
+    PROVIDER_OR_TYPE_TO_CATEGORY = {
+        'desco': BusinessCategory.ELECTRICITY,
+        'dpdc': BusinessCategory.ELECTRICITY,
+        'nesco': BusinessCategory.ELECTRICITY,
+        'breb': BusinessCategory.ELECTRICITY,
+        'electricity': BusinessCategory.ELECTRICITY,
+        'titas': BusinessCategory.ELECTRICITY,
+        'titas gas': BusinessCategory.ELECTRICITY,
+        'gas': BusinessCategory.ELECTRICITY,
+        'wasa': BusinessCategory.ELECTRICITY,
+        'water': BusinessCategory.ELECTRICITY,
+        'link3': BusinessCategory.ELECTRICITY,
+        'link3 internet': BusinessCategory.ELECTRICITY,
+        'internet': BusinessCategory.ELECTRICITY,
+        'utility': BusinessCategory.ELECTRICITY,
+        'eastern housing': BusinessCategory.RENT,
+        'eastern housing rental': BusinessCategory.RENT,
+        'rent': BusinessCategory.RENT,
+        'housing': BusinessCategory.RENT,
+        'apartment': BusinessCategory.RENT,
+        'scholastica': BusinessCategory.EDUCATION,
+        'scholastica school': BusinessCategory.EDUCATION,
+        'sunnydale': BusinessCategory.EDUCATION,
+        'sunnydale academy': BusinessCategory.EDUCATION,
+        'tuition': BusinessCategory.EDUCATION,
+        'school': BusinessCategory.EDUCATION,
+        'college': BusinessCategory.EDUCATION,
+        'education': BusinessCategory.EDUCATION,
+        'other': BusinessCategory.OTHER,
+    }
+
+    @classmethod
+    def resolve_bill_category(cls, provider: str = None, bill_type: str = None) -> str:
+        """
+        Resolves the canonical BusinessCategory for a bill payment from its provider or bill_type.
+        """
+        if bill_type and bill_type in BusinessCategory.values:
+            return bill_type
+        if provider and provider in BusinessCategory.values:
+            return provider
+
+        if provider:
+            p_lower = str(provider).strip().lower()
+            for k, cat in cls.PROVIDER_OR_TYPE_TO_CATEGORY.items():
+                if k in p_lower:
+                    return cat
+
+        if bill_type:
+            bt_lower = str(bill_type).strip().lower()
+            for k, cat in cls.PROVIDER_OR_TYPE_TO_CATEGORY.items():
+                if k in bt_lower:
+                    return cat
+
+        return BusinessCategory.ELECTRICITY
+
     @classmethod
     def _save_transaction_items(cls, txn: Transaction, validated_items: list):
         if validated_items:
@@ -49,6 +104,7 @@ class TransactionService:
         payment_source: str = PaymentSource.NORMAL_WALLET,
         purpose_fund: PurposeFund = None,
         family_pass: FamilyPass = None,
+        category: str = None,
         reference: str = '',
         metadata: dict = None,
         items: list = None
@@ -176,27 +232,47 @@ class TransactionService:
                 )
                 raise TransactionValidationError(reason, code="CATEGORY_RESTRICTION_ERROR")
 
-        if transaction_type == TransactionType.MERCHANT_PAYMENT and payment_source == PaymentSource.FAMILY_PASS:
-            if family_pass and family_pass.allowed_categories:
-                if merchant and merchant.category not in family_pass.allowed_categories:
-                    reason = (
-                        f"Category Restriction Mismatch: Merchant '{merchant.business_name}' category '{merchant.category}' is not allowed for this FamilyPass."
-                    )
-                    Transaction.objects.create(
-                        transaction_id=f"TXN-{timezone.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}",
-                        sender=sender,
-                        merchant=merchant,
-                        amount=amount,
-                        transaction_type=TransactionType.MERCHANT_PAYMENT,
-                        payment_source=PaymentSource.FAMILY_PASS,
-                        family_pass=family_pass,
-                        category=merchant.category,
-                        status=TransactionStatus.REJECTED,
-                        rejection_reason=reason,
-                        reference=reference,
-                        metadata=metadata
-                    )
-                    raise TransactionValidationError(reason, code="FAMILYPASS_CATEGORY_MISMATCH")
+        if transaction_type in [TransactionType.MERCHANT_PAYMENT, TransactionType.BILL_PAYMENT] and payment_source == PaymentSource.FAMILY_PASS:
+            if not family_pass:
+                raise TransactionValidationError("FamilyPass instance is required for FamilyPass payment.", code="FAMILYPASS_REQUIRED")
+            if family_pass.member != sender:
+                raise TransactionValidationError("Unauthorized user for this FamilyPass delegation.", code="FAMILYPASS_UNAUTHORIZED")
+            if family_pass.status != FamilyPassStatus.ACTIVE:
+                raise TransactionValidationError("FamilyPass is not active or has been revoked.", code="FAMILYPASS_INACTIVE")
+            today = timezone.localdate() if timezone.is_aware(timezone.now()) else timezone.now().date()
+            if family_pass.expiry_date < today:
+                family_pass.status = FamilyPassStatus.EXPIRED
+                family_pass.save(update_fields=['status', 'updated_at'])
+                family_pass.member.sync_role()
+                raise TransactionValidationError(f"FamilyPass expired on {family_pass.expiry_date}.", code="FAMILYPASS_EXPIRED")
+            if family_pass.allowed_action not in ['MERCHANT_PAYMENT', 'ALL']:
+                raise TransactionValidationError("Action not permitted under current FamilyPass policy.", code="FAMILYPASS_ACTION_DENIED")
+
+            if transaction_type == TransactionType.MERCHANT_PAYMENT:
+                target_cat = merchant.category if merchant else None
+                target_desc = f"Merchant '{merchant.business_name}' category '{merchant.category}'" if merchant else "Merchant"
+            else:
+                target_cat = category or (metadata.get('category') if metadata else None) or cls.resolve_bill_category(metadata.get('provider') if metadata else None, metadata.get('bill_type') if metadata else None)
+                provider_desc = (metadata.get('provider') if metadata else '') or target_cat
+                target_desc = f"Bill category '{target_cat}' ({provider_desc})"
+
+            if target_cat and not family_pass.is_category_allowed(target_cat):
+                reason = f"Category Restriction Mismatch: {target_desc} is not allowed for this FamilyPass."
+                Transaction.objects.create(
+                    transaction_id=f"TXN-{timezone.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}",
+                    sender=sender,
+                    merchant=merchant if transaction_type == TransactionType.MERCHANT_PAYMENT else None,
+                    amount=amount,
+                    transaction_type=transaction_type,
+                    payment_source=PaymentSource.FAMILY_PASS,
+                    family_pass=family_pass,
+                    category=target_cat,
+                    status=TransactionStatus.REJECTED,
+                    rejection_reason=reason,
+                    reference=reference,
+                    metadata=metadata
+                )
+                raise TransactionValidationError(reason, code="FAMILYPASS_CATEGORY_MISMATCH")
 
         with db_transaction.atomic():
             txn_id = f"TXN-{timezone.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
@@ -392,29 +468,29 @@ class TransactionService:
                         raise TransactionValidationError("Owner's wallet balance is insufficient to cover this transaction.", code="OWNER_BALANCE_INSUFFICIENT")
 
                     # 9. Merchant category restriction for FamilyPass
-                    if family_pass.allowed_categories:
-                        if merchant.category not in family_pass.allowed_categories:
-                            reason = (
-                                f"Category Restriction Mismatch: Merchant '{merchant.business_name}' category '{merchant.category}' is not allowed for this FamilyPass."
-                            )
-                            # Record rejected transaction for audit (no balance changes)
-                            Transaction.objects.create(
-                                transaction_id=txn_id,
-                                sender=sender,
-                                merchant=merchant,
-                                amount=amount,
-                                transaction_type=TransactionType.MERCHANT_PAYMENT,
-                                payment_source=PaymentSource.FAMILY_PASS,
-                                family_pass=family_pass,
-                                category=merchant.category,
-                                status=TransactionStatus.REJECTED,
-                                rejection_reason=reason,
-                                reference=reference,
-                                metadata=metadata,
-                            )
-                            raise TransactionValidationError(reason, code="FAMILYPASS_CATEGORY_MISMATCH")
-                    else:
-                        # Legacy/unrestricted pass — flag for audit but allow
+                    if not family_pass.is_category_allowed(merchant.category):
+                        reason = (
+                            f"Category Restriction Mismatch: Merchant '{merchant.business_name}' category '{merchant.category}' is not allowed for this FamilyPass."
+                        )
+                        # Record rejected transaction for audit (no balance changes)
+                        Transaction.objects.create(
+                            transaction_id=txn_id,
+                            sender=sender,
+                            merchant=merchant,
+                            amount=amount,
+                            transaction_type=TransactionType.MERCHANT_PAYMENT,
+                            payment_source=PaymentSource.FAMILY_PASS,
+                            family_pass=family_pass,
+                            category=merchant.category,
+                            status=TransactionStatus.REJECTED,
+                            rejection_reason=reason,
+                            reference=reference,
+                            metadata=metadata,
+                        )
+                        raise TransactionValidationError(reason, code="FAMILYPASS_CATEGORY_MISMATCH")
+
+                    if not family_pass.get_allowed_categories():
+                        # Unrestricted pass (Emergency or Other) — flag for audit
                         metadata = {**(metadata or {}), 'category_unrestricted': True}
 
                     # 7. Execute FamilyPass transaction atomically
@@ -513,38 +589,159 @@ class TransactionService:
                     return txn
 
             elif transaction_type in [TransactionType.MOBILE_RECHARGE, TransactionType.BILL_PAYMENT, TransactionType.CASH_OUT]:
-                if wallet.balance < amount:
-                    raise TransactionValidationError(f"Insufficient wallet balance. Available: ৳{wallet.balance:,.2f}, required: ৳{amount:,.2f}")
+                bill_category = category or (metadata.get('category') if metadata else None) or cls.resolve_bill_category(metadata.get('provider') if metadata else None, metadata.get('bill_type') if metadata else None)
 
-                wallet.balance -= amount
-                wallet.save(update_fields=['balance', 'updated_at'])
+                if transaction_type == TransactionType.BILL_PAYMENT and payment_source == PaymentSource.FAMILY_PASS:
+                    if not family_pass:
+                        raise TransactionValidationError("FamilyPass instance is required for FamilyPass payment.", code="FAMILYPASS_REQUIRED")
 
-                category_map = {
-                    TransactionType.MOBILE_RECHARGE: 'Recharge',
-                    TransactionType.BILL_PAYMENT: 'Utility Bill',
-                    TransactionType.CASH_OUT: 'Cash Out'
-                }
+                    family_pass = FamilyPass.objects.select_for_update().get(id=family_pass.id)
+                    owner_wallet, _ = Wallet.objects.select_for_update().get_or_create(owner=family_pass.owner)
 
-                txn = Transaction.objects.create(
-                    transaction_id=txn_id,
-                    sender=sender,
-                    amount=amount,
-                    transaction_type=transaction_type,
-                    payment_source=PaymentSource.NORMAL_WALLET,
-                    category=category_map.get(transaction_type, 'General'),
-                    status=TransactionStatus.COMPLETED,
-                    reference=reference or f"Simulated {transaction_type.replace('_', ' ').title()}",
-                    metadata=metadata
-                )
+                    # 1. Active status check
+                    if family_pass.status != FamilyPassStatus.ACTIVE:
+                        raise TransactionValidationError("FamilyPass is not active or has been revoked.", code="FAMILYPASS_INACTIVE")
 
-                Notification.objects.create(
-                    user=sender,
-                    title=f"{transaction_type.replace('_', ' ').title()} Successful",
-                    message=f"৳{amount:,.2f} processed. Remaining balance: ৳{wallet.balance:,.2f}",
-                    notification_type=NotificationType.TRANSACTION
-                )
-                cls._check_anomaly_and_record(txn)
-                return txn
+                    # 2. Expiry check
+                    today = timezone.localdate() if timezone.is_aware(timezone.now()) else timezone.now().date()
+                    if family_pass.expiry_date < today:
+                        family_pass.status = FamilyPassStatus.EXPIRED
+                        family_pass.save(update_fields=['status', 'updated_at'])
+                        family_pass.member.sync_role()
+                        raise TransactionValidationError(f"FamilyPass expired on {family_pass.expiry_date}.", code="FAMILYPASS_EXPIRED")
+
+                    # 3. Member authorization check
+                    if family_pass.member != sender:
+                        raise TransactionValidationError("Unauthorized user for this FamilyPass delegation.", code="FAMILYPASS_UNAUTHORIZED")
+
+                    # 4. Action permission check
+                    if family_pass.allowed_action not in ['MERCHANT_PAYMENT', 'ALL']:
+                        raise TransactionValidationError("Action not permitted under current FamilyPass policy.", code="FAMILYPASS_ACTION_DENIED")
+
+                    # 5. Remaining quota check
+                    if family_pass.remaining_limit < amount:
+                        raise TransactionValidationError(
+                            f"FamilyPass spending limit exceeded. Remaining allowance: ৳{family_pass.remaining_limit:,.2f}, requested: ৳{amount:,.2f}",
+                            code="FAMILYPASS_LIMIT_EXCEEDED"
+                        )
+
+                    # 6. Owner wallet balance check
+                    if owner_wallet.balance < amount:
+                        raise TransactionValidationError("Owner's wallet balance is insufficient to cover this transaction.", code="OWNER_BALANCE_INSUFFICIENT")
+
+                    # 7. Category restriction check
+                    if not family_pass.is_category_allowed(bill_category):
+                        provider_name = (metadata.get('provider') if metadata else '') or bill_category
+                        reason = f"Category Restriction Mismatch: Bill category '{bill_category}' ({provider_name}) is not allowed for this FamilyPass."
+                        Transaction.objects.create(
+                            transaction_id=txn_id,
+                            sender=sender,
+                            amount=amount,
+                            transaction_type=TransactionType.BILL_PAYMENT,
+                            payment_source=PaymentSource.FAMILY_PASS,
+                            family_pass=family_pass,
+                            category=bill_category,
+                            status=TransactionStatus.REJECTED,
+                            rejection_reason=reason,
+                            reference=reference,
+                            metadata=metadata,
+                        )
+                        raise TransactionValidationError(reason, code="FAMILYPASS_CATEGORY_MISMATCH")
+
+                    if not family_pass.get_allowed_categories():
+                        metadata = {**(metadata or {}), 'category_unrestricted': True}
+
+                    # Execute accounting updates atomically
+                    owner_wallet.balance -= amount
+                    owner_wallet.save(update_fields=['balance', 'updated_at'])
+
+                    family_pass.used_amount += amount
+                    family_pass.save(update_fields=['used_amount', 'updated_at'])
+
+                    provider_name = (metadata.get('provider') if metadata else '') or 'Utility Provider'
+                    txn = Transaction.objects.create(
+                        transaction_id=txn_id,
+                        sender=sender,
+                        amount=amount,
+                        transaction_type=TransactionType.BILL_PAYMENT,
+                        payment_source=PaymentSource.FAMILY_PASS,
+                        family_pass=family_pass,
+                        category=bill_category,
+                        status=TransactionStatus.COMPLETED,
+                        reference=reference or f"Bill payment for {provider_name}",
+                        metadata={**(metadata or {}), 'owner_username': family_pass.owner.username, 'member_username': sender.username, 'provider': provider_name}
+                    )
+
+                    # FamilyPass activity log
+                    FamilyPassTransaction.objects.create(
+                        family_pass=family_pass,
+                        transaction=txn,
+                        member=sender,
+                        amount=amount,
+                        remaining_limit_after=family_pass.remaining_limit
+                    )
+
+                    # Instant notification to Owner
+                    member_display = sender.full_name or sender.username
+                    Notification.objects.create(
+                        user=family_pass.owner,
+                        title="🔔 FamilyPass Transaction Alert",
+                        message=f"{member_display} spent ৳{amount:,.2f} for {provider_name} ({bill_category}). FamilyPass remaining limit: ৳{family_pass.remaining_limit:,.2f}.",
+                        notification_type=NotificationType.FAMILY_PASS,
+                        metadata={
+                            'member': member_display,
+                            'provider': provider_name,
+                            'category': bill_category,
+                            'amount': float(amount),
+                            'remaining_limit': float(family_pass.remaining_limit),
+                            'timestamp': timezone.now().isoformat()
+                        }
+                    )
+
+                    # Notification to Member
+                    Notification.objects.create(
+                        user=sender,
+                        title="Bill Payment Successful",
+                        message=f"Paid ৳{amount:,.2f} for {provider_name} via {family_pass.owner.full_name or family_pass.owner.username}'s FamilyPass. Remaining limit: ৳{family_pass.remaining_limit:,.2f}.",
+                        notification_type=NotificationType.TRANSACTION
+                    )
+
+                    cls._check_anomaly_and_record(txn)
+                    return txn
+
+                else:
+                    if wallet.balance < amount:
+                        raise TransactionValidationError(f"Insufficient wallet balance. Available: ৳{wallet.balance:,.2f}, required: ৳{amount:,.2f}")
+
+                    wallet.balance -= amount
+                    wallet.save(update_fields=['balance', 'updated_at'])
+
+                    category_map = {
+                        TransactionType.MOBILE_RECHARGE: 'Recharge',
+                        TransactionType.BILL_PAYMENT: bill_category if bill_category else 'Utility Bill',
+                        TransactionType.CASH_OUT: 'Cash Out'
+                    }
+
+                    txn = Transaction.objects.create(
+                        transaction_id=txn_id,
+                        sender=sender,
+                        amount=amount,
+                        transaction_type=transaction_type,
+                        payment_source=PaymentSource.NORMAL_WALLET,
+                        category=category_map.get(transaction_type, 'General'),
+                        status=TransactionStatus.COMPLETED,
+                        reference=reference or f"Simulated {transaction_type.replace('_', ' ').title()}",
+                        metadata=metadata
+                    )
+
+                    Notification.objects.create(
+                        user=sender,
+                        title=f"{transaction_type.replace('_', ' ').title()} Successful",
+                        message=f"৳{amount:,.2f} processed. Remaining balance: ৳{wallet.balance:,.2f}",
+                        notification_type=NotificationType.TRANSACTION
+                    )
+                    cls._check_anomaly_and_record(txn)
+                    return txn
 
             else:
                 raise TransactionValidationError(f"Unsupported transaction type: {transaction_type}")

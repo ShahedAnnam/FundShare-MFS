@@ -158,6 +158,21 @@ class FamilyPassPurpose(models.TextChoices):
     OTHER = 'Other', 'Other'
 
 
+# Canonical mapping: FamilyPassPurpose -> BusinessCategory values.
+# Emergency and Other are intentionally unrestricted (allowed_categories == []).
+PURPOSE_TO_CATEGORIES = {
+    "Grocery": ["Grocery"],
+    "Medical": ["Medicine", "Treatment"],
+    "Dining": ["Restaurant/Food"],
+    "Bills & Utilities": ["Electricity", "Rent"],
+    "Education": ["Education"],
+    "Transport": ["Transport"],
+    "Shopping": ["Shopping"],
+    "Emergency": [],  # unrestricted: usable at any merchant category
+    "Other": [],      # unrestricted: usable at any merchant category
+}
+
+
 class FamilyPass(models.Model):
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='issued_family_passes')
     member = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_family_passes')
@@ -196,6 +211,25 @@ class FamilyPass(models.Model):
         if self.expiry_date < today:
             return False
         return self.remaining_limit > Decimal('0.00')
+
+    def get_allowed_categories(self):
+        """
+        Returns the list of allowed BusinessCategory strings for this FamilyPass.
+        Returns empty list [] if and only if the pass is genuinely unrestricted.
+        """
+        if self.allowed_categories and isinstance(self.allowed_categories, (list, tuple)) and len(self.allowed_categories) > 0:
+            return list(self.allowed_categories)
+        return []
+
+    def is_category_allowed(self, category):
+        """
+        Checks if this FamilyPass permits transactions for a merchant of `category`.
+        - If allowed_categories is non-empty, category must be in allowed_categories.
+        - If allowed_categories is empty, pass is unrestricted.
+        """
+        if self.allowed_categories and isinstance(self.allowed_categories, (list, tuple)) and len(self.allowed_categories) > 0:
+            return category in self.allowed_categories
+        return True
 
     def save(self, *args, **kwargs):
         # Synchronize purpose and purpose_label

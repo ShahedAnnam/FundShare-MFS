@@ -93,6 +93,7 @@ function openModal(id) {
   }
   if (id === 'transferFundModal') populateFundSelects();
   if (id === 'fpMemberPayModal') populateFPMerchantSelect();
+  if (id === 'billModal') initBillModal();
 }
 
 function closeModal(id) {
@@ -528,11 +529,17 @@ function renderMerchantGrid(merchants) {
   }).join('');
 }
 
-function selectMerchant(id) {
+async function selectMerchant(id) {
   state.selectedMerchant = allMerchants.find(m => m.id === id);
   if (!state.selectedMerchant) return;
   const m = state.selectedMerchant;
   document.getElementById('payMerchantSub').textContent = `Paying: ${m.business_name} (${m.category})`;
+
+  // Ensure familyPasses is loaded if user is a member
+  if (!state.familyPasses || (!state.familyPasses.received?.length && !state.familyPasses.issued?.length)) {
+    await loadFamilyPass();
+  }
+
   buildPaymentSourceSelector(m);
 
   // Initialize checkout item builder
@@ -545,9 +552,103 @@ function selectMerchant(id) {
   openModal('payMerchantModal');
 }
 
+// Canonical mapping: FamilyPassPurpose -> BusinessCategory values.
+// Emergency and Other are intentionally unrestricted (allowed_categories == []).
+const PURPOSE_TO_CATEGORIES = {
+  'Grocery': ['Grocery'],
+  'Medical': ['Medicine', 'Treatment'],
+  'Dining': ['Restaurant/Food'],
+  'Bills & Utilities': ['Electricity', 'Rent'],
+  'Education': ['Education'],
+  'Transport': ['Transport'],
+  'Shopping': ['Shopping'],
+  'Emergency': [],  // unrestricted: usable at any merchant category
+  'Other': []       // unrestricted: usable at any merchant category
+};
+
+function isFamilyPassEligibleForCategory(fp, category) {
+  if (!fp || fp.status !== 'ACTIVE') return false;
+
+  // Expiry check
+  if (fp.expiry_date) {
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (fp.expiry_date < todayStr) return false;
+  }
+
+  // Permission check
+  if (fp.allowed_action && fp.allowed_action !== 'MERCHANT_PAYMENT' && fp.allowed_action !== 'ALL') {
+    return false;
+  }
+
+  // 1. Explicit allowed_categories configured on the pass take priority
+  if (Array.isArray(fp.allowed_categories) && fp.allowed_categories.length > 0) {
+    return fp.allowed_categories.includes(category);
+  }
+
+  // 2. Canonical mapping by purpose
+  const purpose = fp.purpose || 'Other';
+  const canonicalCats = PURPOSE_TO_CATEGORIES[purpose];
+  if (Array.isArray(canonicalCats) && canonicalCats.length > 0) {
+    return canonicalCats.includes(category);
+  }
+
+  // 3. Unrestricted emergency/other only if configured as unrestricted (canonicalCats is empty)
+  if (purpose === 'Emergency' || purpose === 'Other') {
+    return true;
+  }
+
+  return false;
+}
+
+function isFamilyPassEligibleForMerchant(fp, merchantCategory) {
+  return isFamilyPassEligibleForCategory(fp, merchantCategory);
+}
+
 function buildPaymentSourceSelector(merchant) {
   const el = document.getElementById('paySourceSelector');
-  let html = `<div class="source-option selected" onclick="selectSource(this,'NORMAL_WALLET',null)">
+  if (!el || !merchant) return;
+
+  // Check previous selection
+  const prevSource = el.dataset.source || 'NORMAL_WALLET';
+  const prevFundId = el.dataset.fundId || '';
+  const prevFpId = el.dataset.fpId || '';
+
+  // 1. Purpose Funds matching
+  const matchingFunds = (state.funds || []).filter(f => f.category === merchant.category);
+  const nonMatchingFunds = (state.funds || []).filter(f => f.category !== merchant.category);
+
+  // 2. FamilyPass filtering: only eligible allocations for this merchant's category
+  const allReceivedPasses = (state.familyPasses?.received || []).filter(fp => fp.status === 'ACTIVE');
+  const seenFpIds = new Set();
+  const eligiblePasses = [];
+  allReceivedPasses.forEach(fp => {
+    if (!seenFpIds.has(fp.id) && isFamilyPassEligibleForMerchant(fp, merchant.category)) {
+      seenFpIds.add(fp.id);
+      eligiblePasses.push(fp);
+    }
+  });
+
+  // Preserve previous selection if still eligible, otherwise safely reset to NORMAL_WALLET
+  let selectedSource = 'NORMAL_WALLET';
+  let selectedFundId = '';
+  let selectedFpId = '';
+
+  if (prevSource === 'FAMILY_PASS' && prevFpId) {
+    const stillEligible = eligiblePasses.find(fp => String(fp.id) === String(prevFpId));
+    if (stillEligible) {
+      selectedSource = 'FAMILY_PASS';
+      selectedFpId = String(prevFpId);
+    }
+  } else if (prevSource === 'PURPOSE_FUND' && prevFundId) {
+    const stillEligible = matchingFunds.find(f => String(f.id) === String(prevFundId));
+    if (stillEligible) {
+      selectedSource = 'PURPOSE_FUND';
+      selectedFundId = String(prevFundId);
+    }
+  }
+
+  // Always show Normal Wallet as payment source (default)
+  let html = `<div class="source-option ${selectedSource === 'NORMAL_WALLET' ? 'selected' : ''}" onclick="selectSource(this,'NORMAL_WALLET',null)">
     <span class="source-radio"></span>
     <div class="source-info">
       <div class="source-name">💰 Normal Wallet</div>
@@ -556,9 +657,9 @@ function buildPaymentSourceSelector(merchant) {
     <span class="source-badge source-badge-green">Default</span>
   </div>`;
 
-  const matchingFunds = (state.funds || []).filter(f => f.category === merchant.category);
   matchingFunds.forEach(f => {
-    html += `<div class="source-option" onclick="selectSource(this,'PURPOSE_FUND',${f.id})">
+    const isSel = (selectedSource === 'PURPOSE_FUND' && String(f.id) === selectedFundId);
+    html += `<div class="source-option ${isSel ? 'selected' : ''}" onclick="selectSource(this,'PURPOSE_FUND',${f.id})">
       <span class="source-radio"></span>
       <div class="source-info">
         <div class="source-name">${CATEGORY_ICONS[f.category] || '🎯'} ${f.name} Fund</div>
@@ -568,8 +669,7 @@ function buildPaymentSourceSelector(merchant) {
     </div>`;
   });
 
-  // If no matching fund but other funds exist — show disabled options
-  const nonMatchingFunds = (state.funds || []).filter(f => f.category !== merchant.category);
+  // If no matching fund but other funds exist — show disabled options (for owners)
   nonMatchingFunds.forEach(f => {
     html += `<div class="source-option" style="opacity:0.5;cursor:not-allowed;" title="Cannot pay ${merchant.category} merchant with ${f.category} fund">
       <span class="source-radio"></span>
@@ -580,24 +680,34 @@ function buildPaymentSourceSelector(merchant) {
     </div>`;
   });
 
-  // FamilyPass for members
-  const receivedPasses = (state.familyPasses.received || []).filter(fp => fp.status === 'ACTIVE');
-  receivedPasses.forEach(fp => {
+  // Eligible FamilyPasses
+  eligiblePasses.forEach(fp => {
     const pIcon = PURPOSE_ICONS[fp.purpose] || '🎯';
-    html += `<div class="source-option" onclick="selectSource(this,'FAMILY_PASS',${fp.id})">
+    const isSel = (selectedSource === 'FAMILY_PASS' && String(fp.id) === selectedFpId);
+    const rem = parseFloat(fp.remaining_limit !== undefined ? fp.remaining_limit : (fp.limit_amount - fp.used_amount)) || 0;
+    const limit = parseFloat(fp.limit_amount) || 0;
+    html += `<div class="source-option ${isSel ? 'selected' : ''}" onclick="selectSource(this,'FAMILY_PASS',${fp.id})">
       <span class="source-radio"></span>
       <div class="source-info">
-        <div class="source-name">👨‍👩‍👧 ${pIcon} ${fp.purpose_label} (from ${fp.owner_name || 'Owner'})</div>
-        <div class="source-balance">Available: ৳${fmt(fp.remaining_limit)} / Limit: ৳${fmt(fp.limit_amount)} • Expires: ${fp.expiry_date}</div>
+        <div class="source-name">👨‍👩‍👧 ${pIcon} ${fp.purpose_label || fp.purpose} (from ${fp.owner_name || fp.owner_username || 'Owner'})</div>
+        <div class="source-balance">Available: ৳${fmt(rem)} / Limit: ৳${fmt(limit)} • Expires: ${fp.expiry_date}</div>
       </div>
       <span class="source-badge source-badge-purple">FamilyPass</span>
     </div>`;
   });
 
+  // If no matching FamilyPass allocation exists, show subtle message for members/pass holders
+  const isMemberOrHasPasses = (state.user?.role === 'MEMBER' || state.user?.effective_role === 'MEMBER' || allReceivedPasses.length > 0);
+  if (isMemberOrHasPasses && eligiblePasses.length === 0) {
+    html += `<div class="source-hint" style="font-size:12px;color:var(--text-muted);padding:8px 4px;font-style:italic;">
+      ℹ️ No matching FamilyPass allocation is available for this merchant.
+    </div>`;
+  }
+
   el.innerHTML = html;
-  el.dataset.source = 'NORMAL_WALLET';
-  el.dataset.fundId = '';
-  el.dataset.fpId = '';
+  el.dataset.source = selectedSource;
+  el.dataset.fundId = selectedFundId;
+  el.dataset.fpId = selectedFpId;
 }
 
 function selectSource(el, source, id) {
@@ -634,6 +744,181 @@ function onFPPurposeSelectChange(mode) {
     if (customGroup) customGroup.style.display = 'block';
   } else {
     if (customGroup) customGroup.style.display = 'none';
+  }
+}
+
+// ============================================================
+// BILL PAYMENT SOURCE SELECTOR & CATEGORY LOGIC
+// ============================================================
+const BILL_TYPE_PROVIDERS = {
+  'Electricity': [
+    { value: 'DESCO', name: 'DESCO (Dhaka Electric Supply)', category: 'Electricity' },
+    { value: 'DPDC', name: 'DPDC (Dhaka Power Distribution)', category: 'Electricity' },
+    { value: 'NESCO', name: 'NESCO (Northern Electricity)', category: 'Electricity' },
+    { value: 'BREB', name: 'BREB (Rural Electrification)', category: 'Electricity' }
+  ],
+  'Gas & Water': [
+    { value: 'Titas Gas', name: 'Titas Gas Transmission', category: 'Electricity' },
+    { value: 'WASA', name: 'Dhaka WASA Water Supply', category: 'Electricity' },
+    { value: 'KGDCL', name: 'Karnaphuli Gas (KGDCL)', category: 'Electricity' }
+  ],
+  'Internet': [
+    { value: 'Link3 Internet', name: 'Link3 Internet', category: 'Electricity' },
+    { value: 'Carnival Internet', name: 'Carnival Internet', category: 'Electricity' }
+  ],
+  'Rent': [
+    { value: 'Eastern Housing Rental', name: 'Eastern Housing Rental', category: 'Rent' },
+    { value: 'Apartment Rent', name: 'Apartment Rent / Maintenance', category: 'Rent' }
+  ],
+  'Education': [
+    { value: 'Scholastica School', name: 'Scholastica School Tuition', category: 'Education' },
+    { value: 'Tuition Fee', name: 'School/College Tuition Fee', category: 'Education' },
+    { value: 'University Fee', name: 'University Semester Fee', category: 'Education' }
+  ],
+  'Other': [
+    { value: 'General Utility', name: 'General Utility Service', category: 'Other' },
+    { value: 'Other Service', name: 'Other Service Bill', category: 'Other' }
+  ]
+};
+
+function resolveBillCategory(provider, billType) {
+  const provEl = document.getElementById('billProvider');
+  if (provEl && provEl.selectedOptions && provEl.selectedOptions[0]) {
+    const dataCat = provEl.selectedOptions[0].getAttribute('data-category');
+    if (dataCat) return dataCat;
+  }
+  const p = (provider || '').trim().toLowerCase();
+  const bt = (billType || '').trim().toLowerCase();
+
+  if (p.includes('desco') || p.includes('dpdc') || p.includes('nesco') || p.includes('breb') ||
+      p.includes('titas') || p.includes('gas') || p.includes('wasa') || p.includes('water') ||
+      p.includes('link3') || p.includes('internet') || p.includes('electricity') || p.includes('utility') ||
+      bt.includes('electricity') || bt.includes('gas') || bt.includes('water') || bt.includes('internet')) {
+    return 'Electricity';
+  }
+  if (p.includes('eastern housing') || p.includes('rent') || p.includes('housing') || p.includes('apartment') ||
+      bt.includes('rent') || bt.includes('housing')) {
+    return 'Rent';
+  }
+  if (p.includes('scholastica') || p.includes('sunnydale') || p.includes('tuition') || p.includes('school') ||
+      p.includes('college') || p.includes('education') || bt.includes('education') || bt.includes('tuition')) {
+    return 'Education';
+  }
+  return 'Other';
+}
+
+function onBillTypeChange() {
+  const typeEl = document.getElementById('billType');
+  const provEl = document.getElementById('billProvider');
+  if (!typeEl || !provEl) return;
+  const billType = typeEl.value;
+  const providers = BILL_TYPE_PROVIDERS[billType] || [];
+
+  if (providers.length > 0) {
+    provEl.innerHTML = providers.map(p =>
+      `<option value="${p.value}" data-category="${p.category}">${p.name}</option>`
+    ).join('');
+  }
+  onBillProviderChange();
+}
+
+function onBillProviderChange() {
+  const typeEl = document.getElementById('billType');
+  const provEl = document.getElementById('billProvider');
+  const billType = typeEl ? typeEl.value : 'Electricity';
+  const provider = provEl ? provEl.value : 'DESCO';
+  const category = resolveBillCategory(provider, billType);
+  buildBillPaymentSourceSelector(category);
+}
+
+function buildBillPaymentSourceSelector(billCategory) {
+  const el = document.getElementById('billSourceSelector');
+  if (!el) return;
+
+  const prevSource = el.dataset.source || 'NORMAL_WALLET';
+  const prevFpId = el.dataset.fpId || '';
+
+  // Filter eligible active FamilyPasses for this bill category
+  const allReceivedPasses = (state.familyPasses?.received || []).filter(fp => fp.status === 'ACTIVE');
+  const seenFpIds = new Set();
+  const eligiblePasses = [];
+  allReceivedPasses.forEach(fp => {
+    if (!seenFpIds.has(fp.id) && isFamilyPassEligibleForCategory(fp, billCategory)) {
+      seenFpIds.add(fp.id);
+      eligiblePasses.push(fp);
+    }
+  });
+
+  // Preserve previous selection if still eligible, otherwise safely reset to NORMAL_WALLET
+  let selectedSource = 'NORMAL_WALLET';
+  let selectedFpId = '';
+
+  if (prevSource === 'FAMILY_PASS' && prevFpId) {
+    const stillEligible = eligiblePasses.find(fp => String(fp.id) === String(prevFpId));
+    if (stillEligible) {
+      selectedSource = 'FAMILY_PASS';
+      selectedFpId = String(prevFpId);
+    }
+  }
+
+  // Always show Normal Wallet as payment source
+  let html = `<div class="source-option ${selectedSource === 'NORMAL_WALLET' ? 'selected' : ''}" onclick="selectBillSource(this,'NORMAL_WALLET',null)">
+    <span class="source-radio"></span>
+    <div class="source-info">
+      <div class="source-name">💰 Normal Wallet</div>
+      <div class="source-balance">Balance: ৳${fmt(state.wallet)}</div>
+    </div>
+    <span class="source-badge source-badge-green">Default</span>
+  </div>`;
+
+  // Render eligible FamilyPass options
+  eligiblePasses.forEach(fp => {
+    const pIcon = PURPOSE_ICONS[fp.purpose] || '🎯';
+    const isSel = (selectedSource === 'FAMILY_PASS' && String(fp.id) === selectedFpId);
+    const rem = parseFloat(fp.remaining_limit !== undefined ? fp.remaining_limit : (fp.limit_amount - fp.used_amount)) || 0;
+    const limit = parseFloat(fp.limit_amount) || 0;
+    html += `<div class="source-option ${isSel ? 'selected' : ''}" onclick="selectBillSource(this,'FAMILY_PASS',${fp.id})">
+      <span class="source-radio"></span>
+      <div class="source-info">
+        <div class="source-name">👨‍👩‍👧 ${pIcon} ${fp.purpose_label || fp.purpose} (from ${fp.owner_name || fp.owner_username || 'Owner'})</div>
+        <div class="source-balance">Available: ৳${fmt(rem)} / Limit: ৳${fmt(limit)} • Expires: ${fp.expiry_date}</div>
+      </div>
+      <span class="source-badge source-badge-purple">FamilyPass</span>
+    </div>`;
+  });
+
+  // If no matching FamilyPass allocation exists, show subtle hint for members
+  const isMemberOrHasPasses = (state.user?.role === 'MEMBER' || state.user?.effective_role === 'MEMBER' || allReceivedPasses.length > 0);
+  if (isMemberOrHasPasses && eligiblePasses.length === 0) {
+    html += `<div class="source-hint" style="font-size:12px;color:var(--text-muted);padding:8px 4px;font-style:italic;">
+      ℹ️ No matching FamilyPass allocation is available for ${billCategory} bills.
+    </div>`;
+  }
+
+  el.innerHTML = html;
+  el.dataset.source = selectedSource;
+  el.dataset.fpId = selectedFpId;
+}
+
+function selectBillSource(el, source, fpId) {
+  const container = document.getElementById('billSourceSelector');
+  if (container) {
+    container.querySelectorAll('.source-option').forEach(o => o.classList.remove('selected'));
+    container.dataset.source = source;
+    container.dataset.fpId = fpId ? String(fpId) : '';
+  }
+  if (el) el.classList.add('selected');
+}
+
+async function initBillModal() {
+  if (!state.familyPasses || (!state.familyPasses.received?.length && !state.familyPasses.issued?.length)) {
+    await loadFamilyPass();
+  }
+  const provEl = document.getElementById('billProvider');
+  if (!provEl || !provEl.options || provEl.options.length === 0) {
+    onBillTypeChange();
+  } else {
+    onBillProviderChange();
   }
 }
 
@@ -1049,7 +1334,62 @@ async function doSendMoney() {
   }
 }
 
+async function doBillPayment() {
+  const typeEl = document.getElementById('billType');
+  const provEl = document.getElementById('billProvider');
+  const accEl = document.getElementById('billAccount');
+  const amtEl = document.getElementById('billAmount');
+  const selector = document.getElementById('billSourceSelector');
+
+  const billType = typeEl ? typeEl.value : 'Electricity';
+  const provider = provEl ? provEl.value : 'DESCO';
+  const account = accEl ? accEl.value.trim() : '';
+  const amount = amtEl ? amtEl.value : '';
+
+  if (!amount || parseFloat(amount) <= 0) {
+    showToast('error', 'Enter a valid amount');
+    return;
+  }
+
+  const category = resolveBillCategory(provider, billType);
+  const paymentSource = selector?.dataset?.source || 'NORMAL_WALLET';
+  const fpId = selector?.dataset?.fpId || null;
+
+  const payload = {
+    action_type: 'BILL',
+    amount: amount,
+    payment_source: paymentSource,
+    family_pass_id: paymentSource === 'FAMILY_PASS' ? fpId : null,
+    category: category,
+    provider: provider,
+    bill_type: billType,
+    account_number: account,
+    reference: `${provider} Bill payment${account ? ' - Acc: ' + account : ''}`
+  };
+
+  const r = await apiPost('/api/wallet/utility/', payload);
+  if (!r) return;
+
+  if (r.ok) {
+    showToast('success', r.data.message || `Bill payment of ৳${amount} for ${provider} successful!`);
+    closeModal('billModal');
+    if (amtEl) amtEl.value = '';
+    if (accEl) accEl.value = '';
+    refreshFinancialState();
+  } else {
+    const err = r.data;
+    if (err && err.is_category_mismatch) {
+      showToast('error', `🚫 Category Restriction: Cannot pay ${category} bill using this allocation`, 6000);
+    } else {
+      showToast('error', (err && err.error) || 'Bill payment failed');
+    }
+  }
+}
+
 async function doUtility(type, amountId, refId) {
+  if (type === 'BILL') {
+    return doBillPayment();
+  }
   const amount = document.getElementById(amountId)?.value;
   const refEl = document.getElementById(refId);
   const ref = refEl ? refEl.value : '';
@@ -1358,7 +1698,7 @@ async function doPayMerchant() {
   } else {
     const err = r.data;
     if (err.is_category_mismatch) {
-      showToast('error', `🚫 Category Restriction: Cannot pay ${merchant.category} merchant using this fund`, 6000);
+      showToast('error', `🚫 Category Restriction: Cannot pay ${merchant.category} merchant using this allocation`, 6000);
     } else {
       showToast('error', err.error || 'Payment failed');
     }
@@ -1725,7 +2065,16 @@ function populateFPMerchantSelect() {
   const el = document.getElementById('fpMerchantSelect');
   if (!el) return;
   const merchants = allMerchants.length > 0 ? allMerchants : state.merchants;
-  el.innerHTML = merchants.map(m => `<option value="${m.id}">${CATEGORY_ICONS[m.category]||'🏪'} ${m.business_name} (${m.category})</option>`).join('');
+  const fp = state.selectedFamilyPass;
+  let filteredMerchants = merchants;
+  if (fp) {
+    filteredMerchants = merchants.filter(m => isFamilyPassEligibleForMerchant(fp, m.category));
+  }
+  if (filteredMerchants.length === 0) {
+    el.innerHTML = '<option value="">No matching merchants available for this FamilyPass</option>';
+  } else {
+    el.innerHTML = filteredMerchants.map(m => `<option value="${m.id}">${CATEGORY_ICONS[m.category]||'🏪'} ${m.business_name} (${m.category})</option>`).join('');
+  }
 }
 
 async function doFPMemberPay() {
