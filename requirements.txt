@@ -11,3 +11,6 @@ numpy>=1.26.0
 
 # Optional Google Gemini Generative AI SDK
 google-genai>=2.0.0
+# Only for Production
+gunicorn>=23.0.0
+whitenoise[brotli]>=6.9.0
