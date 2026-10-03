@@ -4,7 +4,7 @@ from django.db import transaction as db_transaction
 from django.utils import timezone
 from fundshare_app.models import (
     User, Wallet, Merchant, PurposeFund, FundTransfer,
-    FamilyPass, FamilyPassTransaction, Transaction,
+    FamilyPass, FamilyPassTransaction, Transaction, TransactionItem,
     TransactionType, PaymentSource, TransactionStatus,
     FamilyPassStatus, Notification, NotificationType, AnomalyResult
 )
@@ -20,18 +20,37 @@ class TransactionValidationError(Exception):
 class TransactionService:
 
     @classmethod
+    def _save_transaction_items(cls, txn: Transaction, validated_items: list):
+        if validated_items:
+            items_to_create = [
+                TransactionItem(
+                    transaction=txn,
+                    name=itm['name'],
+                    product_id=itm['product_id'],
+                    quantity=itm['quantity'],
+                    unit_price=itm['unit_price'],
+                    discount=itm['discount'],
+                    tax=itm['tax'],
+                    total=itm['total']
+                )
+                for itm in validated_items
+            ]
+            TransactionItem.objects.bulk_create(items_to_create)
+
+    @classmethod
     def execute_transaction(
         cls,
         sender: User,
         transaction_type: str,
-        amount: Decimal,
+        amount: Decimal = None,
         receiver: User = None,
         merchant: Merchant = None,
         payment_source: str = PaymentSource.NORMAL_WALLET,
         purpose_fund: PurposeFund = None,
         family_pass: FamilyPass = None,
         reference: str = '',
-        metadata: dict = None
+        metadata: dict = None,
+        items: list = None
     ) -> Transaction:
         """
         Executes financial transactions adhering strictly to deterministic business rules:
@@ -39,9 +58,88 @@ class TransactionService:
         - 7-point validation for FamilyPass
         - Atomic wallet updates
         - Non-frontend authorization checks
+        - Item-level purchase validation and persistence
         """
-        if amount <= Decimal('0.00'):
-            raise TransactionValidationError("Transaction amount must be greater than zero.")
+        validated_items = []
+        if items is not None:
+            if not isinstance(items, (list, tuple)):
+                raise TransactionValidationError("Items must be a list.", code="INVALID_ITEMS_FORMAT")
+            if len(items) > 0:
+                for idx, itm in enumerate(items):
+                    if not isinstance(itm, dict):
+                        raise TransactionValidationError(f"Item #{idx+1} must be an object.", code="INVALID_ITEM_FORMAT")
+                    name = str(itm.get('item_name') or itm.get('name') or '').strip()
+                    if not name:
+                        raise TransactionValidationError("Item name is required for all purchased items.", code="INVALID_ITEM_NAME")
+                    prod_id = str(itm.get('product_id') or itm.get('sku') or '').strip()
+                    try:
+                        qty = Decimal(str(itm.get('quantity', '1')))
+                    except Exception:
+                        raise TransactionValidationError(f"Invalid quantity for item '{name}'.", code="INVALID_ITEM_QUANTITY")
+                    if qty <= Decimal('0.00'):
+                        raise TransactionValidationError(f"Quantity for item '{name}' must be greater than zero.", code="INVALID_ITEM_QUANTITY")
+
+                    try:
+                        price = Decimal(str(itm.get('unit_price', '0')))
+                    except Exception:
+                        raise TransactionValidationError(f"Invalid unit price for item '{name}'.", code="INVALID_ITEM_PRICE")
+                    if price < Decimal('0.00'):
+                        raise TransactionValidationError(f"Unit price for item '{name}' cannot be negative.", code="INVALID_ITEM_PRICE")
+
+                    try:
+                        discount = Decimal(str(itm.get('discount', '0') or '0'))
+                    except Exception:
+                        raise TransactionValidationError(f"Invalid discount for item '{name}'.", code="INVALID_ITEM_DISCOUNT")
+                    if discount < Decimal('0.00'):
+                        raise TransactionValidationError(f"Discount for item '{name}' cannot be negative.", code="INVALID_ITEM_DISCOUNT")
+
+                    try:
+                        tax = Decimal(str(itm.get('tax', '0') or '0'))
+                    except Exception:
+                        raise TransactionValidationError(f"Invalid tax for item '{name}'.", code="INVALID_ITEM_TAX")
+                    if tax < Decimal('0.00'):
+                        raise TransactionValidationError(f"Tax for item '{name}' cannot be negative.", code="INVALID_ITEM_TAX")
+
+                    line_total = (qty * price) - discount + tax
+                    if line_total < Decimal('0.00'):
+                        raise TransactionValidationError(f"Line total for item '{name}' cannot be negative.", code="INVALID_LINE_TOTAL")
+
+                    validated_items.append({
+                        'name': name,
+                        'product_id': prod_id,
+                        'quantity': qty,
+                        'unit_price': price,
+                        'discount': discount,
+                        'tax': tax,
+                        'total': line_total
+                    })
+
+                items_sum = sum([it['total'] for it in validated_items])
+                if items_sum <= Decimal('0.00'):
+                    raise TransactionValidationError("Total purchase amount must be greater than zero.", code="INVALID_AMOUNT")
+
+                if amount is not None:
+                    try:
+                        supplied_amount = Decimal(str(amount))
+                        if supplied_amount != items_sum:
+                            raise TransactionValidationError(
+                                f"Payment amount mismatch: supplied ৳{supplied_amount}, calculated item total ৳{items_sum}.",
+                                code="AMOUNT_MISMATCH"
+                            )
+                    except Exception as e:
+                        if isinstance(e, TransactionValidationError):
+                            raise
+                        raise TransactionValidationError("Invalid payment amount format.", code="INVALID_AMOUNT")
+                amount = items_sum
+
+        if amount is None or amount <= Decimal('0.00'):
+            raise TransactionValidationError("Transaction amount must be greater than zero.", code="INVALID_AMOUNT")
+
+        if transaction_type == TransactionType.MERCHANT_PAYMENT:
+            if not merchant:
+                raise TransactionValidationError("Merchant is required for payment.", code="MERCHANT_REQUIRED")
+            if not merchant.is_active:
+                raise TransactionValidationError(f"Merchant '{merchant.business_name}' is inactive and cannot accept payments.", code="MERCHANT_INACTIVE")
 
         if metadata is None:
             metadata = {}
@@ -219,6 +317,7 @@ class TransactionService:
                         reference=reference or f"Payment to {merchant.business_name} via {purpose_fund.name} Fund",
                         metadata=metadata
                     )
+                    cls._save_transaction_items(txn, validated_items)
 
                     Notification.objects.create(
                         user=sender,
@@ -289,6 +388,7 @@ class TransactionService:
                         reference=reference or f"FamilyPass spending by {sender.full_name or sender.username} at {merchant.business_name}",
                         metadata={**metadata, 'owner_username': family_pass.owner.username, 'member_username': sender.username}
                     )
+                    cls._save_transaction_items(txn, validated_items)
 
                     # Create FamilyPass activity log
                     FamilyPassTransaction.objects.create(
@@ -349,6 +449,7 @@ class TransactionService:
                         reference=reference or f"Payment to {merchant.business_name}",
                         metadata=metadata
                     )
+                    cls._save_transaction_items(txn, validated_items)
 
                     Notification.objects.create(
                         user=sender,

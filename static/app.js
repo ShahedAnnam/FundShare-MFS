@@ -14,6 +14,8 @@ const state = {
   currentTab: 'home',
   selectedMerchant: null,
   selectedFamilyPass: null,
+  contacts: [],
+  pickerConfig: null,
 };
 
 // ============================================================
@@ -42,6 +44,28 @@ async function apiPost(url, data) {
   });
   if (r.status === 401) { window.location.href = '/login/'; return null; }
   return { ok: r.ok, status: r.status, data: await r.json() };
+}
+
+async function apiPatch(url, data) {
+  const r = await fetch(url, {
+    method: 'PATCH',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+    body: JSON.stringify(data)
+  });
+  if (r.status === 401) { window.location.href = '/login/'; return null; }
+  return { ok: r.ok, status: r.status, data: await r.json() };
+}
+
+async function apiDelete(url) {
+  const r = await fetch(url, {
+    method: 'DELETE',
+    credentials: 'same-origin',
+    headers: { 'X-CSRFToken': getCsrfToken() }
+  });
+  if (r.status === 401) { window.location.href = '/login/'; return null; }
+  const data = r.status !== 204 ? await r.json().catch(() => ({})) : {};
+  return { ok: r.ok, status: r.status, data };
 }
 
 // ============================================================
@@ -154,6 +178,7 @@ async function initApp() {
   checkRoleBasedUI();
   await loadDashboard();
   loadNotifications();
+  loadContacts();
   initAiChat();
 
   // Check for stored Gemini key
@@ -310,6 +335,10 @@ function renderFunds() {
         forecastBadge = `<span class="fund-forecast-badge forecast-ok">✅ On track</span>`;
       }
     }
+    const recipientInfo = (f.recipient_name || f.recipient_username)
+      ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">👤 Recipient: <strong style="color:var(--text);">${f.recipient_name || f.recipient_username}</strong></div>`
+      : '';
+
     return `<div class="fund-card" style="border-left-color:${color};">
       <div class="fund-header">
         <div class="fund-name-row">
@@ -317,6 +346,7 @@ function renderFunds() {
           <div>
             <div class="fund-name">${f.name}</div>
             <div class="fund-category">${f.category} • ${pct.toFixed(0)}% used</div>
+            ${recipientInfo}
           </div>
         </div>
         <div class="fund-balance">
@@ -332,6 +362,10 @@ function renderFunds() {
         <span>Spent: <span class="fund-stat-val">৳${fmt(spent)}</span></span>
       </div>
       ${forecastBadge}
+      <div class="fund-card-actions">
+        <button class="fund-action-btn" onclick="openEditFundModal(${f.id})">✏️ Edit</button>
+        <button class="fund-action-btn fund-action-delete" onclick="doDeleteFund(${f.id}, '${f.name.replace(/'/g, "\\'")}')">🗑️ Delete</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -401,6 +435,14 @@ function selectMerchant(id) {
   const m = state.selectedMerchant;
   document.getElementById('payMerchantSub').textContent = `Paying: ${m.business_name} (${m.category})`;
   buildPaymentSourceSelector(m);
+
+  // Initialize checkout item builder
+  checkoutItems.payMerchant = [];
+  renderCheckoutPresets('payMerchant', m.category);
+  renderCheckoutItemsList('payMerchant');
+  syncCheckoutTotal('payMerchant');
+  document.getElementById('payAmount').value = '';
+
   openModal('payMerchantModal');
 }
 
@@ -877,13 +919,22 @@ async function doCreateFund() {
   const category = document.getElementById('fundCategory').value;
   const allocation = document.getElementById('fundAllocation').value;
   const budget = document.getElementById('fundBudget').value;
+  const recipientEl = document.getElementById('fundRecipient');
+  const recipient = recipientEl ? recipientEl.value.trim() : '';
+
   if (!name) { showToast('error', 'Enter a fund name'); return; }
   if (!category) { showToast('error', 'Select a category'); return; }
-  const r = await apiPost('/api/funds/', {
+
+  const payload = {
     name, category,
     allocated_amount: allocation || '0',
     monthly_budget: budget || allocation || '0'
-  });
+  };
+  if (recipient) {
+    payload.recipient = recipient;
+  }
+
+  const r = await apiPost('/api/funds/', payload);
   if (!r) return;
   if (r.ok) {
     showToast('success', `✅ ${name} Fund created!`);
@@ -892,10 +943,66 @@ async function doCreateFund() {
     document.getElementById('fundCategory').value = '';
     document.getElementById('fundAllocation').value = '';
     document.getElementById('fundBudget').value = '';
+    if (recipientEl) recipientEl.value = '';
     loadFunds();
     loadDashboard();
   } else {
     showToast('error', r.data.error || 'Failed to create fund');
+  }
+}
+
+function openEditFundModal(fundId) {
+  const fund = state.funds.find(f => f.id === fundId);
+  if (!fund) return;
+  document.getElementById('editFundId').value = fund.id;
+  document.getElementById('editFundName').value = fund.name || '';
+  document.getElementById('editFundCategory').value = fund.category || '';
+  document.getElementById('editFundRecipient').value = fund.recipient_username || fund.recipient_phone || '';
+  document.getElementById('editFundBudget').value = fund.monthly_budget || '';
+  openModal('editFundModal');
+}
+
+async function doUpdateFund() {
+  const id = document.getElementById('editFundId').value;
+  const name = document.getElementById('editFundName').value.trim();
+  const category = document.getElementById('editFundCategory').value;
+  const recipient = document.getElementById('editFundRecipient').value.trim();
+  const budget = document.getElementById('editFundBudget').value;
+
+  if (!name) { showToast('error', 'Enter a fund name'); return; }
+  if (!category) { showToast('error', 'Select a category'); return; }
+
+  const payload = {
+    name,
+    category,
+    monthly_budget: budget || '0',
+    recipient: recipient || ''
+  };
+
+  const r = await apiPatch(`/api/funds/${id}/`, payload);
+  if (!r) return;
+  if (r.ok) {
+    showToast('success', `✅ Fund updated successfully!`);
+    closeModal('editFundModal');
+    loadFunds();
+    loadDashboard();
+  } else {
+    showToast('error', r.data?.error || 'Failed to update fund');
+  }
+}
+
+async function doDeleteFund(fundId, fundName) {
+  if (!confirm(`Are you sure you want to delete or close "${fundName}"?\nAny remaining balance will be returned to your wallet.`)) {
+    return;
+  }
+  const r = await apiDelete(`/api/funds/${fundId}/`);
+  if (!r) return;
+  if (r.ok) {
+    showToast('success', r.data?.message || 'Fund deleted/closed successfully');
+    loadFunds();
+    loadDashboard();
+  } else {
+    showToast('error', r.data?.error || 'Failed to delete fund');
   }
 }
 
@@ -927,22 +1034,167 @@ async function doFundTransfer() {
   }
 }
 
+// ============================================================
+// CHECKOUT ITEM BUILDER
+// ============================================================
+const checkoutItems = {
+  payMerchant: [],
+  fpMember: []
+};
+
+const MERCHANT_PRESETS = {
+  'Grocery': [
+    { name: 'Rice (Miniket 2kg)', qty: 2, price: 80 },
+    { name: 'Soybean Oil (1L)', qty: 1, price: 180 },
+    { name: 'Fresh Milk (1L)', qty: 1, price: 90 },
+    { name: 'Sugar (1kg)', qty: 1, price: 135 },
+    { name: 'Atta / Flour (2kg)', qty: 2, price: 55 }
+  ],
+  'Medicine': [
+    { name: 'Napa Extra (1 strip)', qty: 1, price: 35 },
+    { name: 'Paracetamol 500mg', qty: 1, price: 25 },
+    { name: 'Antacid Plus', qty: 1, price: 30 },
+    { name: 'Cevit / Vitamin C', qty: 1, price: 40 }
+  ],
+  'Treatment': [
+    { name: 'Doctor Consultation', qty: 1, price: 500 },
+    { name: 'Blood Glucose Test', qty: 1, price: 250 },
+    { name: 'ECG Report', qty: 1, price: 400 }
+  ],
+  'Education': [
+    { name: 'Notebooks (3 pack)', qty: 3, price: 60 },
+    { name: 'Pen Set (10 pcs)', qty: 1, price: 120 },
+    { name: 'Reference Textbook', qty: 1, price: 350 }
+  ],
+  'Restaurant/Food': [
+    { name: 'Chicken Biryani', qty: 1, price: 220 },
+    { name: 'Soft Drink (500ml)', qty: 1, price: 40 },
+    { name: 'Mineral Water (500ml)', qty: 1, price: 25 }
+  ],
+  'default': [
+    { name: 'Standard Product', qty: 1, price: 100 },
+    { name: 'Essential Goods', qty: 1, price: 150 }
+  ]
+};
+
+function renderCheckoutPresets(prefix, category) {
+  const container = document.getElementById(`${prefix}Presets`);
+  if (!container) return;
+  const presets = MERCHANT_PRESETS[category] || MERCHANT_PRESETS['default'];
+  container.innerHTML = presets.map((p, i) => `
+    <span class="checkout-preset-tag" onclick="applyCheckoutPreset('${prefix}', '${p.name}', ${p.qty}, ${p.price})">+ ${p.name} (৳${p.price})</span>
+  `).join('');
+}
+
+function applyCheckoutPreset(prefix, name, qty, price) {
+  addCheckoutItemRow(prefix, name, qty, price);
+}
+
+function addCheckoutItemRow(prefix, name = '', qty = 1, price = 0) {
+  checkoutItems[prefix].push({
+    item_name: name,
+    quantity: qty,
+    unit_price: price
+  });
+  renderCheckoutItemsList(prefix);
+  syncCheckoutTotal(prefix);
+}
+
+function removeCheckoutItemRow(prefix, index) {
+  checkoutItems[prefix].splice(index, 1);
+  renderCheckoutItemsList(prefix);
+  syncCheckoutTotal(prefix);
+}
+
+function updateCheckoutItem(prefix, index, field, value) {
+  if (!checkoutItems[prefix][index]) return;
+  if (field === 'item_name') {
+    checkoutItems[prefix][index].item_name = value;
+  } else if (field === 'quantity') {
+    checkoutItems[prefix][index].quantity = parseFloat(value) || 0;
+  } else if (field === 'unit_price') {
+    checkoutItems[prefix][index].unit_price = parseFloat(value) || 0;
+  }
+  syncCheckoutTotal(prefix);
+}
+
+function renderCheckoutItemsList(prefix) {
+  const container = document.getElementById(`${prefix}ItemsList`);
+  if (!container) return;
+  const items = checkoutItems[prefix];
+  if (items.length === 0) {
+    container.innerHTML = `<div style="font-size:11px;color:var(--text-muted);font-style:italic;padding:4px 0;">No items added yet. Click "+ Add Item" or choose a quick preset above.</div>`;
+    return;
+  }
+  container.innerHTML = items.map((item, idx) => `
+    <div class="checkout-item-row">
+      <input type="text" class="checkout-item-input" placeholder="Item name" value="${item.item_name}" oninput="updateCheckoutItem('${prefix}', ${idx}, 'item_name', this.value)">
+      <input type="number" class="checkout-item-input" placeholder="Qty" min="0.1" step="any" value="${item.quantity}" oninput="updateCheckoutItem('${prefix}', ${idx}, 'quantity', this.value)">
+      <input type="number" class="checkout-item-input" placeholder="Price ৳" min="0" step="any" value="${item.unit_price}" oninput="updateCheckoutItem('${prefix}', ${idx}, 'unit_price', this.value)">
+      <button type="button" class="checkout-item-del-btn" onclick="removeCheckoutItemRow('${prefix}', ${idx})" title="Remove item">✕</button>
+    </div>
+  `).join('');
+}
+
+function syncCheckoutTotal(prefix) {
+  const items = checkoutItems[prefix];
+  const total = items.reduce((sum, itm) => sum + ((parseFloat(itm.quantity) || 0) * (parseFloat(itm.unit_price) || 0)), 0);
+  const totalEl = document.getElementById(`${prefix}ItemsTotal`);
+  if (totalEl) totalEl.textContent = `৳${fmt(total)}`;
+
+  const amountInput = document.getElementById(prefix === 'payMerchant' ? 'payAmount' : 'fpPayAmount');
+  if (amountInput) {
+    if (items.length > 0) {
+      amountInput.value = total.toFixed(2);
+      amountInput.readOnly = true;
+      amountInput.style.background = '#F3F4F6';
+    } else {
+      amountInput.readOnly = false;
+      amountInput.style.background = '#fff';
+    }
+  }
+}
+
 async function doPayMerchant() {
-  const amount = document.getElementById('payAmount').value;
   const selector = document.getElementById('paySourceSelector');
   const source = selector.dataset.source || 'NORMAL_WALLET';
   const fundId = selector.dataset.fundId;
   const fpId = selector.dataset.fpId;
   const merchant = state.selectedMerchant;
   if (!merchant) { showToast('error', 'No merchant selected'); return; }
-  if (!amount || amount <= 0) { showToast('error', 'Enter a valid amount'); return; }
+
+  const items = checkoutItems.payMerchant;
+  let amount = document.getElementById('payAmount').value;
+
+  if (items.length > 0) {
+    for (let itm of items) {
+      if (!itm.item_name || !itm.item_name.trim()) {
+        showToast('error', 'Please provide a name for all line items');
+        return;
+      }
+      if (!itm.quantity || itm.quantity <= 0) {
+        showToast('error', `Invalid quantity for item "${itm.item_name}"`);
+        return;
+      }
+      if (itm.unit_price === undefined || itm.unit_price < 0) {
+        showToast('error', `Invalid unit price for item "${itm.item_name}"`);
+        return;
+      }
+    }
+  } else {
+    if (!amount || amount <= 0) { showToast('error', 'Enter a valid amount'); return; }
+  }
 
   const payload = {
     merchant_id: merchant.id,
-    amount,
     payment_source: source,
     ...(fundId ? { purpose_fund_id: fundId } : {}),
-    ...(fpId ? { family_pass_id: fpId } : {})
+    ...(fpId ? { family_pass_id: fpId } : {}),
+    ...(items.length > 0 ? { items: items.map(it => ({
+      item_name: it.item_name.trim(),
+      quantity: it.quantity,
+      unit_price: it.unit_price
+    })) } : { amount })
   };
 
   const r = await apiPost('/api/pay/', payload);
@@ -950,6 +1202,7 @@ async function doPayMerchant() {
   if (r.ok) {
     showToast('success', r.data.message || 'Payment successful!');
     closeModal('payMerchantModal');
+    checkoutItems.payMerchant = [];
     document.getElementById('payAmount').value = '';
     loadDashboard();
     if (state.currentTab === 'funds') loadFunds();
@@ -1002,11 +1255,192 @@ async function revokeFP(id) {
 }
 
 async function viewFPActivity(id) {
+  // Show modal immediately with loading indicator
+  const summaryEl = document.getElementById('fpActivitySummary');
+  const listEl = document.getElementById('fpActivityList');
+  const badgeEl = document.getElementById('fpActivityCountBadge');
+
+  if (summaryEl) summaryEl.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px;">⏳ Loading FamilyPass details...</div>`;
+  if (listEl) listEl.innerHTML = `<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px;">⏳ Loading transactions & purchase records...</div>`;
+  if (badgeEl) badgeEl.textContent = 'Loading...';
+
+  openModal('fpActivityModal');
+
   const data = await apiGet(`/api/family-pass/${id}/activity/`);
-  if (!data) return;
+  if (!data) {
+    if (listEl) listEl.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Failed to load activity</div><div class="empty-sub">Please check your connection and try again.</div></div>`;
+    return;
+  }
+
   const fp = data.family_pass;
-  const activities = data.activities || [];
-  showToast('info', `📋 ${fp.member_name || 'Member'}: ${activities.length} transaction(s) recorded`);
+  const activities = data.activities || data.transactions || [];
+
+  if (badgeEl) badgeEl.textContent = `${activities.length} transaction${activities.length === 1 ? '' : 's'}`;
+
+  // Render Summary
+  const initials = (fp.member_name || fp.member_username || 'M').substring(0, 2).toUpperCase();
+  const limit = parseFloat(fp.limit_amount) || 0;
+  const used = parseFloat(fp.used_amount) || 0;
+  const rem = parseFloat(fp.remaining_limit) || 0;
+  const statusClass = { ACTIVE: 'fp-status-active', REVOKED: 'fp-status-revoked', EXPIRED: 'fp-status-expired' }[fp.status] || '';
+
+  if (summaryEl) {
+    summaryEl.innerHTML = `
+      <div class="fp-act-header">
+        <div class="fp-act-member">
+          <div class="fp-act-avatar">${initials}</div>
+          <div>
+            <div class="fp-act-name">${fp.member_name || fp.member_username}</div>
+            <div class="fp-act-purpose">${fp.purpose_label || 'Family Spending'}</div>
+          </div>
+        </div>
+        <span class="fp-status-badge ${statusClass}">${fp.status}</span>
+      </div>
+      <div class="fp-act-stats">
+        <div class="fp-act-stat">
+          <span class="fp-act-stat-label">Total Limit</span>
+          <span class="fp-act-stat-val">৳${fmt(limit)}</span>
+        </div>
+        <div class="fp-act-stat">
+          <span class="fp-act-stat-label">Used</span>
+          <span class="fp-act-stat-val" style="color:#DC2626;">৳${fmt(used)}</span>
+        </div>
+        <div class="fp-act-stat">
+          <span class="fp-act-stat-label">Remaining</span>
+          <span class="fp-act-stat-val" style="color:#059669;">৳${fmt(rem)}</span>
+        </div>
+        <div class="fp-act-stat">
+          <span class="fp-act-stat-label">Expires</span>
+          <span class="fp-act-stat-val">${fp.expiry_date || '---'}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  // Render Activities
+  if (listEl) {
+    if (activities.length === 0) {
+      listEl.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">🧾</div>
+          <div class="empty-title">No transactions recorded</div>
+          <div class="empty-sub">${fp.member_name || 'Member'} has not made any purchases with this FamilyPass yet.</div>
+        </div>`;
+      return;
+    }
+
+    listEl.innerHTML = activities.map(act => {
+      const dt = act.timestamp ? new Date(act.timestamp).toLocaleString('en-US', {
+        day: '2-digit', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: true
+      }) : '---';
+      const merchantName = act.merchant_name || (act.merchant ? act.merchant.name : 'Merchant');
+      const merchantLoc = act.merchant_location || (act.merchant ? act.merchant.location : '');
+      const category = act.category || 'General';
+      const icon = CATEGORY_ICONS[category] || '🏪';
+      const hasItems = act.items && act.items.length > 0;
+      const itemsCount = hasItems ? act.items.length : 0;
+      const remAfter = act.remaining_limit_after !== undefined ? `Remaining after: ৳${fmt(act.remaining_limit_after)}` : '';
+
+      let itemsHtml = '';
+      if (hasItems) {
+        const itemRows = act.items.map(it => `
+          <tr>
+            <td style="font-weight:600;">${it.item_name || it.name}</td>
+            <td style="text-align:center;">${it.quantity}</td>
+            <td style="text-align:right;">৳${fmt(it.unit_price)}</td>
+            <td style="text-align:right;font-weight:700;">৳${fmt(it.line_total || it.total)}</td>
+          </tr>
+        `).join('');
+
+        itemsHtml = `
+          <div class="fp-txn-expandable" id="fp-txn-items-${act.id}" style="display:none;">
+            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px;">Purchased Items (${itemsCount})</div>
+            <table class="fp-items-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th style="text-align:center;">Qty</th>
+                  <th style="text-align:right;">Unit Price</th>
+                  <th style="text-align:right;">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemRows}
+                <tr style="border-top:1.5px solid #D1D5DB;background:#F3F4F6;">
+                  <td colspan="3" style="font-weight:700;text-align:right;">Subtotal:</td>
+                  <td style="text-align:right;font-weight:800;color:#059669;">৳${fmt(act.amount)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        `;
+      } else {
+        itemsHtml = `
+          <div class="fp-txn-expandable" id="fp-txn-items-${act.id}" style="display:none;">
+            <div class="fp-no-items-notice">
+              <span>ℹ️</span>
+              <span>Item-level purchase details were not recorded for this transaction.</span>
+            </div>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="fp-txn-card">
+          <div class="fp-txn-top">
+            <div style="display:flex;align-items:flex-start;gap:10px;">
+              <div style="width:36px;height:36px;border-radius:10px;background:var(--primary-light);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">
+                ${icon}
+              </div>
+              <div>
+                <div class="fp-txn-merchant-title">${merchantName}</div>
+                <div class="fp-txn-merchant-sub">
+                  <span>${category}</span>
+                  ${merchantLoc ? `<span>• 📍 ${merchantLoc}</span>` : ''}
+                  <span>• 🕒 ${dt}</span>
+                </div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:2px;font-family:monospace;">
+                  ID: ${act.transaction_id || act.reference || ('TXN-' + act.id)}
+                </div>
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <div class="fp-txn-amount">-৳${fmt(act.amount)}</div>
+              ${remAfter ? `<div class="fp-txn-rem-badge">${remAfter}</div>` : ''}
+            </div>
+          </div>
+
+          <div class="fp-txn-details-toggle" onclick="toggleTxnItems(${act.id})">
+            <span class="fp-toggle-label" id="fp-toggle-btn-${act.id}">
+              <span>${hasItems ? `▼ View Purchased Items (${itemsCount})` : '▼ View Details'}</span>
+            </span>
+            <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;">
+              ${act.status || 'COMPLETED'}
+            </span>
+          </div>
+
+          ${itemsHtml}
+        </div>
+      `;
+    }).join('');
+  }
+}
+
+function toggleTxnItems(actId) {
+  const el = document.getElementById(`fp-txn-items-${actId}`);
+  const btn = document.getElementById(`fp-toggle-btn-${actId}`);
+  if (!el) return;
+  const isHidden = (el.style.display === 'none' || !el.style.display);
+  el.style.display = isHidden ? 'block' : 'none';
+  if (btn) {
+    const text = btn.textContent;
+    if (isHidden) {
+      btn.innerHTML = text.replace('▼', '▲').replace('View', 'Hide');
+    } else {
+      btn.innerHTML = text.replace('▲', '▼').replace('Hide', 'View');
+    }
+  }
 }
 
 // ============================================================
@@ -1017,7 +1451,27 @@ function openFPMemberPay(fpId, ownerName, remaining) {
   document.getElementById('fpMemberPaySub').textContent = `Using FamilyPass from: ${ownerName}`;
   document.getElementById('fpPayLimitInfo').innerHTML = `<div style="font-size:12px;color:var(--primary-dark);">Remaining limit: <strong>৳${fmt(remaining)}</strong></div>`;
   populateFPMerchantSelect();
+
+  // Initialize checkout item builder for FamilyPass
+  checkoutItems.fpMember = [];
+  const sel = document.getElementById('fpMerchantSelect');
+  const merchantId = sel ? sel.value : null;
+  const merchants = allMerchants.length > 0 ? allMerchants : state.merchants;
+  const merchant = merchants.find(m => m.id == merchantId);
+  renderCheckoutPresets('fpMember', merchant ? merchant.category : 'default');
+  renderCheckoutItemsList('fpMember');
+  syncCheckoutTotal('fpMember');
+  document.getElementById('fpPayAmount').value = '';
+
   openModal('fpMemberPayModal');
+}
+
+function onFPMerchantSelectChange() {
+  const sel = document.getElementById('fpMerchantSelect');
+  const merchantId = sel ? sel.value : null;
+  const merchants = allMerchants.length > 0 ? allMerchants : state.merchants;
+  const merchant = merchants.find(m => m.id == merchantId);
+  renderCheckoutPresets('fpMember', merchant ? merchant.category : 'default');
 }
 
 function populateFPMerchantSelect() {
@@ -1029,20 +1483,57 @@ function populateFPMerchantSelect() {
 
 async function doFPMemberPay() {
   const merchantId = document.getElementById('fpMerchantSelect').value;
-  const amount = document.getElementById('fpPayAmount').value;
   if (!merchantId) { showToast('error', 'Select a merchant'); return; }
-  if (!amount || amount <= 0) { showToast('error', 'Enter a valid amount'); return; }
   if (!state.selectedFamilyPass) { showToast('error', 'No FamilyPass selected'); return; }
-  const r = await apiPost('/api/pay/', {
+
+  const items = checkoutItems.fpMember;
+  let amount = document.getElementById('fpPayAmount').value;
+
+  if (items.length > 0) {
+    for (let itm of items) {
+      if (!itm.item_name || !itm.item_name.trim()) {
+        showToast('error', 'Please provide a name for all line items');
+        return;
+      }
+      if (!itm.quantity || itm.quantity <= 0) {
+        showToast('error', `Invalid quantity for item "${itm.item_name}"`);
+        return;
+      }
+      if (itm.unit_price === undefined || itm.unit_price < 0) {
+        showToast('error', `Invalid unit price for item "${itm.item_name}"`);
+        return;
+      }
+    }
+    const total = items.reduce((s, it) => s + (it.quantity * it.unit_price), 0);
+    if (total > state.selectedFamilyPass.remaining) {
+      showToast('error', `Spending exceeds remaining FamilyPass allowance (৳${fmt(state.selectedFamilyPass.remaining)})`);
+      return;
+    }
+  } else {
+    if (!amount || amount <= 0) { showToast('error', 'Enter a valid amount'); return; }
+    if (parseFloat(amount) > state.selectedFamilyPass.remaining) {
+      showToast('error', `Amount exceeds remaining FamilyPass allowance (৳${fmt(state.selectedFamilyPass.remaining)})`);
+      return;
+    }
+  }
+
+  const payload = {
     merchant_id: merchantId,
-    amount,
     payment_source: 'FAMILY_PASS',
-    family_pass_id: state.selectedFamilyPass.id
-  });
+    family_pass_id: state.selectedFamilyPass.id,
+    ...(items.length > 0 ? { items: items.map(it => ({
+      item_name: it.item_name.trim(),
+      quantity: it.quantity,
+      unit_price: it.unit_price
+    })) } : { amount })
+  };
+
+  const r = await apiPost('/api/pay/', payload);
   if (!r) return;
   if (r.ok) {
     showToast('success', r.data.message || 'FamilyPass payment successful!');
     closeModal('fpMemberPayModal');
+    checkoutItems.fpMember = [];
     document.getElementById('fpPayAmount').value = '';
     loadFamilyPass();
   } else {
@@ -1107,6 +1598,293 @@ async function doLogout() {
   } catch (e) {
     window.location.href = '/login/';
   }
+}
+
+// ============================================================
+// CONTACT BOOK
+// ============================================================
+async function loadContacts(query = '') {
+  const url = query ? `/api/contacts/search/?q=${encodeURIComponent(query)}` : '/api/contacts/';
+  const data = await apiGet(url);
+  if (!data) return [];
+  state.contacts = Array.isArray(data) ? data : [];
+  return state.contacts;
+}
+
+function openContactBookModal() {
+  loadContacts().then(() => {
+    const searchInput = document.getElementById('contactBookSearch');
+    if (searchInput) searchInput.value = '';
+    renderContacts();
+    openModal('contactBookModal');
+  });
+}
+
+function filterContacts(query) {
+  const q = query.toLowerCase().trim();
+  if (!q) {
+    renderContacts(state.contacts);
+    return;
+  }
+  const filtered = state.contacts.filter(c => 
+    (c.name && c.name.toLowerCase().includes(q)) ||
+    (c.phone && c.phone.includes(q)) ||
+    (c.username && c.username.toLowerCase().includes(q))
+  );
+  renderContacts(filtered);
+}
+
+function renderContacts(list = state.contacts) {
+  const el = document.getElementById('contactBookList');
+  if (!el) return;
+
+  if (!list || list.length === 0) {
+    el.innerHTML = `
+      <div class="empty-state" style="padding:24px 12px;">
+        <div class="empty-icon">📖</div>
+        <div class="empty-title">No contacts found</div>
+        <div class="empty-sub">Add friends and family to your personal contact book</div>
+        <button class="btn-primary" style="max-width:180px;margin:8px auto 0;" onclick="openAddContactModal()">+ Add Contact</button>
+      </div>`;
+    return;
+  }
+
+  el.innerHTML = list.map(c => {
+    const initial = (c.name || 'C').charAt(0).toUpperCase();
+    const isReg = !!c.is_registered;
+    const badge = isReg
+      ? `<span class="contact-badge badge-registered">✓ FundShare account</span>`
+      : `<span class="contact-badge badge-unregistered">Not registered</span>`;
+    const userTag = c.username ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px;">(@${c.username})</span>` : '';
+
+    return `
+      <div class="contact-card">
+        <div class="contact-main">
+          <div class="contact-avatar">${initial}</div>
+          <div class="contact-info">
+            <div class="contact-name">${c.name} ${userTag}</div>
+            <div class="contact-phone">${c.phone}</div>
+            <div style="margin-top:2px;">${badge}</div>
+          </div>
+        </div>
+        <div class="contact-actions-row">
+          <div style="display:flex;gap:4px;flex-wrap:wrap;">
+            <button class="contact-btn contact-btn-edit" onclick="openEditContactModal(${c.id})">✏️ Edit</button>
+            <button class="contact-btn contact-btn-delete" onclick="doDeleteContact(${c.id}, '${c.name.replace(/'/g, "\\'")}')">🗑️ Delete</button>
+          </div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;">
+            <button class="contact-btn" style="color:var(--primary);border-color:var(--primary);" title="Recharge Mobile" onclick="quickRechargeContact('${c.phone}')">📱 Recharge</button>
+            ${isReg ? `<button class="contact-btn contact-btn-primary" title="Send Money" onclick="quickSendMoneyContact('${c.phone}')">📲 Send</button>` : `<button class="contact-btn contact-btn-disabled" disabled title="Send Money requires registered account">Send 🚫</button>`}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function quickRechargeContact(phone) {
+  closeModal('contactBookModal');
+  const input = document.getElementById('rechargePhone');
+  if (input) input.value = phone;
+  openModal('rechargeModal');
+}
+
+function quickSendMoneyContact(phone) {
+  closeModal('contactBookModal');
+  const input = document.getElementById('sendReceiver');
+  if (input) input.value = phone;
+  openModal('sendMoneyModal');
+}
+
+function openAddContactModal() {
+  closeModal('contactBookModal');
+  document.getElementById('newContactName').value = '';
+  document.getElementById('newContactPhone').value = '';
+  document.getElementById('newContactUsername').value = '';
+  openModal('addContactModal');
+}
+
+async function doCreateContact() {
+  const name = document.getElementById('newContactName').value.trim();
+  const phone = document.getElementById('newContactPhone').value.trim();
+  const username = document.getElementById('newContactUsername').value.trim();
+
+  if (!name) { showToast('error', 'Enter a contact name'); return; }
+  if (!phone) { showToast('error', 'Enter a valid phone number'); return; }
+
+  const r = await apiPost('/api/contacts/', { name, phone, username: username || undefined });
+  if (!r) return;
+  if (r.ok) {
+    showToast('success', `✅ Contact "${name}" saved!`);
+    closeModal('addContactModal');
+    openContactBookModal();
+  } else {
+    showToast('error', r.data?.phone || r.data?.error || 'Failed to save contact');
+  }
+}
+
+function openEditContactModal(id) {
+  const c = state.contacts.find(x => x.id === id);
+  if (!c) return;
+  closeModal('contactBookModal');
+  document.getElementById('editContactId').value = c.id;
+  document.getElementById('editContactName').value = c.name || '';
+  document.getElementById('editContactPhone').value = c.phone || '';
+  document.getElementById('editContactUsername').value = c.username || '';
+  openModal('editContactModal');
+}
+
+async function doUpdateContact() {
+  const id = document.getElementById('editContactId').value;
+  const name = document.getElementById('editContactName').value.trim();
+  const phone = document.getElementById('editContactPhone').value.trim();
+  const username = document.getElementById('editContactUsername').value.trim();
+
+  if (!name) { showToast('error', 'Enter a contact name'); return; }
+  if (!phone) { showToast('error', 'Enter a valid phone number'); return; }
+
+  const r = await apiPatch(`/api/contacts/${id}/`, { name, phone, username: username || '' });
+  if (!r) return;
+  if (r.ok) {
+    showToast('success', `✅ Contact "${name}" updated!`);
+    closeModal('editContactModal');
+    openContactBookModal();
+  } else {
+    showToast('error', r.data?.phone || r.data?.error || 'Failed to update contact');
+  }
+}
+
+async function doDeleteContact(id, name) {
+  if (!confirm(`Are you sure you want to remove "${name}" from your contacts?`)) return;
+  const r = await apiDelete(`/api/contacts/${id}/`);
+  if (!r) return;
+  if (r.ok) {
+    showToast('success', `Contact deleted`);
+    await loadContacts();
+    renderContacts();
+  } else {
+    showToast('error', r.data?.error || 'Failed to delete contact');
+  }
+}
+
+// ============================================================
+// REUSABLE CONTACT PICKER
+// ============================================================
+async function openContactPicker(config) {
+  // config: { inputId, feature: 'send_money'|'mobile_recharge'|'fund_share'|'family_pass', title, returnModalId }
+  state.pickerConfig = config;
+  const titleEl = document.getElementById('contactPickerTitle');
+  const subEl = document.getElementById('contactPickerSubtitle');
+  const searchInput = document.getElementById('contactPickerSearch');
+
+  if (titleEl) titleEl.textContent = config.title || '🔍 Select Contact';
+
+  let subText = 'Choose a contact from your saved contacts';
+  if (config.feature === 'mobile_recharge') {
+    subText = '📱 Select any contact — FundShare account not required for recharge';
+  } else if (config.feature === 'send_money') {
+    subText = '📤 Select a recipient — requires a registered FundShare account';
+  } else if (config.feature === 'fund_share') {
+    subText = '🎯 Select fund recipient — requires a registered FundShare account';
+  } else if (config.feature === 'family_pass') {
+    subText = '👨‍👩‍👧 Select family member — requires a registered FundShare account';
+  }
+  if (subEl) subEl.textContent = subText;
+  if (searchInput) searchInput.value = '';
+
+  if (config.returnModalId) {
+    closeModal(config.returnModalId);
+  }
+
+  await loadContacts();
+  renderPickerList();
+  openModal('contactPickerModal');
+}
+
+function closeContactPicker() {
+  closeModal('contactPickerModal');
+  if (state.pickerConfig && state.pickerConfig.returnModalId) {
+    openModal(state.pickerConfig.returnModalId);
+  }
+  state.pickerConfig = null;
+}
+
+function filterPickerContacts(query) {
+  const q = query.toLowerCase().trim();
+  if (!q) {
+    renderPickerList(state.contacts);
+    return;
+  }
+  const filtered = state.contacts.filter(c =>
+    (c.name && c.name.toLowerCase().includes(q)) ||
+    (c.phone && c.phone.includes(q)) ||
+    (c.username && c.username.toLowerCase().includes(q))
+  );
+  renderPickerList(filtered);
+}
+
+function renderPickerList(list = state.contacts) {
+  const el = document.getElementById('contactPickerList');
+  if (!el) return;
+
+  const feature = state.pickerConfig ? state.pickerConfig.feature : 'general';
+  const allowsUnregistered = (feature === 'mobile_recharge');
+
+  if (!list || list.length === 0) {
+    el.innerHTML = `
+      <div class="empty-state" style="padding:20px 10px;">
+        <div class="empty-icon">📖</div>
+        <div class="empty-title">No contacts available</div>
+        <div class="empty-sub">Save contacts in your Contact Book to quickly pick them here</div>
+      </div>`;
+    return;
+  }
+
+  el.innerHTML = list.map(c => {
+    const initial = (c.name || 'C').charAt(0).toUpperCase();
+    const isReg = !!c.is_registered;
+    const isSelectable = allowsUnregistered || isReg;
+
+    const badge = isReg
+      ? `<span class="contact-badge badge-registered">✓ FundShare account</span>`
+      : `<span class="contact-badge badge-unregistered">Not registered</span>`;
+
+    let buttonHtml = '';
+    if (isSelectable) {
+      buttonHtml = `<button class="contact-btn contact-btn-primary" onclick="selectPickerContact('${c.phone}', '${(c.username || '').replace(/'/g, "\\'")}', '${c.name.replace(/'/g, "\\'")}')">Select</button>`;
+    } else {
+      buttonHtml = `<button class="contact-btn contact-btn-disabled" disabled title="Account not registered for this feature">Unavailable</button>`;
+    }
+
+    const featureNote = (!allowsUnregistered && !isReg)
+      ? `<div style="font-size:10.5px;color:var(--danger);margin-top:3px;">⚠️ Send Money / FundShare requires a registered account</div>`
+      : '';
+
+    return `
+      <div class="contact-card" style="opacity:${isSelectable ? '1' : '0.65'}">
+        <div class="contact-main">
+          <div class="contact-avatar" style="background:${isReg ? 'var(--primary-light)' : '#F3F4F6'};color:${isReg ? 'var(--primary-dark)' : '#6B7280'}">${initial}</div>
+          <div class="contact-info">
+            <div class="contact-name">${c.name} ${c.username ? `<span style="font-size:11px;color:var(--text-muted);">(@${c.username})</span>` : ''}</div>
+            <div class="contact-phone">${c.phone}</div>
+            <div style="margin-top:2px;">${badge}</div>
+            ${featureNote}
+          </div>
+          <div>${buttonHtml}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function selectPickerContact(phone, username, name) {
+  if (!state.pickerConfig) return;
+  const input = document.getElementById(state.pickerConfig.inputId);
+  if (input) {
+    input.value = phone;
+  }
+  showToast('info', `Selected ${name} (${phone})`, 2500);
+  closeContactPicker();
 }
 
 // ============================================================

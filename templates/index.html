@@ -465,7 +465,472 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
   .bottom-nav { max-width: 480px; left: 50%; transform: translateX(-50%); }
   .app-header { max-width: 480px; left: 50%; transform: translateX(-50%); }
 }
+
+/* ===== CONTACT BOOK & PICKER STYLES ===== */
+.input-with-action {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.input-with-action .form-input {
+  padding-right: 46px;
+  width: 100%;
+}
+.input-action-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--primary-light);
+  border: 1px solid var(--primary);
+  color: var(--primary-dark);
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 15px;
+  transition: all 0.2s ease;
+  z-index: 2;
+}
+.input-action-btn:hover {
+  background: var(--primary);
+  color: #fff;
+  transform: translateY(-50%) scale(1.05);
+}
+
+.contact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.contact-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: all 0.2s ease;
+}
+.contact-card:hover {
+  border-color: var(--primary);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+}
+.contact-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.contact-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+.contact-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.contact-avatar.unregistered {
+  background: linear-gradient(135deg, #9CA3AF, #6B7280);
+}
+.contact-details {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.contact-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.contact-phone {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: monospace;
+}
+.contact-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-top: 3px;
+  width: fit-content;
+}
+.contact-badge.registered {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+.contact-badge.unregistered {
+  background: #F3F4F6;
+  color: #6B7280;
+  border: 1px solid #E5E7EB;
+}
+.contact-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.contact-btn {
+  padding: 5px 9px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: #FAFAFA;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.contact-btn:hover:not(:disabled) {
+  background: #F3F4F6;
+  border-color: #D1D5DB;
+}
+.contact-btn-primary {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.contact-btn-primary:hover:not(:disabled) {
+  background: var(--primary-dark);
+  color: #fff;
+}
+.contact-btn-disabled {
+  background: #F3F4F6 !important;
+  color: #9CA3AF !important;
+  border-color: #E5E7EB !important;
+  cursor: not-allowed !important;
+  opacity: 0.7;
+}
+.contact-btn-edit {
+  color: var(--info);
+  background: var(--info-light);
+  border-color: #BFDBFE;
+}
+.contact-btn-delete {
+  color: var(--danger);
+  background: var(--danger-light);
+  border-color: #FECACA;
+}
+.contact-btn-delete:hover {
+  background: #FEE2E2 !important;
+}
+
+/* Fund Card Actions */
+.fund-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+.fund-action-btn {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #FAFAFA;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: all 0.2s;
+}
+.fund-action-btn:hover {
+  background: #F3F4F6;
+  border-color: #D1D5DB;
+}
+.fund-action-delete:hover {
+  background: var(--danger-light);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+/* FamilyPass Activity & Item Breakdown Styles */
+.fp-activity-summary-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+}
+.fp-act-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.fp-act-member {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.fp-act-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.fp-act-name {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text);
+}
+.fp-act-purpose {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.fp-act-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+.fp-act-stat {
+  display: flex;
+  flex-direction: column;
+}
+.fp-act-stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.fp-act-stat-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.fp-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.fp-txn-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  transition: all 0.2s ease;
+}
+.fp-txn-card:hover {
+  border-color: var(--primary);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+.fp-txn-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.fp-txn-merchant-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+}
+.fp-txn-merchant-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+.fp-txn-amount {
+  font-size: 15px;
+  font-weight: 800;
+  color: #059669;
+  text-align: right;
+  white-space: nowrap;
+}
+.fp-txn-rem-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--primary-dark);
+  background: var(--primary-light);
+  padding: 2px 6px;
+  border-radius: 6px;
+  display: inline-block;
+  margin-top: 4px;
+}
+.fp-txn-details-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  cursor: pointer;
+  user-select: none;
+}
+.fp-toggle-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.fp-txn-expandable {
+  margin-top: 8px;
+  padding: 10px;
+  background: #F9FAFB;
+  border-radius: 8px;
+  border: 1px solid #E5E7EB;
+}
+.fp-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.fp-items-table th {
+  text-align: left;
+  padding: 6px 8px;
+  font-weight: 700;
+  color: var(--text-muted);
+  border-bottom: 1px solid #E5E7EB;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.fp-items-table td {
+  padding: 6px 8px;
+  color: var(--text);
+  border-bottom: 1px solid #F3F4F6;
+}
+.fp-items-table tr:last-child td {
+  border-bottom: none;
+}
+.fp-no-items-notice {
+  font-size: 11px;
+  color: #6B7280;
+  font-style: italic;
+  padding: 6px 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Item Entry Builder in Checkout */
+.checkout-items-box {
+  background: #F9FAFB;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  margin-top: 8px;
+}
+.checkout-items-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.checkout-items-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+.checkout-item-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1.2fr auto;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.checkout-item-input {
+  padding: 6px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  width: 100%;
+  box-sizing: border-box;
+}
+.checkout-item-del-btn {
+  background: #FEE2E2;
+  color: #DC2626;
+  border: 1px solid #FCA5A5;
+  border-radius: 6px;
+  width: 26px;
+  height: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+}
+.checkout-item-del-btn:hover {
+  background: #FCA5A5;
+}
+.checkout-items-presets {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.checkout-preset-tag {
+  font-size: 11px;
+  padding: 3px 8px;
+  background: #EFF6FF;
+  color: #1D4ED8;
+  border: 1px solid #BFDBFE;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.checkout-preset-tag:hover {
+  background: #DBEAFE;
+}
 </style>
+
 </head>
 <body>
 
@@ -560,6 +1025,10 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
         <button class="quick-btn" onclick="openModal('cashOutModal')">
           <span class="qb-icon">🏧</span>
           <span class="qb-label">Cash Out</span>
+        </button>
+        <button class="quick-btn" onclick="openContactBookModal()">
+          <span class="qb-icon">📖</span>
+          <span class="qb-label">Contacts</span>
         </button>
         <button class="quick-btn" onclick="navigateTo('ai')">
           <span class="qb-icon">🤖</span>
@@ -744,6 +1213,13 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
 
     <!-- Settings Items -->
     <div class="section-title" style="margin-top:8px">Settings</div>
+    <div class="settings-item" onclick="openContactBookModal()">
+      <div class="settings-item-left">
+        <div class="settings-item-icon" style="background:var(--primary-light)">📖</div>
+        <span class="settings-item-label">Contact Book</span>
+      </div>
+      <span class="settings-item-arrow">›</span>
+    </div>
     <div class="settings-item" onclick="openModal('changePasswordModal')">
       <div class="settings-item-left">
         <div class="settings-item-icon" style="background:var(--primary-light)">🔑</div>
@@ -826,7 +1302,10 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
     <div class="modal-subtitle">Send to any FundShare or upay user</div>
     <div class="form-group">
       <label class="form-label">Recipient Phone / Username</label>
-      <input type="text" class="form-input" id="sendReceiver" placeholder="01XXXXXXXXX or username">
+      <div class="input-with-action">
+        <input type="text" class="form-input" id="sendReceiver" placeholder="01XXXXXXXXX or username">
+        <button type="button" class="input-action-btn" title="Pick from saved contacts" onclick="openContactPicker({ inputId: 'sendReceiver', feature: 'send_money', title: 'Send Money Recipient', returnModalId: 'sendMoneyModal' })">🔍</button>
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">Amount (৳)</label>
@@ -849,7 +1328,10 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
     <div class="modal-subtitle">Recharge any operator in Bangladesh</div>
     <div class="form-group">
       <label class="form-label">Mobile Number</label>
-      <input type="text" class="form-input" id="rechargePhone" placeholder="01XXXXXXXXX">
+      <div class="input-with-action">
+        <input type="text" class="form-input" id="rechargePhone" placeholder="01XXXXXXXXX">
+        <button type="button" class="input-action-btn" title="Pick from saved contacts" onclick="openContactPicker({ inputId: 'rechargePhone', feature: 'mobile_recharge', title: 'Recharge Recipient', returnModalId: 'rechargeModal' })">🔍</button>
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">Operator</label>
@@ -946,6 +1428,14 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
       <div class="form-hint" id="fundWalletHint">Available wallet balance: loading...</div>
     </div>
     <div class="form-group">
+      <label class="form-label">Recipient Phone / Username (Optional)</label>
+      <div class="input-with-action">
+        <input type="text" class="form-input" id="fundRecipient" placeholder="01XXXXXXXXX or username (optional)">
+        <button type="button" class="input-action-btn" title="Pick from saved contacts" onclick="openContactPicker({ inputId: 'fundRecipient', feature: 'fund_share', title: 'Fund Recipient', returnModalId: 'createFundModal' })">🔍</button>
+      </div>
+      <div class="form-hint">Assign fund to a contact with a registered account</div>
+    </div>
+    <div class="form-group">
       <label class="form-label">Monthly Budget (৳)</label>
       <input type="number" class="form-input" id="fundBudget" placeholder="Monthly spending target">
     </div>
@@ -983,13 +1473,29 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
 
 <!-- Pay Merchant Modal -->
 <div class="modal-overlay" id="payMerchantModal">
-  <div class="modal-sheet">
+  <div class="modal-sheet" style="max-height:88vh;overflow-y:auto;">
     <div class="modal-handle"></div>
     <div class="modal-title">💳 Pay Merchant</div>
     <div class="modal-subtitle" id="payMerchantSub">Paying: ---</div>
-    <div class="form-group">
-      <label class="form-label">Amount (৳)</label>
+
+    <!-- Purchase Items Entry -->
+    <div class="checkout-items-box">
+      <div class="checkout-items-header">
+        <span class="checkout-items-title">🛍️ Purchased Items (Item Tracking)</span>
+        <button type="button" class="btn-secondary" style="font-size:11px;padding:3px 8px;width:auto;" onclick="addCheckoutItemRow('payMerchant')">+ Add Item</button>
+      </div>
+      <div id="payMerchantPresets" class="checkout-items-presets"></div>
+      <div id="payMerchantItemsList"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:12px;font-weight:600;color:var(--text-secondary);">
+        <span>Items Subtotal:</span>
+        <span id="payMerchantItemsTotal">৳0.00</span>
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-top:10px;">
+      <label class="form-label">Payment Amount (৳)</label>
       <input type="number" class="form-input form-amount" id="payAmount" placeholder="0" min="1">
+      <div class="form-hint" id="payAmountHint">Automatically matches item total when items are added</div>
     </div>
     <div class="form-group">
       <label class="form-label">Payment Source</label>
@@ -1012,7 +1518,10 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
     <div style="height:12px"></div>
     <div class="form-group">
       <label class="form-label">Member Phone / Username</label>
-      <input type="text" class="form-input" id="fpMember" placeholder="Member's phone or username">
+      <div class="input-with-action">
+        <input type="text" class="form-input" id="fpMember" placeholder="Member's phone or username">
+        <button type="button" class="input-action-btn" title="Pick from saved contacts" onclick="openContactPicker({ inputId: 'fpMember', feature: 'family_pass', title: 'FamilyPass Member', returnModalId: 'createFPModal' })">🔍</button>
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">Spending Limit (৳)</label>
@@ -1054,15 +1563,30 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
 
 <!-- FamilyPass Member Pay Modal -->
 <div class="modal-overlay" id="fpMemberPayModal">
-  <div class="modal-sheet">
+  <div class="modal-sheet" style="max-height:88vh;overflow-y:auto;">
     <div class="modal-handle"></div>
     <div class="modal-title">💳 Pay via FamilyPass</div>
     <div class="modal-subtitle" id="fpMemberPaySub">Using FamilyPass from: ---</div>
     <div class="form-group">
       <label class="form-label">Select Merchant</label>
-      <select class="form-select" id="fpMerchantSelect"></select>
+      <select class="form-select" id="fpMerchantSelect" onchange="onFPMerchantSelectChange()"></select>
     </div>
-    <div class="form-group">
+
+    <!-- Purchase Items Entry -->
+    <div class="checkout-items-box">
+      <div class="checkout-items-header">
+        <span class="checkout-items-title">🛍️ Purchased Items (Item Tracking)</span>
+        <button type="button" class="btn-secondary" style="font-size:11px;padding:3px 8px;width:auto;" onclick="addCheckoutItemRow('fpMember')">+ Add Item</button>
+      </div>
+      <div id="fpMemberPresets" class="checkout-items-presets"></div>
+      <div id="fpMemberItemsList"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:12px;font-weight:600;color:var(--text-secondary);">
+        <span>Items Subtotal:</span>
+        <span id="fpMemberItemsTotal">৳0.00</span>
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-top:10px;">
       <label class="form-label">Amount (৳)</label>
       <input type="number" class="form-input form-amount" id="fpPayAmount" placeholder="0" min="1">
     </div>
@@ -1072,6 +1596,38 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
     <div style="height:12px"></div>
     <button class="btn-primary" onclick="doFPMemberPay()">Pay via FamilyPass</button>
     <div style="margin-top:10px"><button class="btn-secondary w-full" onclick="closeModal('fpMemberPayModal')">Cancel</button></div>
+  </div>
+</div>
+
+<!-- FamilyPass Activity Modal -->
+<div class="modal-overlay" id="fpActivityModal">
+  <div class="modal-sheet" style="max-height:88vh;overflow-y:auto;">
+    <div class="modal-handle"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <div class="modal-title" style="margin-bottom:0;">📋 FamilyPass Activity</div>
+      <button class="btn-secondary" style="font-size:12px;padding:4px 10px;width:auto;" onclick="closeModal('fpActivityModal')">✕ Close</button>
+    </div>
+    <div class="modal-subtitle" id="fpActivitySubtitle">Detailed spending logs & item-level purchase records</div>
+
+    <!-- Summary Card -->
+    <div id="fpActivitySummary" class="fp-activity-summary-card">
+      <!-- Populated dynamically -->
+    </div>
+
+    <!-- History Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0 8px;">
+      <div style="font-weight:700;font-size:14px;color:var(--text);">Transaction History</div>
+      <div id="fpActivityCountBadge" style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;background:var(--primary-light);color:var(--primary-dark);">0 transactions</div>
+    </div>
+
+    <!-- History List -->
+    <div id="fpActivityList" class="fp-activity-list">
+      <!-- Populated dynamically -->
+    </div>
+
+    <div style="margin-top:16px;">
+      <button class="btn-secondary w-full" onclick="closeModal('fpActivityModal')">Close</button>
+    </div>
   </div>
 </div>
 
@@ -1091,6 +1647,132 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
     </div>
     <button class="btn-primary" onclick="showToast('info','Feature coming soon in production version!')">Update PIN</button>
     <div style="margin-top:10px"><button class="btn-secondary w-full" onclick="closeModal('changePasswordModal')">Cancel</button></div>
+  </div>
+</div>
+
+<!-- Edit Fund Modal -->
+<div class="modal-overlay" id="editFundModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">✏️ Edit Purpose Fund</div>
+    <div class="modal-subtitle">Update fund details and allocation</div>
+    <input type="hidden" id="editFundId">
+    <div class="form-group">
+      <label class="form-label">Fund Name</label>
+      <input type="text" class="form-input" id="editFundName" placeholder="Fund name">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Category</label>
+      <select class="form-select" id="editFundCategory">
+        <option value="">Select category...</option>
+        <option value="Grocery">🛒 Grocery</option>
+        <option value="Medicine">💊 Medicine</option>
+        <option value="Treatment">🏥 Treatment</option>
+        <option value="Education">📚 Education</option>
+        <option value="Electricity">⚡ Electricity</option>
+        <option value="Restaurant/Food">🍽 Restaurant/Food</option>
+        <option value="Transport">🚌 Transport</option>
+        <option value="Rent">🏠 Rent</option>
+        <option value="Shopping">🛍 Shopping</option>
+        <option value="Other">📦 Other</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Recipient Phone / Username (Optional)</label>
+      <div class="input-with-action">
+        <input type="text" class="form-input" id="editFundRecipient" placeholder="01XXXXXXXXX or username">
+        <button type="button" class="input-action-btn" title="Pick from saved contacts" onclick="openContactPicker({ inputId: 'editFundRecipient', feature: 'fund_share', title: 'Fund Recipient', returnModalId: 'editFundModal' })">🔍</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Monthly Budget (৳)</label>
+      <input type="number" class="form-input" id="editFundBudget" placeholder="Monthly spending target">
+    </div>
+    <button class="btn-primary" onclick="doUpdateFund()">Save Changes</button>
+    <div style="margin-top:10px"><button class="btn-secondary w-full" onclick="closeModal('editFundModal')">Cancel</button></div>
+  </div>
+</div>
+
+<!-- Contact Book Modal -->
+<div class="modal-overlay" id="contactBookModal">
+  <div class="modal-sheet" style="max-height:85vh;overflow-y:auto;">
+    <div class="modal-handle"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <div class="modal-title" style="margin-bottom:0;">📖 Contact Book</div>
+      <button class="btn-primary" style="font-size:12px;padding:6px 12px;width:auto;" onclick="openAddContactModal()">+ Add Contact</button>
+    </div>
+    <div class="modal-subtitle">Manage your personal contacts and check FundShare account status</div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <input type="text" class="form-input" id="contactBookSearch" placeholder="🔍 Search contacts by name or phone..." oninput="filterContacts(this.value)">
+    </div>
+    <div id="contactBookList" class="contact-list">
+      <!-- dynamically populated -->
+    </div>
+    <div style="margin-top:14px"><button class="btn-secondary w-full" onclick="closeModal('contactBookModal')">Close</button></div>
+  </div>
+</div>
+
+<!-- Add Contact Modal -->
+<div class="modal-overlay" id="addContactModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">👤 Add Contact</div>
+    <div class="modal-subtitle">Save a new person to your Contact Book</div>
+    <div class="form-group">
+      <label class="form-label">Contact Name *</label>
+      <input type="text" class="form-input" id="newContactName" placeholder="Full name">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Phone Number *</label>
+      <input type="text" class="form-input" id="newContactPhone" placeholder="01XXXXXXXXX">
+      <div class="form-hint">Format: 01XXXXXXXXX, +8801XXXXXXXXX, etc.</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Username (Optional)</label>
+      <input type="text" class="form-input" id="newContactUsername" placeholder="Optional FundShare username">
+    </div>
+    <button class="btn-primary" onclick="doCreateContact()">Save Contact</button>
+    <div style="margin-top:10px"><button class="btn-secondary w-full" onclick="closeModal('addContactModal');openModal('contactBookModal');">Cancel</button></div>
+  </div>
+</div>
+
+<!-- Edit Contact Modal -->
+<div class="modal-overlay" id="editContactModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">✏️ Edit Contact</div>
+    <div class="modal-subtitle">Update contact details</div>
+    <input type="hidden" id="editContactId">
+    <div class="form-group">
+      <label class="form-label">Contact Name *</label>
+      <input type="text" class="form-input" id="editContactName" placeholder="Full name">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Phone Number *</label>
+      <input type="text" class="form-input" id="editContactPhone" placeholder="01XXXXXXXXX">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Username (Optional)</label>
+      <input type="text" class="form-input" id="editContactUsername" placeholder="Optional FundShare username">
+    </div>
+    <button class="btn-primary" onclick="doUpdateContact()">Save Changes</button>
+    <div style="margin-top:10px"><button class="btn-secondary w-full" onclick="closeModal('editContactModal');openModal('contactBookModal');">Cancel</button></div>
+  </div>
+</div>
+
+<!-- Reusable Contact Picker Modal -->
+<div class="modal-overlay" id="contactPickerModal">
+  <div class="modal-sheet" style="max-height:85vh;overflow-y:auto;">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="contactPickerTitle">🔍 Select Contact</div>
+    <div class="modal-subtitle" id="contactPickerSubtitle">Choose a contact from your saved contacts</div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <input type="text" class="form-input" id="contactPickerSearch" placeholder="🔍 Search contacts..." oninput="filterPickerContacts(this.value)">
+    </div>
+    <div id="contactPickerList" class="contact-list">
+      <!-- dynamically populated -->
+    </div>
+    <div style="margin-top:14px"><button class="btn-secondary w-full" onclick="closeContactPicker()">Cancel</button></div>
   </div>
 </div>
 

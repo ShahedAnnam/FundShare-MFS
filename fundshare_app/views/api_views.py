@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.utils import timezone
 from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.shortcuts import get_object_or_404
+from django.db.models import Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -11,20 +12,23 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from fundshare_app.models import (
     UserRole, Wallet, Merchant, PurposeFund, FundTransfer,
     FamilyPass, FamilyPassStatus, FamilyPassAction,
-    Transaction, TransactionType, PaymentSource,
+    Transaction, TransactionType, PaymentSource, TransactionStatus,
     Notification, NotificationType, AnomalyResult, BudgetForecast, AIInsight,
-    ExperimentRecord, ExperimentCondition
+    ExperimentRecord, ExperimentCondition, Contact, FundStatus
 )
+
 from fundshare_app.serializers.api_serializers import (
     UserSerializer, WalletSerializer, MerchantSerializer,
     PurposeFundSerializer, FundTransferSerializer,
     FamilyPassSerializer, TransactionSerializer,
     FamilyPassTransactionSerializer, NotificationSerializer,
     AnomalyResultSerializer, BudgetForecastSerializer,
-    ExperimentRecordSerializer
+    ExperimentRecordSerializer, ContactSerializer
 )
 from fundshare_app.services.transaction_service import TransactionService, TransactionValidationError
 from fundshare_app.services.report_service import ReportService
+from fundshare_app.services.contact_service import ContactService
+from fundshare_app.services.phone_utils import normalize_phone, is_valid_bd_phone, find_user_by_phone_or_username
 from fundshare_app.ml.anomaly_detector import AnomalyDetector
 from fundshare_app.ml.budget_forecaster import BudgetForecaster
 from fundshare_app.ml.recommendation_engine import RecommendationEngine
@@ -32,6 +36,7 @@ from fundshare_app.ml.ai_coach import AICoach
 from fundshare_app.ml.data_generator import SyntheticDataGenerator
 
 User = get_user_model()
+
 
 
 def get_authenticated_or_demo_user(request):
@@ -71,9 +76,8 @@ class LoginView(APIView):
     def post(self, request):
         username = request.data.get('username', '').strip()
         password = request.data.get('password', '').strip()
-        # Support phone number login
-        user_obj = User.objects.filter(phone=username).first() or \
-                   User.objects.filter(username=username).first()
+        # Support normalized phone number or username login
+        user_obj = find_user_by_phone_or_username(username)
         if user_obj:
             user = authenticate(request, username=user_obj.username, password=password)
         else:
@@ -217,11 +221,14 @@ class SendMoneyView(APIView):
         try:
             amount = Decimal(str(request.data.get('amount', '0')))
             receiver_identifier = request.data.get('receiver')
-            receiver = User.objects.filter(username=receiver_identifier).first() or \
-                       User.objects.filter(phone=receiver_identifier).first()
+            is_eligible, err_msg, receiver = ContactService.check_recipient_eligibility(receiver_identifier, feature='SEND_MONEY')
 
-            if not receiver:
-                return Response({"error": "Recipient user not found. Check phone or username."}, status=status.HTTP_404_NOT_FOUND)
+            if not is_eligible or not receiver:
+                return Response(
+                    {"error": err_msg or "Recipient does not have a registered account. Send Money requires an active FundShare account."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
 
             txn = TransactionService.execute_transaction(
                 sender=user,
@@ -312,6 +319,13 @@ class PurposeFundsListView(APIView):
                 wallet.balance -= initial_allocation
                 wallet.save(update_fields=['balance', 'updated_at'])
 
+            recipient_identifier = request.data.get('recipient')
+            recipient_user = None
+            if recipient_identifier:
+                is_eligible, err_msg, recipient_user = ContactService.check_recipient_eligibility(recipient_identifier, feature='FUND_SHARE')
+                if not is_eligible or not recipient_user:
+                    return Response({"error": err_msg or "Recipient does not have a registered account. FundShare requires a registered user."}, status=status.HTTP_400_BAD_REQUEST)
+
             fund = PurposeFund.objects.create(
                 owner=user,
                 name=name,
@@ -320,8 +334,10 @@ class PurposeFundsListView(APIView):
                 current_balance=initial_allocation,
                 monthly_budget=budget,
                 icon=icon,
-                color=color
+                color=color,
+                recipient=recipient_user
             )
+
 
             if initial_allocation > Decimal('0.00'):
                 Transaction.objects.create(
@@ -411,7 +427,122 @@ class PurposeFundDetailView(APIView):
         })
 
 
+class PurposeFundManageView(APIView):
+    """
+    CRUD management for an existing PurposeFund / FundShare:
+    - GET: retrieve fund details
+    - PATCH / PUT: edit fund name, category, monthly_budget, icon, color, recipient
+    - DELETE: safe deletion or archival. If the fund has financial history, it is safely
+      archived so transactions are preserved. Remaining balance is returned to owner's wallet.
+    """
+    def get(self, request, pk):
+        user, err = require_auth(request)
+        if err:
+            return err
+        fund = get_object_or_404(PurposeFund, id=pk, owner=user)
+        return Response(PurposeFundSerializer(fund).data)
+
+    def patch(self, request, pk):
+        user, err = require_auth(request)
+        if err:
+            return err
+        fund = get_object_or_404(PurposeFund, id=pk, owner=user)
+        try:
+            if 'name' in request.data:
+                name = request.data.get('name', '').strip()
+                if not name:
+                    return Response({"error": "Fund name cannot be empty."}, status=status.HTTP_400_BAD_REQUEST)
+                fund.name = name
+
+            if 'category' in request.data:
+                cat = request.data.get('category')
+                if cat:
+                    fund.category = cat
+
+            if 'monthly_budget' in request.data:
+                budget = Decimal(str(request.data.get('monthly_budget', '0')))
+                if budget > Decimal('0.00'):
+                    fund.monthly_budget = budget
+
+            if 'icon' in request.data:
+                fund.icon = request.data.get('icon', fund.icon)
+
+            if 'color' in request.data:
+                fund.color = request.data.get('color', fund.color)
+
+            if 'recipient' in request.data:
+                recip_ident = request.data.get('recipient')
+                if recip_ident:
+                    is_eligible, err_msg, recip_user = ContactService.check_recipient_eligibility(recip_ident, feature='FUND_SHARE')
+                    if not is_eligible or not recip_user:
+                        return Response(
+                            {"error": err_msg or "Recipient does not have a registered account. FundShare requires a registered user."},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    fund.recipient = recip_user
+                else:
+                    fund.recipient = None
+
+            fund.save()
+            return Response({
+                "message": f"Fund '{fund.name}' updated successfully.",
+                "fund": PurposeFundSerializer(fund).data
+            })
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request, pk):
+        return self.patch(request, pk)
+
+    def delete(self, request, pk):
+        user, err = require_auth(request)
+        if err:
+            return err
+        fund = get_object_or_404(PurposeFund, id=pk, owner=user)
+
+        # Check for prior financial history (transactions or inter-fund transfers)
+        has_txns = Transaction.objects.filter(purpose_fund=fund).exists()
+        has_transfers = FundTransfer.objects.filter(Q(source_fund=fund) | Q(destination_fund=fund)).exists()
+        has_history = has_txns or has_transfers
+
+        refund_amount = fund.current_balance
+        if refund_amount > Decimal('0.00'):
+            wallet, _ = Wallet.objects.get_or_create(owner=user)
+            wallet.balance += refund_amount
+            wallet.save(update_fields=['balance', 'updated_at'])
+            Transaction.objects.create(
+                sender=user,
+                receiver=user,
+                amount=refund_amount,
+                transaction_type=TransactionType.CASH_IN,
+                payment_source=PaymentSource.NORMAL_WALLET,
+                purpose_fund=fund if has_history else None,
+                category='Deposit',
+                status=TransactionStatus.COMPLETED,
+                reference=f"Refund from closed fund '{fund.name}'"
+            )
+            fund.current_balance = Decimal('0.00')
+
+        if has_history:
+            fund.status = FundStatus.ARCHIVED
+            fund.save(update_fields=['status', 'current_balance', 'updated_at'])
+            return Response({
+                "message": f"Fund '{fund.name}' has active transaction history, so it was safely archived. Remaining balance of ৳{refund_amount:,.2f} returned to your wallet.",
+                "status": "archived",
+                "refunded_amount": float(refund_amount)
+            })
+        else:
+            fund.delete()
+            return Response({
+                "message": f"Fund '{fund.name}' successfully deleted. Remaining balance of ৳{refund_amount:,.2f} returned to your wallet.",
+                "status": "deleted",
+                "refunded_amount": float(refund_amount)
+            })
+
+
+
 # ==================== MERCHANTS & PAYMENTS ====================
+
 
 class MerchantsListView(APIView):
     def get(self, request):
@@ -432,7 +563,9 @@ class PayMerchantView(APIView):
             return err
         try:
             merchant_id = request.data.get('merchant_id')
-            amount = Decimal(str(request.data.get('amount', '0')))
+            raw_amount = request.data.get('amount')
+            amount = Decimal(str(raw_amount)) if raw_amount not in [None, ''] else None
+            items = request.data.get('items', None)
             payment_source = request.data.get('payment_source', PaymentSource.NORMAL_WALLET)
             purpose_fund_id = request.data.get('purpose_fund_id')
             family_pass_id = request.data.get('family_pass_id')
@@ -457,12 +590,13 @@ class PayMerchantView(APIView):
                 payment_source=payment_source,
                 purpose_fund=purpose_fund,
                 family_pass=family_pass,
-                reference=ref
+                reference=ref,
+                items=items
             )
 
             return Response({
                 "success": True,
-                "message": f"Payment of ৳{amount:,.2f} to {merchant.business_name} successful!",
+                "message": f"Payment of ৳{txn.amount:,.2f} to {merchant.business_name} successful!",
                 "transaction": TransactionSerializer(txn).data
             })
 
@@ -529,11 +663,14 @@ class FamilyPassListView(APIView):
             action = request.data.get('allowed_action', FamilyPassAction.MERCHANT_PAYMENT)
             purpose_label = request.data.get('purpose_label', 'Family Spending')
 
-            member = User.objects.filter(username=member_identifier).first() or \
-                     User.objects.filter(phone=member_identifier).first()
+            is_eligible, err_msg, member = ContactService.check_recipient_eligibility(member_identifier, feature='FAMILY_PASS')
 
-            if not member:
-                return Response({"error": "Member not found. Check username or phone."}, status=status.HTTP_404_NOT_FOUND)
+            if not is_eligible or not member:
+                return Response(
+                    {"error": err_msg or "Member not found. Check username or phone."},
+                    status=status.HTTP_404_NOT_FOUND if "not found" in (err_msg or "").lower() else status.HTTP_400_BAD_REQUEST
+                )
+
 
             if member == user:
                 return Response({"error": "Cannot grant FamilyPass to yourself."}, status=status.HTTP_400_BAD_REQUEST)
@@ -598,10 +735,15 @@ class FamilyPassActivityView(APIView):
         if fp.owner != user and fp.member != user:
             return Response({"error": "Unauthorized access to FamilyPass activity."}, status=status.HTTP_403_FORBIDDEN)
 
-        activities = fp.activity_logs.all().order_by('-timestamp')
+        activities = fp.activity_logs.select_related(
+            'family_pass', 'member', 'transaction', 'transaction__merchant'
+        ).prefetch_related('transaction__items').order_by('-timestamp')
+        serialized_activities = FamilyPassTransactionSerializer(activities, many=True).data
+
         return Response({
             "family_pass": FamilyPassSerializer(fp).data,
-            "activities": FamilyPassTransactionSerializer(activities, many=True).data
+            "activities": serialized_activities,
+            "transactions": serialized_activities
         })
 
 
@@ -860,3 +1002,175 @@ class SeedDemoDataView(APIView):
             "message": "Demo data seeded successfully",
             "stats": result
         })
+
+
+# ==================== CONTACT BOOK ====================
+
+class ContactsListView(APIView):
+    """
+    Private Contact Book management for the authenticated user.
+    Strictly isolated: users can ONLY access and modify their own contacts.
+    """
+    def get(self, request):
+        user, err = require_auth(request)
+        if err:
+            return err
+
+        q = request.query_params.get('q', '').strip()
+        contacts = Contact.objects.filter(owner=user)
+        if q:
+            contacts = contacts.filter(
+                Q(name__icontains=q) | Q(phone__icontains=q) | Q(username__icontains=q)
+            )
+
+        data = [ContactService.get_contact_account_info(c) for c in contacts]
+        return Response(data)
+
+    def post(self, request):
+        user, err = require_auth(request)
+        if err:
+            return err
+
+        name = request.data.get('name', '').strip()
+        raw_phone = request.data.get('phone', '').strip()
+        contact_username = request.data.get('username', '').strip()
+
+        if not name:
+            return Response({"error": "Contact name is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not raw_phone:
+            return Response({"error": "Phone number is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        norm_phone = normalize_phone(raw_phone)
+        if not norm_phone:
+            return Response({"error": "Please provide a valid phone number."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if already in user's contact book
+        existing = Contact.objects.filter(owner=user, phone=norm_phone).first()
+        if existing:
+            return Response(
+                {"error": f"A contact with phone {norm_phone} already exists in your Contact Book ('{existing.name}')."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        contact = Contact.objects.create(
+            owner=user,
+            name=name,
+            phone=norm_phone,
+            username=contact_username
+        )
+
+        return Response(ContactService.get_contact_account_info(contact), status=status.HTTP_201_CREATED)
+
+
+class ContactDetailView(APIView):
+    """
+    Manage a single contact. Ownership is strictly enforced.
+    """
+    def get(self, request, pk):
+        user, err = require_auth(request)
+        if err:
+            return err
+        contact = get_object_or_404(Contact, id=pk, owner=user)
+        return Response(ContactService.get_contact_account_info(contact))
+
+    def patch(self, request, pk):
+        user, err = require_auth(request)
+        if err:
+            return err
+        contact = get_object_or_404(Contact, id=pk, owner=user)
+
+        if 'name' in request.data:
+            name = request.data.get('name', '').strip()
+            if not name:
+                return Response({"error": "Contact name cannot be empty."}, status=status.HTTP_400_BAD_REQUEST)
+            contact.name = name
+
+        if 'phone' in request.data:
+            new_phone = normalize_phone(request.data.get('phone', '').strip())
+            if not new_phone:
+                return Response({"error": "Valid phone number required."}, status=status.HTTP_400_BAD_REQUEST)
+            # Check for conflict with another contact of the same owner
+            conflict = Contact.objects.filter(owner=user, phone=new_phone).exclude(id=contact.id).first()
+            if conflict:
+                return Response(
+                    {"error": f"Another contact already uses phone {new_phone} ('{conflict.name}')."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            contact.phone = new_phone
+
+        if 'username' in request.data:
+            contact.username = request.data.get('username', '').strip()
+
+        contact.save()
+        return Response({
+            "message": f"Contact '{contact.name}' updated successfully.",
+            "contact": ContactService.get_contact_account_info(contact)
+        })
+
+    def put(self, request, pk):
+        return self.patch(request, pk)
+
+    def delete(self, request, pk):
+        user, err = require_auth(request)
+        if err:
+            return err
+        contact = get_object_or_404(Contact, id=pk, owner=user)
+        contact_name = contact.name
+        contact.delete()
+        return Response({"message": f"Contact '{contact_name}' deleted successfully."})
+
+
+class ContactSearchView(APIView):
+    """
+    Dedicated search endpoint: GET /api/contacts/search/?q=...
+    """
+    def get(self, request):
+        user, err = require_auth(request)
+        if err:
+            return err
+
+        q = request.query_params.get('q', '').strip()
+        contacts = Contact.objects.filter(owner=user)
+        if q:
+            contacts = contacts.filter(
+                Q(name__icontains=q) | Q(phone__icontains=q) | Q(username__icontains=q)
+            )
+
+        return Response([ContactService.get_contact_account_info(c) for c in contacts])
+
+
+class ContactResolveView(APIView):
+    """
+    Resolves recipient eligibility on the fly:
+    GET/POST /api/contacts/resolve/?recipient=...&feature=...
+    """
+    def get(self, request):
+        recipient = request.query_params.get('recipient') or request.query_params.get('q') or request.query_params.get('phone')
+        feature = request.query_params.get('feature', 'SEND_MONEY')
+        is_eligible, err_msg, matched_user = ContactService.check_recipient_eligibility(recipient, feature=feature)
+
+        norm_phone = normalize_phone(recipient)
+        return Response({
+            "identifier": recipient,
+            "normalized_phone": norm_phone,
+            "feature": feature,
+            "is_eligible": is_eligible,
+            "error_message": err_msg,
+            "is_registered": matched_user is not None,
+            "account_status": "REGISTERED" if matched_user else "NOT_REGISTERED",
+            "user": {
+                "id": matched_user.id,
+                "username": matched_user.username,
+                "full_name": matched_user.full_name,
+                "phone": matched_user.phone,
+                "role": matched_user.role,
+                "avatar_url": getattr(matched_user, 'avatar_url', ''),
+            } if matched_user else None
+        })
+
+    def post(self, request):
+        recipient = request.data.get('recipient') or request.data.get('phone')
+        feature = request.data.get('feature', 'SEND_MONEY')
+        request.query_params = {'recipient': recipient, 'feature': feature}
+        return self.get(request)
+

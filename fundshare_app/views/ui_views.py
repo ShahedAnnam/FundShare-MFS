@@ -36,10 +36,8 @@ class LoginPageView(View):
         from django.contrib.auth import get_user_model
         User = get_user_model()
 
-        # Support phone number login
-        user_obj = User.objects.filter(phone=username).first() or \
-                   User.objects.filter(username=username).first()
-
+        from fundshare_app.services.phone_utils import find_user_by_phone_or_username
+        user_obj = find_user_by_phone_or_username(username)
         if user_obj:
             user = authenticate(request, username=user_obj.username, password=password)
         else:

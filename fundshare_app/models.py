@@ -75,7 +75,9 @@ class PurposeFund(models.Model):
     icon = models.CharField(max_length=50, default='wallet')
     color = models.CharField(max_length=30, default='#10B981')
     status = models.CharField(max_length=20, choices=FundStatus.choices, default=FundStatus.ACTIVE)
+    recipient = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_purpose_funds')
     created_at = models.DateTimeField(auto_now_add=True)
+
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -191,6 +193,53 @@ class Transaction(models.Model):
 
     def __str__(self):
         return f"{self.transaction_id} | {self.transaction_type} | ৳{self.amount} | {self.status}"
+
+
+class TransactionItem(models.Model):
+    """
+    Stores individual purchased items within a merchant payment transaction.
+    Provides granular item-level tracking for FamilyPass activity and
+    transaction history without modifying existing Transaction totals.
+    """
+    transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name='items')
+    name = models.CharField(max_length=200)
+    product_id = models.CharField(max_length=100, blank=True, default='')
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('1.00'))
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+    discount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    tax = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    total = models.DecimalField(max_digits=12, decimal_places=2)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['id']
+        indexes = [
+            models.Index(fields=['transaction']),
+        ]
+
+    @property
+    def item_name(self):
+        return self.name
+
+    @item_name.setter
+    def item_name(self, value):
+        self.name = value
+
+    @property
+    def line_total(self):
+        return self.total
+
+    @line_total.setter
+    def line_total(self, value):
+        self.total = value
+
+    def save(self, *args, **kwargs):
+        if self.total is None:
+            self.total = (self.quantity * self.unit_price) - self.discount + self.tax
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.name} x{self.quantity} @ ৳{self.unit_price} = ৳{self.total}"
 
 
 class FamilyPassTransaction(models.Model):
@@ -328,3 +377,41 @@ class ExperimentRecord(models.Model):
 
     def __str__(self):
         return f"Exp {self.participant_id} | {self.condition} | Task {self.task_index} ({self.completion_time_seconds}s)"
+
+
+class Contact(models.Model):
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='contacts')
+    name = models.CharField(max_length=150)
+    phone = models.CharField(max_length=30)
+    username = models.CharField(max_length=150, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name', '-created_at']
+        indexes = [
+            models.Index(fields=['owner', 'phone']),
+            models.Index(fields=['owner', 'name']),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=['owner', 'phone'], name='unique_owner_contact_phone')
+        ]
+
+    def save(self, *args, **kwargs):
+        from fundshare_app.services.phone_utils import normalize_phone
+        if self.phone:
+            self.phone = normalize_phone(self.phone)
+        super().save(*args, **kwargs)
+
+    @property
+    def matched_user(self):
+        from fundshare_app.services.phone_utils import find_user_by_phone_or_username
+        return find_user_by_phone_or_username(self.phone) or (find_user_by_phone_or_username(self.username) if self.username else None)
+
+    @property
+    def is_registered(self):
+        return self.matched_user is not None
+
+    def __str__(self):
+        return f"{self.name} ({self.phone}) - {self.owner.username}"
+

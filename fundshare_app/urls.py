@@ -17,9 +17,17 @@ urlpatterns = [
 
     # Purpose Funds
     path('funds/', api_views.PurposeFundsListView.as_view(), name='api-funds-list'),
+    path('funds/<int:pk>/', api_views.PurposeFundManageView.as_view(), name='api-fund-manage'),
     path('funds/<int:pk>/allocate/', api_views.PurposeFundAllocateView.as_view(), name='api-fund-allocate'),
     path('funds/transfer/', api_views.PurposeFundTransferView.as_view(), name='api-fund-transfer'),
     path('funds/<int:pk>/details/', api_views.PurposeFundDetailView.as_view(), name='api-fund-details'),
+
+    # Contact Book
+    path('contacts/', api_views.ContactsListView.as_view(), name='api-contacts-list'),
+    path('contacts/search/', api_views.ContactSearchView.as_view(), name='api-contacts-search'),
+    path('contacts/resolve/', api_views.ContactResolveView.as_view(), name='api-contacts-resolve'),
+    path('contacts/<int:pk>/', api_views.ContactDetailView.as_view(), name='api-contact-detail'),
+
 
     # Merchants & Payments
     path('merchants/', api_views.MerchantsListView.as_view(), name='api-merchants'),
