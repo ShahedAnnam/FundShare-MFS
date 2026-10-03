@@ -2,9 +2,14 @@
 .env
 .env.*
 *.env
+!.env.example
 
-# SQLite databases
+# SQLite databases & backups
 *.sqlite3
+*.sqlite
+*.db
+*.sqlite3-journal
+*.bak
 db.sqlite3
 old_db.sqlite3
 
@@ -32,9 +37,18 @@ wheels/
 
 # Virtual environments
 venv/
+.venv/
 env/
 ENV/
-.venv/
+
+# Static files & Media
+staticfiles/
+media/
+
+# Logs & temporary files
+*.log
+*.tmp
+*.temp
 
 # IDE & Editor configs
 .vscode/
