@@ -1634,3 +1634,547 @@ class FamilyPassEnhancementsIntegrationTest(TestCase):
         self.assertTrue(act['has_items'])
         self.assertEqual(len(act['items']), 2)
         self.assertEqual(act['items'][0]['item_name'], 'Atta 2kg')
+
+
+# ==================== FAMILYPASS CATEGORY RESTRICTION TESTS ====================
+
+class FamilyPassCategoryRestrictionTest(TestCase):
+    """
+    Tests for FamilyPass category-based merchant payment restrictions.
+    Covers: allowed payments, rejected payments, balance integrity,
+    creation/edit category sync, and unrestricted pass behavior (Emergency & Other).
+    """
+
+    def setUp(self):
+        self.today = timezone.localdate() if timezone.is_aware(timezone.now()) else timezone.now().date()
+
+        # Owner
+        self.owner = User.objects.create_user(
+            username='cat_owner', phone='01700100001',
+            role=UserRole.CUSTOMER, password='pass123'
+        )
+        self.owner_wallet = Wallet.objects.create(owner=self.owner, balance=Decimal('50000.00'))
+
+        # Member
+        self.member = User.objects.create_user(
+            username='cat_member', full_name='Cat Member',
+            phone='01700100002', role=UserRole.MEMBER, password='pass123'
+        )
+        self.member_wallet = Wallet.objects.create(owner=self.member, balance=Decimal('100.00'))
+
+        # Merchants for each BusinessCategory
+        self.grocery_merchant = Merchant.objects.create(
+            business_name='Agora Super Shop',
+            category=BusinessCategory.GROCERY,
+            account_number='GRC-CAT-01', balance=Decimal('0.00')
+        )
+        self.medicine_merchant = Merchant.objects.create(
+            business_name='Lazz Pharma',
+            category=BusinessCategory.MEDICINE,
+            account_number='MED-CAT-01', balance=Decimal('0.00')
+        )
+        self.treatment_merchant = Merchant.objects.create(
+            business_name='Square Hospital Diagnostic',
+            category=BusinessCategory.TREATMENT,
+            account_number='TRT-CAT-01', balance=Decimal('0.00')
+        )
+        self.restaurant_merchant = Merchant.objects.create(
+            business_name='Star Kabab & Restaurant',
+            category=BusinessCategory.RESTAURANT,
+            account_number='RES-CAT-01', balance=Decimal('0.00')
+        )
+        self.electricity_merchant = Merchant.objects.create(
+            business_name='DESCO Prepaid Meter',
+            category=BusinessCategory.ELECTRICITY,
+            account_number='ELE-CAT-01', balance=Decimal('0.00')
+        )
+        self.rent_merchant = Merchant.objects.create(
+            business_name='Property Management Services',
+            category=BusinessCategory.RENT,
+            account_number='RNT-CAT-01', balance=Decimal('0.00')
+        )
+        self.education_merchant = Merchant.objects.create(
+            business_name='Scholastica School',
+            category=BusinessCategory.EDUCATION,
+            account_number='EDU-CAT-01', balance=Decimal('0.00')
+        )
+        self.transport_merchant = Merchant.objects.create(
+            business_name='Shohoz Transport',
+            category=BusinessCategory.TRANSPORT,
+            account_number='TRN-CAT-01', balance=Decimal('0.00')
+        )
+        self.shopping_merchant = Merchant.objects.create(
+            business_name='Aarong Retail',
+            category=BusinessCategory.SHOPPING,
+            account_number='SHP-CAT-01', balance=Decimal('0.00')
+        )
+
+        # Passes with canonical mappings
+        self.grocery_pass = FamilyPass.objects.create(
+            owner=self.owner, member=self.member,
+            limit_amount=Decimal('5000.00'), used_amount=Decimal('0.00'),
+            start_date=self.today - datetime.timedelta(days=1),
+            expiry_date=self.today + datetime.timedelta(days=30),
+            allowed_action=FamilyPassAction.MERCHANT_PAYMENT,
+            status=FamilyPassStatus.ACTIVE,
+            purpose='Grocery', purpose_label='Grocery',
+            allowed_categories=['Grocery']
+        )
+        self.medical_pass = FamilyPass.objects.create(
+            owner=self.owner, member=self.member,
+            limit_amount=Decimal('5000.00'), used_amount=Decimal('0.00'),
+            start_date=self.today - datetime.timedelta(days=1),
+            expiry_date=self.today + datetime.timedelta(days=30),
+            allowed_action=FamilyPassAction.MERCHANT_PAYMENT,
+            status=FamilyPassStatus.ACTIVE,
+            purpose='Medical', purpose_label='Medical',
+            allowed_categories=['Medicine', 'Treatment']
+        )
+        self.dining_pass = FamilyPass.objects.create(
+            owner=self.owner, member=self.member,
+            limit_amount=Decimal('5000.00'), used_amount=Decimal('0.00'),
+            start_date=self.today - datetime.timedelta(days=1),
+            expiry_date=self.today + datetime.timedelta(days=30),
+            allowed_action=FamilyPassAction.MERCHANT_PAYMENT,
+            status=FamilyPassStatus.ACTIVE,
+            purpose='Dining', purpose_label='Dining',
+            allowed_categories=['Restaurant/Food']
+        )
+        self.bills_pass = FamilyPass.objects.create(
+            owner=self.owner, member=self.member,
+            limit_amount=Decimal('5000.00'), used_amount=Decimal('0.00'),
+            start_date=self.today - datetime.timedelta(days=1),
+            expiry_date=self.today + datetime.timedelta(days=30),
+            allowed_action=FamilyPassAction.MERCHANT_PAYMENT,
+            status=FamilyPassStatus.ACTIVE,
+            purpose='Bills & Utilities', purpose_label='Bills & Utilities',
+            allowed_categories=['Electricity', 'Rent']
+        )
+        self.emergency_pass = FamilyPass.objects.create(
+            owner=self.owner, member=self.member,
+            limit_amount=Decimal('5000.00'), used_amount=Decimal('0.00'),
+            start_date=self.today - datetime.timedelta(days=1),
+            expiry_date=self.today + datetime.timedelta(days=30),
+            allowed_action=FamilyPassAction.MERCHANT_PAYMENT,
+            status=FamilyPassStatus.ACTIVE,
+            purpose='Emergency', purpose_label='Emergency',
+            allowed_categories=[]
+        )
+        self.other_pass = FamilyPass.objects.create(
+            owner=self.owner, member=self.member,
+            limit_amount=Decimal('5000.00'), used_amount=Decimal('0.00'),
+            start_date=self.today - datetime.timedelta(days=1),
+            expiry_date=self.today + datetime.timedelta(days=30),
+            allowed_action=FamilyPassAction.MERCHANT_PAYMENT,
+            status=FamilyPassStatus.ACTIVE,
+            purpose='Other', purpose_label='Monthly Allowance',
+            allowed_categories=[]
+        )
+
+        # API clients
+        self.client_owner = Client()
+        self.client_owner.force_login(self.owner)
+        self.client_member = Client()
+        self.client_member.force_login(self.member)
+
+    # ==================== 1. GROCERY PASS TESTS ====================
+    def test_grocery_pass_pays_grocery_merchant_success(self):
+        """Grocery FamilyPass must allow payment to a Grocery merchant."""
+        amt = Decimal('500.00')
+        owner_bal_before = self.owner_wallet.balance
+        merchant_bal_before = self.grocery_merchant.balance
+
+        txn = TransactionService.execute_transaction(
+            sender=self.member,
+            merchant=self.grocery_merchant,
+            amount=amt,
+            transaction_type=TransactionType.MERCHANT_PAYMENT,
+            payment_source=PaymentSource.FAMILY_PASS,
+            family_pass=self.grocery_pass
+        )
+
+        self.assertEqual(txn.status, TransactionStatus.COMPLETED)
+        self.owner_wallet.refresh_from_db()
+        self.assertEqual(self.owner_wallet.balance, owner_bal_before - amt)
+        self.grocery_pass.refresh_from_db()
+        self.assertEqual(self.grocery_pass.used_amount, amt)
+        self.grocery_merchant.refresh_from_db()
+        self.assertEqual(self.grocery_merchant.balance, merchant_bal_before + amt)
+
+    def test_grocery_pass_rejected_at_treatment_merchant(self):
+        """Grocery FamilyPass must be REJECTED when paying a Treatment merchant."""
+        with self.assertRaises(TransactionValidationError) as ctx:
+            TransactionService.execute_transaction(
+                sender=self.member,
+                merchant=self.treatment_merchant,
+                amount=Decimal('300.00'),
+                transaction_type=TransactionType.MERCHANT_PAYMENT,
+                payment_source=PaymentSource.FAMILY_PASS,
+                family_pass=self.grocery_pass
+            )
+        self.assertEqual(ctx.exception.code, "FAMILYPASS_CATEGORY_MISMATCH")
+        self.assertIn("Category Restriction Mismatch", ctx.exception.message)
+
+    def test_grocery_pass_rejected_at_education_merchant(self):
+        """Grocery FamilyPass must be REJECTED when paying an Education merchant."""
+        with self.assertRaises(TransactionValidationError) as ctx:
+            TransactionService.execute_transaction(
+                sender=self.member,
+                merchant=self.education_merchant,
+                amount=Decimal('200.00'),
+                transaction_type=TransactionType.MERCHANT_PAYMENT,
+                payment_source=PaymentSource.FAMILY_PASS,
+                family_pass=self.grocery_pass
+            )
+        self.assertEqual(ctx.exception.code, "FAMILYPASS_CATEGORY_MISMATCH")
+
+    # ==================== 2. MEDICAL PASS TESTS ====================
+    def test_medical_pass_pays_medicine_merchant_success(self):
+        """Medical FamilyPass must SUCCEED when paying a Medicine merchant."""
+        amt = Decimal('150.00')
+        txn = TransactionService.execute_transaction(
+            sender=self.member,
+            merchant=self.medicine_merchant,
+            amount=amt,
+            transaction_type=TransactionType.MERCHANT_PAYMENT,
+            payment_source=PaymentSource.FAMILY_PASS,
+            family_pass=self.medical_pass
+        )
+        self.assertEqual(txn.status, TransactionStatus.COMPLETED)
+        self.medical_pass.refresh_from_db()
+        self.assertEqual(self.medical_pass.used_amount, amt)
+
+    def test_medical_pass_pays_treatment_merchant_success(self):
+        """Medical FamilyPass must SUCCEED when paying a Treatment merchant (hospital/clinic)."""
+        amt = Decimal('1200.00')
+        txn = TransactionService.execute_transaction(
+            sender=self.member,
+            merchant=self.treatment_merchant,
+            amount=amt,
+            transaction_type=TransactionType.MERCHANT_PAYMENT,
+            payment_source=PaymentSource.FAMILY_PASS,
+            family_pass=self.medical_pass
+        )
+        self.assertEqual(txn.status, TransactionStatus.COMPLETED)
+        self.medical_pass.refresh_from_db()
+        self.assertEqual(self.medical_pass.used_amount, amt)
+
+    def test_medical_pass_rejected_at_grocery_merchant(self):
+        """Medical FamilyPass must be REJECTED when paying a Grocery merchant."""
+        with self.assertRaises(TransactionValidationError) as ctx:
+            TransactionService.execute_transaction(
+                sender=self.member,
+                merchant=self.grocery_merchant,
+                amount=Decimal('400.00'),
+                transaction_type=TransactionType.MERCHANT_PAYMENT,
+                payment_source=PaymentSource.FAMILY_PASS,
+                family_pass=self.medical_pass
+            )
+        self.assertEqual(ctx.exception.code, "FAMILYPASS_CATEGORY_MISMATCH")
+
+    # ==================== 3. DINING PASS TESTS ====================
+    def test_dining_pass_pays_restaurant_merchant_success(self):
+        """Dining FamilyPass must SUCCEED when paying a Restaurant/Food merchant."""
+        amt = Decimal('650.00')
+        txn = TransactionService.execute_transaction(
+            sender=self.member,
+            merchant=self.restaurant_merchant,
+            amount=amt,
+            transaction_type=TransactionType.MERCHANT_PAYMENT,
+            payment_source=PaymentSource.FAMILY_PASS,
+            family_pass=self.dining_pass
+        )
+        self.assertEqual(txn.status, TransactionStatus.COMPLETED)
+        self.dining_pass.refresh_from_db()
+        self.assertEqual(self.dining_pass.used_amount, amt)
+
+    def test_dining_pass_rejected_at_grocery_merchant(self):
+        """Dining FamilyPass must be REJECTED when paying a Grocery merchant."""
+        with self.assertRaises(TransactionValidationError) as ctx:
+            TransactionService.execute_transaction(
+                sender=self.member,
+                merchant=self.grocery_merchant,
+                amount=Decimal('350.00'),
+                transaction_type=TransactionType.MERCHANT_PAYMENT,
+                payment_source=PaymentSource.FAMILY_PASS,
+                family_pass=self.dining_pass
+            )
+        self.assertEqual(ctx.exception.code, "FAMILYPASS_CATEGORY_MISMATCH")
+
+    # ==================== 4. BILLS & UTILITIES PASS TESTS ====================
+    def test_bills_pass_pays_electricity_merchant_success(self):
+        """Bills & Utilities FamilyPass must SUCCEED when paying an Electricity merchant."""
+        amt = Decimal('1500.00')
+        txn = TransactionService.execute_transaction(
+            sender=self.member,
+            merchant=self.electricity_merchant,
+            amount=amt,
+            transaction_type=TransactionType.MERCHANT_PAYMENT,
+            payment_source=PaymentSource.FAMILY_PASS,
+            family_pass=self.bills_pass
+        )
+        self.assertEqual(txn.status, TransactionStatus.COMPLETED)
+        self.bills_pass.refresh_from_db()
+        self.assertEqual(self.bills_pass.used_amount, amt)
+
+    def test_bills_pass_pays_rent_merchant_success(self):
+        """Bills & Utilities FamilyPass must SUCCEED when paying a Rent merchant."""
+        amt = Decimal('2000.00')
+        txn = TransactionService.execute_transaction(
+            sender=self.member,
+            merchant=self.rent_merchant,
+            amount=amt,
+            transaction_type=TransactionType.MERCHANT_PAYMENT,
+            payment_source=PaymentSource.FAMILY_PASS,
+            family_pass=self.bills_pass
+        )
+        self.assertEqual(txn.status, TransactionStatus.COMPLETED)
+        self.bills_pass.refresh_from_db()
+        self.assertEqual(self.bills_pass.used_amount, amt)
+
+    def test_bills_pass_rejected_at_grocery_merchant(self):
+        """Bills & Utilities FamilyPass must be REJECTED when paying a Grocery merchant."""
+        with self.assertRaises(TransactionValidationError) as ctx:
+            TransactionService.execute_transaction(
+                sender=self.member,
+                merchant=self.grocery_merchant,
+                amount=Decimal('500.00'),
+                transaction_type=TransactionType.MERCHANT_PAYMENT,
+                payment_source=PaymentSource.FAMILY_PASS,
+                family_pass=self.bills_pass
+            )
+        self.assertEqual(ctx.exception.code, "FAMILYPASS_CATEGORY_MISMATCH")
+
+    # ==================== 5. EMERGENCY PASS TESTS (UNRESTRICTED) ====================
+    def test_emergency_pass_pays_grocery_merchant_success(self):
+        """Emergency FamilyPass is unrestricted and must allow payment to Grocery."""
+        txn = TransactionService.execute_transaction(
+            sender=self.member,
+            merchant=self.grocery_merchant,
+            amount=Decimal('200.00'),
+            transaction_type=TransactionType.MERCHANT_PAYMENT,
+            payment_source=PaymentSource.FAMILY_PASS,
+            family_pass=self.emergency_pass
+        )
+        self.assertEqual(txn.status, TransactionStatus.COMPLETED)
+        self.assertTrue(txn.metadata.get('category_unrestricted', False))
+
+    def test_emergency_pass_pays_medicine_merchant_success(self):
+        """Emergency FamilyPass is unrestricted and must allow payment to Medicine."""
+        txn = TransactionService.execute_transaction(
+            sender=self.member,
+            merchant=self.medicine_merchant,
+            amount=Decimal('350.00'),
+            transaction_type=TransactionType.MERCHANT_PAYMENT,
+            payment_source=PaymentSource.FAMILY_PASS,
+            family_pass=self.emergency_pass
+        )
+        self.assertEqual(txn.status, TransactionStatus.COMPLETED)
+        self.assertTrue(txn.metadata.get('category_unrestricted', False))
+
+    def test_emergency_pass_pays_treatment_merchant_success(self):
+        """Emergency FamilyPass is unrestricted and must allow payment to Treatment."""
+        txn = TransactionService.execute_transaction(
+            sender=self.member,
+            merchant=self.treatment_merchant,
+            amount=Decimal('900.00'),
+            transaction_type=TransactionType.MERCHANT_PAYMENT,
+            payment_source=PaymentSource.FAMILY_PASS,
+            family_pass=self.emergency_pass
+        )
+        self.assertEqual(txn.status, TransactionStatus.COMPLETED)
+        self.assertTrue(txn.metadata.get('category_unrestricted', False))
+
+    # ==================== 6. OTHER PASS TESTS (UNRESTRICTED) ====================
+    def test_other_pass_pays_any_merchant_category_success(self):
+        """Other FamilyPass is intentionally unrestricted and can pay any category."""
+        merchants_to_test = [
+            self.grocery_merchant,
+            self.restaurant_merchant,
+            self.education_merchant,
+            self.shopping_merchant,
+            self.transport_merchant,
+        ]
+        for m in merchants_to_test:
+            txn = TransactionService.execute_transaction(
+                sender=self.member,
+                merchant=m,
+                amount=Decimal('50.00'),
+                transaction_type=TransactionType.MERCHANT_PAYMENT,
+                payment_source=PaymentSource.FAMILY_PASS,
+                family_pass=self.other_pass
+            )
+            self.assertEqual(txn.status, TransactionStatus.COMPLETED)
+            self.assertTrue(txn.metadata.get('category_unrestricted', False))
+
+    # ==================== 7. BALANCE & AUDIT INTEGRITY ====================
+    def test_rejected_payment_balances_unchanged(self):
+        """After a rejected FamilyPass payment, all balances and used_amount must remain unchanged."""
+        owner_bal_before = self.owner_wallet.balance
+        pass_used_before = self.grocery_pass.used_amount
+        merchant_bal_before = self.treatment_merchant.balance
+
+        with self.assertRaises(TransactionValidationError):
+            TransactionService.execute_transaction(
+                sender=self.member,
+                merchant=self.treatment_merchant,
+                amount=Decimal('100.00'),
+                transaction_type=TransactionType.MERCHANT_PAYMENT,
+                payment_source=PaymentSource.FAMILY_PASS,
+                family_pass=self.grocery_pass
+            )
+
+        self.owner_wallet.refresh_from_db()
+        self.grocery_pass.refresh_from_db()
+        self.treatment_merchant.refresh_from_db()
+
+        self.assertEqual(self.owner_wallet.balance, owner_bal_before)
+        self.assertEqual(self.grocery_pass.used_amount, pass_used_before)
+        self.assertEqual(self.treatment_merchant.balance, merchant_bal_before)
+
+    def test_rejected_payment_creates_audit_transaction(self):
+        """A rejected FamilyPass payment must create a REJECTED transaction record."""
+        with self.assertRaises(TransactionValidationError):
+            TransactionService.execute_transaction(
+                sender=self.member,
+                merchant=self.treatment_merchant,
+                amount=Decimal('100.00'),
+                transaction_type=TransactionType.MERCHANT_PAYMENT,
+                payment_source=PaymentSource.FAMILY_PASS,
+                family_pass=self.grocery_pass
+            )
+
+        rejected_txn = Transaction.objects.filter(
+            sender=self.member,
+            status=TransactionStatus.REJECTED,
+            family_pass=self.grocery_pass
+        ).first()
+        self.assertIsNotNone(rejected_txn)
+        self.assertIn("Category Restriction Mismatch", rejected_txn.rejection_reason)
+
+    # ==================== 8. API CREATION TESTS ====================
+    def test_creation_saves_grocery_category(self):
+        """Creating a FamilyPass with purpose='Grocery' via API must save allowed_categories=['Grocery']."""
+        resp = self.client_owner.post('/api/family-pass/', {
+            'member': self.member.phone,
+            'limit_amount': '2000',
+            'duration_days': 30,
+            'purpose': 'Grocery',
+        }, content_type='application/json')
+        self.assertEqual(resp.status_code, 201)
+        fp_id = resp.json()['id']
+        fp = FamilyPass.objects.get(id=fp_id)
+        self.assertEqual(fp.allowed_categories, ['Grocery'])
+        self.assertEqual(fp.purpose, 'Grocery')
+
+    def test_creation_saves_medical_categories(self):
+        """Creating a FamilyPass with purpose='Medical' via API must save ['Medicine', 'Treatment']."""
+        resp = self.client_owner.post('/api/family-pass/', {
+            'member': self.member.phone,
+            'limit_amount': '3000',
+            'duration_days': 30,
+            'purpose': 'Medical',
+        }, content_type='application/json')
+        self.assertEqual(resp.status_code, 201)
+        fp_id = resp.json()['id']
+        fp = FamilyPass.objects.get(id=fp_id)
+        self.assertEqual(fp.allowed_categories, ['Medicine', 'Treatment'])
+
+    def test_creation_saves_dining_category(self):
+        """Creating a FamilyPass with purpose='Dining' via API must save ['Restaurant/Food']."""
+        resp = self.client_owner.post('/api/family-pass/', {
+            'member': self.member.phone,
+            'limit_amount': '2500',
+            'duration_days': 15,
+            'purpose': 'Dining',
+        }, content_type='application/json')
+        self.assertEqual(resp.status_code, 201)
+        fp_id = resp.json()['id']
+        fp = FamilyPass.objects.get(id=fp_id)
+        self.assertEqual(fp.allowed_categories, ['Restaurant/Food'])
+
+    def test_creation_saves_bills_utilities_categories(self):
+        """Creating a FamilyPass with purpose='Bills & Utilities' via API must save ['Electricity', 'Rent']."""
+        resp = self.client_owner.post('/api/family-pass/', {
+            'member': self.member.phone,
+            'limit_amount': '4000',
+            'duration_days': 30,
+            'purpose': 'Bills & Utilities',
+        }, content_type='application/json')
+        self.assertEqual(resp.status_code, 201)
+        fp_id = resp.json()['id']
+        fp = FamilyPass.objects.get(id=fp_id)
+        self.assertEqual(fp.allowed_categories, ['Electricity', 'Rent'])
+
+    def test_creation_emergency_and_other_have_empty_categories(self):
+        """Creating FamilyPass with Emergency or Other must leave allowed_categories=[] (unrestricted)."""
+        # Emergency
+        resp1 = self.client_owner.post('/api/family-pass/', {
+            'member': self.member.phone,
+            'limit_amount': '1000',
+            'duration_days': 7,
+            'purpose': 'Emergency',
+        }, content_type='application/json')
+        self.assertEqual(resp1.status_code, 201)
+        fp1 = FamilyPass.objects.get(id=resp1.json()['id'])
+        self.assertEqual(fp1.allowed_categories, [])
+
+        # Other
+        resp2 = self.client_owner.post('/api/family-pass/', {
+            'member': self.member.phone,
+            'limit_amount': '1500',
+            'duration_days': 14,
+            'purpose': 'Other',
+            'custom_purpose': 'Pet Care',
+        }, content_type='application/json')
+        self.assertEqual(resp2.status_code, 201)
+        fp2 = FamilyPass.objects.get(id=resp2.json()['id'])
+        self.assertEqual(fp2.allowed_categories, [])
+
+    # ==================== 9. API EDIT TESTS ====================
+    def test_edit_purpose_syncs_categories(self):
+        """Editing purpose from Grocery to Education must update allowed_categories to ['Education']."""
+        resp = self.client_owner.patch(
+            f'/api/family-pass/{self.grocery_pass.id}/',
+            {'purpose': 'Education'},
+            content_type='application/json'
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.grocery_pass.refresh_from_db()
+        self.assertEqual(self.grocery_pass.purpose, 'Education')
+        self.assertEqual(self.grocery_pass.allowed_categories, ['Education'])
+
+    def test_edit_purpose_to_medical_syncs_categories(self):
+        """Editing purpose to Medical must update allowed_categories to ['Medicine', 'Treatment']."""
+        resp = self.client_owner.patch(
+            f'/api/family-pass/{self.grocery_pass.id}/',
+            {'purpose': 'Medical'},
+            content_type='application/json'
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.grocery_pass.refresh_from_db()
+        self.assertEqual(self.grocery_pass.purpose, 'Medical')
+        self.assertEqual(self.grocery_pass.allowed_categories, ['Medicine', 'Treatment'])
+
+    def test_edit_purpose_to_other_clears_categories(self):
+        """Editing purpose to 'Other' must clear allowed_categories (unrestricted)."""
+        resp = self.client_owner.patch(
+            f'/api/family-pass/{self.grocery_pass.id}/',
+            {'purpose': 'Other', 'custom_purpose': 'Misc'},
+            content_type='application/json'
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.grocery_pass.refresh_from_db()
+        self.assertEqual(self.grocery_pass.allowed_categories, [])
+
+    def test_edit_explicit_categories_override(self):
+        """Sending explicit allowed_categories in edit must take priority."""
+        resp = self.client_owner.patch(
+            f'/api/family-pass/{self.grocery_pass.id}/',
+            {'allowed_categories': ['Grocery', 'Medicine']},
+            content_type='application/json'
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.grocery_pass.refresh_from_db()
+        self.assertEqual(self.grocery_pass.allowed_categories, ['Grocery', 'Medicine'])
+

@@ -176,6 +176,28 @@ class TransactionService:
                 )
                 raise TransactionValidationError(reason, code="CATEGORY_RESTRICTION_ERROR")
 
+        if transaction_type == TransactionType.MERCHANT_PAYMENT and payment_source == PaymentSource.FAMILY_PASS:
+            if family_pass and family_pass.allowed_categories:
+                if merchant and merchant.category not in family_pass.allowed_categories:
+                    reason = (
+                        f"Category Restriction Mismatch: Merchant '{merchant.business_name}' category '{merchant.category}' is not allowed for this FamilyPass."
+                    )
+                    Transaction.objects.create(
+                        transaction_id=f"TXN-{timezone.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}",
+                        sender=sender,
+                        merchant=merchant,
+                        amount=amount,
+                        transaction_type=TransactionType.MERCHANT_PAYMENT,
+                        payment_source=PaymentSource.FAMILY_PASS,
+                        family_pass=family_pass,
+                        category=merchant.category,
+                        status=TransactionStatus.REJECTED,
+                        rejection_reason=reason,
+                        reference=reference,
+                        metadata=metadata
+                    )
+                    raise TransactionValidationError(reason, code="FAMILYPASS_CATEGORY_MISMATCH")
+
         with db_transaction.atomic():
             txn_id = f"TXN-{timezone.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
 
@@ -370,26 +392,30 @@ class TransactionService:
                         raise TransactionValidationError("Owner's wallet balance is insufficient to cover this transaction.", code="OWNER_BALANCE_INSUFFICIENT")
 
                     # 9. Merchant category restriction for FamilyPass
-                    if family_pass.allowed_categories and merchant.category not in family_pass.allowed_categories:
-                        reason = (
-                            f"Category Restriction Mismatch: Merchant '{merchant.business_name}' category '{merchant.category}' is not allowed for this FamilyPass."
-                        )
-                        # Record rejected transaction for audit (no balance changes)
-                        Transaction.objects.create(
-                            transaction_id=txn_id,
-                            sender=sender,
-                            merchant=merchant,
-                            amount=amount,
-                            transaction_type=TransactionType.MERCHANT_PAYMENT,
-                            payment_source=PaymentSource.FAMILY_PASS,
-                            family_pass=family_pass,
-                            category=merchant.category,
-                            status=TransactionStatus.REJECTED,
-                            rejection_reason=reason,
-                            reference=reference,
-                            metadata=metadata,
-                        )
-                        raise TransactionValidationError(reason, code="FAMILYPASS_CATEGORY_MISMATCH")
+                    if family_pass.allowed_categories:
+                        if merchant.category not in family_pass.allowed_categories:
+                            reason = (
+                                f"Category Restriction Mismatch: Merchant '{merchant.business_name}' category '{merchant.category}' is not allowed for this FamilyPass."
+                            )
+                            # Record rejected transaction for audit (no balance changes)
+                            Transaction.objects.create(
+                                transaction_id=txn_id,
+                                sender=sender,
+                                merchant=merchant,
+                                amount=amount,
+                                transaction_type=TransactionType.MERCHANT_PAYMENT,
+                                payment_source=PaymentSource.FAMILY_PASS,
+                                family_pass=family_pass,
+                                category=merchant.category,
+                                status=TransactionStatus.REJECTED,
+                                rejection_reason=reason,
+                                reference=reference,
+                                metadata=metadata,
+                            )
+                            raise TransactionValidationError(reason, code="FAMILYPASS_CATEGORY_MISMATCH")
+                    else:
+                        # Legacy/unrestricted pass — flag for audit but allow
+                        metadata = {**(metadata or {}), 'category_unrestricted': True}
 
                     # 7. Execute FamilyPass transaction atomically
                     owner_wallet.balance -= amount

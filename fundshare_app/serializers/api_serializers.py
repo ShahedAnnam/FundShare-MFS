@@ -128,6 +128,7 @@ class FamilyPassSerializer(serializers.ModelSerializer):
             'id', 'owner', 'owner_name', 'owner_username', 'member', 'member_name', 'member_username',
             'limit_amount', 'used_amount', 'remaining_limit', 'start_date', 'expiry_date',
             'allowed_action', 'status', 'purpose', 'custom_purpose', 'purpose_label', 'purpose_display',
+            'allowed_categories',
             'is_valid', 'usage_pct', 'created_at'
         ]
 

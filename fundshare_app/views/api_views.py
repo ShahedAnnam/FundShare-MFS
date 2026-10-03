@@ -38,6 +38,21 @@ from fundshare_app.ml.data_generator import SyntheticDataGenerator
 
 User = get_user_model()
 
+# Canonical mapping: FamilyPassPurpose -> BusinessCategory values.
+# Emergency and Other are intentionally unrestricted (allowed_categories == []).
+PURPOSE_TO_CATEGORIES = {
+    "Grocery": ["Grocery"],
+    "Medical": ["Medicine", "Treatment"],
+    "Dining": ["Restaurant/Food"],
+    "Bills & Utilities": ["Electricity", "Rent"],
+    "Education": ["Education"],
+    "Transport": ["Transport"],
+    "Shopping": ["Shopping"],
+    "Emergency": [],  # unrestricted: usable at any merchant category
+    "Other": [],      # unrestricted: usable at any merchant category
+}
+
+
 
 
 def get_authenticated_or_demo_user(request):
@@ -754,6 +769,18 @@ class FamilyPassListView(APIView):
             start_date = timezone.localdate() if timezone.is_aware(timezone.now()) else timezone.now().date()
             expiry_date = start_date + datetime.timedelta(days=duration_days)
 
+            # Determine allowed categories based on explicit payload or purpose mapping
+            if 'allowed_categories' in request.data:
+                explicit_cats = request.data['allowed_categories']
+                if not isinstance(explicit_cats, list):
+                    return Response({"error": "allowed_categories must be a list of category values."}, status=status.HTTP_400_BAD_REQUEST)
+                invalid = [c for c in explicit_cats if c not in BusinessCategory.values]
+                if invalid:
+                    return Response({"error": f"Invalid categories: {', '.join(invalid)}."}, status=status.HTTP_400_BAD_REQUEST)
+                allowed_categories = explicit_cats
+            else:
+                allowed_categories = PURPOSE_TO_CATEGORIES.get(purpose, [])
+            # Create FamilyPass with allowed_categories
             fp = FamilyPass.objects.create(
                 owner=user,
                 member=member,
@@ -765,7 +792,8 @@ class FamilyPassListView(APIView):
                 status=FamilyPassStatus.ACTIVE,
                 purpose=purpose,
                 custom_purpose=custom_purpose,
-                purpose_label=purpose_label
+                purpose_label=purpose_label,
+                allowed_categories=allowed_categories
             )
 
             # Sync recipient role immediately to FamilyPass Member
@@ -885,6 +913,7 @@ class FamilyPassDetailView(APIView):
                 return Response({"error": "Invalid duration format."}, status=status.HTTP_400_BAD_REQUEST)
 
         # 5. Purpose dropdown validation
+        purpose_changed = False
         if 'purpose' in request.data:
             purpose_val = request.data['purpose']
             if purpose_val not in FamilyPassPurpose.values:
@@ -893,6 +922,7 @@ class FamilyPassDetailView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             fp.purpose = purpose_val
+            purpose_changed = True
             if fp.purpose == FamilyPassPurpose.OTHER:
                 fp.custom_purpose = request.data.get('custom_purpose', '').strip()
                 fp.purpose_label = f"Other: {fp.custom_purpose}" if fp.custom_purpose else "Other"
@@ -911,6 +941,20 @@ class FamilyPassDetailView(APIView):
             if action_val in FamilyPassAction.values:
                 fp.allowed_action = action_val
 
+        # 7. Allowed Categories
+        if 'allowed_categories' in request.data:
+            # Explicit override takes priority
+            cat_vals = request.data['allowed_categories']
+            if not isinstance(cat_vals, list):
+                return Response({"error": "allowed_categories must be a list of category values."}, status=status.HTTP_400_BAD_REQUEST)
+            # Validate categories against BusinessCategory enum
+            invalid = [c for c in cat_vals if c not in BusinessCategory.values]
+            if invalid:
+                return Response({"error": f"Invalid categories: {', '.join(invalid)}."}, status=status.HTTP_400_BAD_REQUEST)
+            fp.allowed_categories = cat_vals
+        elif purpose_changed:
+            # Auto-sync allowed_categories from the new purpose
+            fp.allowed_categories = PURPOSE_TO_CATEGORIES.get(fp.purpose, [])
         fp.save()
 
         # Notify Member about the edit
