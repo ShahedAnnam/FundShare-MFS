@@ -277,7 +277,7 @@ class FinancialAIService:
                         return {
                             "question": question,
                             "answer": response.text,
-                            "source": "Gemini 3.8 Flash (AI-Grounded)" if intent != "GENERAL" else "Gemini 3.8 Flash",
+                            "source": f"{model_name} (AI-Grounded)" if intent != "GENERAL" else model_name,
                             "ai_powered": True,
                             "online": True,
                             "intent": intent,
