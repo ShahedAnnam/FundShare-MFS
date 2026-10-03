@@ -369,6 +369,28 @@ class TransactionService:
                     if owner_wallet.balance < amount:
                         raise TransactionValidationError("Owner's wallet balance is insufficient to cover this transaction.", code="OWNER_BALANCE_INSUFFICIENT")
 
+                    # 9. Merchant category restriction for FamilyPass
+                    if family_pass.allowed_categories and merchant.category not in family_pass.allowed_categories:
+                        reason = (
+                            f"Category Restriction Mismatch: Merchant '{merchant.business_name}' category '{merchant.category}' is not allowed for this FamilyPass."
+                        )
+                        # Record rejected transaction for audit (no balance changes)
+                        Transaction.objects.create(
+                            transaction_id=txn_id,
+                            sender=sender,
+                            merchant=merchant,
+                            amount=amount,
+                            transaction_type=TransactionType.MERCHANT_PAYMENT,
+                            payment_source=PaymentSource.FAMILY_PASS,
+                            family_pass=family_pass,
+                            category=merchant.category,
+                            status=TransactionStatus.REJECTED,
+                            rejection_reason=reason,
+                            reference=reference,
+                            metadata=metadata,
+                        )
+                        raise TransactionValidationError(reason, code="FAMILYPASS_CATEGORY_MISMATCH")
+
                     # 7. Execute FamilyPass transaction atomically
                     owner_wallet.balance -= amount
                     owner_wallet.save(update_fields=['balance', 'updated_at'])
