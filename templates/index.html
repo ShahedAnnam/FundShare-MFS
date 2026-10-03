@@ -987,8 +987,8 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
         <button class="bal-action-btn" onclick="openModal('sendMoneyModal')">
           <span class="btn-icon">📤</span> Send
         </button>
-        <button class="bal-action-btn" onclick="openModal('utilityModal')">
-          <span class="btn-icon">⚡</span> Services
+        <button class="bal-action-btn" onclick="openModal('cashOutModal')">
+          <span class="btn-icon">🏧</span> Cash Out
         </button>
         <button class="bal-action-btn" onclick="navigateTo('payments')">
           <span class="btn-icon">💳</span> Pay
@@ -1000,14 +1000,6 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
     <div class="quick-actions">
       <div class="section-title">Quick Actions</div>
       <div class="quick-grid">
-        <button class="quick-btn" onclick="openModal('cashInModal')">
-          <span class="qb-icon">🏦</span>
-          <span class="qb-label">Add Money</span>
-        </button>
-        <button class="quick-btn" onclick="openModal('sendMoneyModal')">
-          <span class="qb-icon">📲</span>
-          <span class="qb-label">Send Money</span>
-        </button>
         <button class="quick-btn" onclick="openModal('rechargeModal')">
           <span class="qb-icon">📱</span>
           <span class="qb-label">Recharge</span>
@@ -1016,25 +1008,13 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
           <span class="qb-icon">💡</span>
           <span class="qb-label">Bill Pay</span>
         </button>
-        <button class="quick-btn" onclick="navigateTo('funds')">
-          <span class="qb-icon">🎯</span>
-          <span class="qb-label">My Funds</span>
-        </button>
-        <button class="quick-btn" onclick="navigateTo('familypass')">
-          <span class="qb-icon">👨‍👩‍👧</span>
-          <span class="qb-label">FamilyPass</span>
-        </button>
-        <button class="quick-btn" onclick="openModal('cashOutModal')">
-          <span class="qb-icon">🏧</span>
-          <span class="qb-label">Cash Out</span>
+        <button class="quick-btn" onclick="openModal('transferFundModal')">
+          <span class="qb-icon">⇄</span>
+          <span class="qb-label">Transfer</span>
         </button>
         <button class="quick-btn" onclick="openContactBookModal()">
           <span class="qb-icon">📖</span>
           <span class="qb-label">Contacts</span>
-        </button>
-        <button class="quick-btn" onclick="navigateTo('ai')">
-          <span class="qb-icon">🤖</span>
-          <span class="qb-label">AI Coach</span>
         </button>
       </div>
     </div>
@@ -1043,7 +1023,7 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
     <div class="card">
       <div class="card-header">
         <span class="card-title">Recent Transactions</span>
-        <button class="card-action" onclick="navigateTo('history')">See All</button>
+        <button class="card-action" onclick="openTxnHistoryModal()">See All</button>
       </div>
       <div id="recentTxns"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No transactions yet</div></div></div>
     </div>
@@ -1852,6 +1832,34 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
       <!-- dynamically populated -->
     </div>
     <div style="margin-top:14px"><button class="btn-secondary w-full" onclick="closeContactPicker()">Cancel</button></div>
+  </div>
+</div>
+
+<!-- Full Transaction History Modal -->
+<div class="modal-overlay" id="txnHistoryModal">
+  <div class="modal-sheet" style="max-height:88vh;overflow-y:auto;">
+    <div class="modal-handle"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <div class="modal-title" style="margin-bottom:0;">📜 Transaction History</div>
+      <button class="btn-secondary" style="font-size:12px;padding:4px 10px;width:auto;" onclick="closeModal('txnHistoryModal')">✕ Close</button>
+    </div>
+    <div class="modal-subtitle">Full transaction ledger and activity history</div>
+
+    <!-- Filter Chips -->
+    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:12px;" id="txnHistoryFilters">
+      <button class="ai-prompt-chip active" id="thf-all" onclick="loadTxnHistory('')" style="white-space:nowrap;font-size:11px;padding:4px 10px;">All</button>
+      <button class="ai-prompt-chip" id="thf-pay" onclick="loadTxnHistory('MERCHANT_PAYMENT')" style="white-space:nowrap;font-size:11px;padding:4px 10px;">💳 Payments</button>
+      <button class="ai-prompt-chip" id="thf-cashin" onclick="loadTxnHistory('CASH_IN')" style="white-space:nowrap;font-size:11px;padding:4px 10px;">➕ Add Money</button>
+      <button class="ai-prompt-chip" id="thf-send" onclick="loadTxnHistory('SEND_MONEY')" style="white-space:nowrap;font-size:11px;padding:4px 10px;">📤 Send Money</button>
+      <button class="ai-prompt-chip" id="thf-cashout" onclick="loadTxnHistory('CASH_OUT')" style="white-space:nowrap;font-size:11px;padding:4px 10px;">🏧 Cash Out</button>
+    </div>
+
+    <!-- Transaction List Container -->
+    <div id="fullTxnList"></div>
+
+    <div style="margin-top:16px;">
+      <button class="btn-secondary w-full" onclick="closeModal('txnHistoryModal')">Close</button>
+    </div>
   </div>
 </div>
 

@@ -194,8 +194,10 @@ class WalletSummaryView(APIView):
         fp_total_limit = sum([float(fp.limit_amount) for fp in active_fps])
         fp_total_used = sum([float(fp.used_amount) for fp in active_fps])
 
-        # Recent transactions
-        recent_txns = Transaction.objects.filter(sender=user).order_by('-timestamp')[:6]
+        # Recent transactions (all activity relevant to user: sent, received, or FamilyPass funded by owner)
+        recent_txns = Transaction.objects.filter(
+            Q(sender=user) | Q(receiver=user) | Q(family_pass__owner=user)
+        ).distinct().order_by('-timestamp')[:6]
 
         # Forecasts / warnings
         overrun_funds = []
@@ -1053,7 +1055,9 @@ class TransactionHistoryView(APIView):
         user, err = require_auth(request)
         if err:
             return err
-        qs = Transaction.objects.filter(sender=user)
+        qs = Transaction.objects.filter(
+            Q(sender=user) | Q(receiver=user) | Q(family_pass__owner=user)
+        ).distinct()
 
         # Filters
         txn_type = request.query_params.get('type')

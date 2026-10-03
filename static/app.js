@@ -110,10 +110,14 @@ document.addEventListener('click', e => {
 // ============================================================
 const TAB_MAP = {
   home: 'home', funds: 'funds', payments: 'payments', familypass: 'familypass',
-  ai: 'ai', more: 'more', history: 'more'
+  ai: 'ai', more: 'more', history: 'home'
 };
 
 function navigateTo(tab) {
+  if (tab === 'history') {
+    openTxnHistoryModal();
+    return;
+  }
   const mapped = TAB_MAP[tab] || tab;
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -280,26 +284,113 @@ async function loadDashboard() {
   }
 }
 
+function renderTxnItemHtml(t) {
+  const currentUserId = state.user ? state.user.id : null;
+  const isRejected = t.status === 'REJECTED';
+  const isCashIn = t.transaction_type === 'CASH_IN';
+  const isIncomingP2P = (t.transaction_type === 'SEND_MONEY' || t.transaction_type === 'RECEIVE_MONEY') && currentUserId && (t.receiver === currentUserId) && (t.sender !== currentUserId);
+  const isCredit = isCashIn || isIncomingP2P;
+  const isFp = t.payment_source === 'FAMILY_PASS';
+  const isFpMember = isFp && currentUserId && (t.sender === currentUserId);
+  const isFpOwner = isFp && currentUserId && (t.sender !== currentUserId);
+
+  let icon = CATEGORY_ICONS[t.category] || (isCredit ? '💚' : '💸');
+  if (isRejected) icon = '🚫';
+  else if (isFp) icon = '👨‍👩‍👧';
+  else if (isCredit) icon = '⬆️';
+
+  let title = t.merchant_name || t.receiver_name || TXN_TYPE_LABELS[t.transaction_type] || t.transaction_type;
+  if (isCashIn) {
+    title = 'Add Money (Bank Deposit)';
+  } else if (isIncomingP2P) {
+    title = `Received from ${t.sender_name || t.sender_username || 'User'}`;
+  } else if (isFpOwner) {
+    title = `${t.merchant_name || 'Merchant'} <span class="pill pill-purple" style="font-size:9px;">FamilyPass</span>`;
+  } else if (isFpMember) {
+    title = `${t.merchant_name || 'Merchant'} <span class="pill pill-purple" style="font-size:9px;">FamilyPass</span>`;
+  }
+
+  let meta = `${TXN_TYPE_LABELS[t.transaction_type] || t.transaction_type} • ${timeAgo(t.timestamp)}`;
+  if (isRejected) {
+    meta = `${t.rejection_reason || 'Transaction rejected'} • ${timeAgo(t.timestamp)}`;
+  } else if (isFpOwner) {
+    meta = `Spent by ${t.sender_name || t.sender_username || 'Member'} • ${timeAgo(t.timestamp)}`;
+  } else if (isFpMember) {
+    meta = `Paid via FamilyPass • ${timeAgo(t.timestamp)}`;
+  }
+
+  let amountHtml = '';
+  if (isRejected) {
+    amountHtml = `<div class="txn-amount" style="color:var(--danger);font-size:12px;font-weight:700;text-align:right;">
+      ৳0.00
+      <div style="font-size:9px;color:var(--danger);font-weight:600;">REJECTED</div>
+    </div>`;
+  } else if (isFpMember) {
+    amountHtml = `<div class="txn-amount" style="color:var(--purple);font-size:12px;font-weight:700;text-align:right;">
+      ৳${fmt(t.amount)}
+      <div style="font-size:9px;color:var(--purple);font-weight:600;">Pass Spending</div>
+    </div>`;
+  } else if (isCredit) {
+    amountHtml = `<div class="txn-amount credit">+৳${fmt(t.amount)}</div>`;
+  } else {
+    amountHtml = `<div class="txn-amount debit">-৳${fmt(t.amount)}</div>`;
+  }
+
+  return `<div class="txn-item">
+    <div class="txn-icon ${isRejected ? 'debit' : (isCredit ? 'credit' : (isFp ? 'purple' : 'debit'))}">${icon}</div>
+    <div class="txn-info">
+      <div class="txn-name">${title}</div>
+      <div class="txn-meta">${meta}</div>
+    </div>
+    ${amountHtml}
+  </div>`;
+}
+
 function renderRecentTxns(txns) {
   const el = document.getElementById('recentTxns');
   if (!txns || txns.length === 0) {
     el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No transactions yet</div></div>';
     return;
   }
-  el.innerHTML = txns.slice(0, 6).map(t => {
-    const isCredit = t.transaction_type === 'CASH_IN';
-    const icon = isCredit ? '⬆️' : (TXN_TYPE_LABELS[t.transaction_type] ? '⬇️' : '💳');
-    const label = t.merchant_name || t.receiver_name || TXN_TYPE_LABELS[t.transaction_type] || t.transaction_type;
-    const statusBadge = t.status === 'REJECTED' ? `<span class="pill pill-red" style="font-size:9px;">REJECTED</span>` : '';
-    return `<div class="txn-item">
-      <div class="txn-icon ${isCredit ? 'credit' : 'debit'}">${CATEGORY_ICONS[t.category] || (isCredit ? '💚' : '💸')}</div>
-      <div class="txn-info">
-        <div class="txn-name">${label} ${statusBadge}</div>
-        <div class="txn-meta">${TXN_TYPE_LABELS[t.transaction_type] || t.transaction_type} • ${timeAgo(t.timestamp)}</div>
-      </div>
-      <div class="txn-amount ${isCredit ? 'credit' : 'debit'}">${isCredit ? '+' : '-'}৳${fmt(t.amount)}</div>
-    </div>`;
-  }).join('');
+  el.innerHTML = txns.slice(0, 6).map(renderTxnItemHtml).join('');
+}
+
+let currentTxnFilter = '';
+
+async function openTxnHistoryModal() {
+  openModal('txnHistoryModal');
+  await loadTxnHistory('');
+}
+
+async function loadTxnHistory(filterType = '') {
+  currentTxnFilter = filterType;
+  document.querySelectorAll('#txnHistoryFilters .ai-prompt-chip').forEach(btn => btn.classList.remove('active'));
+  const activeId = filterType === 'MERCHANT_PAYMENT' ? 'thf-pay' :
+                   filterType === 'CASH_IN' ? 'thf-cashin' :
+                   filterType === 'SEND_MONEY' ? 'thf-send' :
+                   filterType === 'CASH_OUT' ? 'thf-cashout' : 'thf-all';
+  const activeBtn = document.getElementById(activeId);
+  if (activeBtn) activeBtn.classList.add('active');
+
+  const el = document.getElementById('fullTxnList');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);">Loading transactions...</div>';
+
+  let url = '/api/transactions/';
+  if (filterType) url += `?type=${filterType}`;
+  const data = await apiGet(url);
+  if (!data || data.length === 0) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No transactions found</div></div>';
+    return;
+  }
+  el.innerHTML = data.map(renderTxnItemHtml).join('');
+}
+
+async function refreshFinancialState() {
+  await loadDashboard();
+  if (state.currentTab === 'funds') loadFunds();
+  if (state.currentTab === 'familypass') loadFamilyPass();
+  if (state.currentTab === 'more') loadMoreTab();
 }
 
 // ============================================================
@@ -786,7 +877,7 @@ async function loadReport(period) {
         <div class="report-stat-label">Avg Transaction</div>
       </div>
       <div class="report-stat">
-        <div class="report-stat-val">${stats.savings_rate ? (stats.savings_rate * 100).toFixed(1) + '%' : 'N/A'}</div>
+        <div class="report-stat-val">${stats.savings_rate !== undefined && stats.savings_rate !== null ? (stats.savings_rate * 100).toFixed(1) + '%' : 'N/A'}</div>
         <div class="report-stat-label">Savings Rate</div>
       </div>
     </div>
@@ -799,6 +890,11 @@ async function loadReport(period) {
           <div class="bar-bg"><div class="bar-fill" style="width:${(amt/maxVal)*100}%;background:${CATEGORY_COLORS[cat]||'var(--primary)'};"></div></div>
           <div class="bar-value">৳${fmt(amt)}</div>
         </div>`).join('')}
+    </div>` : '<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:12px;">No spending recorded in this period</div>'}
+    ${data.ai_summary ? `
+    <div class="card" style="margin-top:14px;background:var(--primary-light);border:1px solid rgba(0,135,90,0.2);">
+      <div style="font-size:12px;font-weight:700;color:var(--primary-dark);margin-bottom:4px;">🤖 AI Financial Insights (${data.report_title || 'Report'})</div>
+      <div style="font-size:12px;color:var(--text);line-height:1.5;">${data.ai_summary}</div>
     </div>` : ''}`;
 }
 
@@ -928,7 +1024,7 @@ async function doCashIn() {
     document.getElementById('cashInAmount').value = '';
     state.wallet = r.data.new_balance;
     document.getElementById('walletBalance').textContent = fmt(state.wallet);
-    loadDashboard();
+    refreshFinancialState();
   } else {
     showToast('error', r.data.error || 'Failed to add money');
   }
@@ -947,7 +1043,7 @@ async function doSendMoney() {
     closeModal('sendMoneyModal');
     document.getElementById('sendAmount').value = '';
     document.getElementById('sendReceiver').value = '';
-    loadDashboard();
+    refreshFinancialState();
   } else {
     showToast('error', r.data.error || 'Transfer failed');
   }
@@ -965,7 +1061,7 @@ async function doUtility(type, amountId, refId) {
     showToast('success', r.data.message || 'Transaction successful!');
     closeModal(modalMap[type]);
     document.getElementById(amountId).value = '';
-    loadDashboard();
+    refreshFinancialState();
   } else {
     showToast('error', r.data.error || 'Transaction failed');
   }
@@ -1001,8 +1097,7 @@ async function doCreateFund() {
     document.getElementById('fundAllocation').value = '';
     document.getElementById('fundBudget').value = '';
     if (recipientEl) recipientEl.value = '';
-    loadFunds();
-    loadDashboard();
+    refreshFinancialState();
   } else {
     showToast('error', r.data.error || 'Failed to create fund');
   }
@@ -1041,8 +1136,7 @@ async function doUpdateFund() {
   if (r.ok) {
     showToast('success', `✅ Fund updated successfully!`);
     closeModal('editFundModal');
-    loadFunds();
-    loadDashboard();
+    refreshFinancialState();
   } else {
     showToast('error', r.data?.error || 'Failed to update fund');
   }
@@ -1056,8 +1150,7 @@ async function doDeleteFund(fundId, fundName) {
   if (!r) return;
   if (r.ok) {
     showToast('success', r.data?.message || 'Fund deleted/closed successfully');
-    loadFunds();
-    loadDashboard();
+    refreshFinancialState();
   } else {
     showToast('error', r.data?.error || 'Failed to delete fund');
   }
@@ -1085,7 +1178,7 @@ async function doFundTransfer() {
     showToast('success', r.data.message || 'Transfer successful!');
     closeModal('transferFundModal');
     document.getElementById('transferAmount').value = '';
-    loadFunds();
+    refreshFinancialState();
   } else {
     showToast('error', r.data.error || 'Transfer failed');
   }
@@ -1261,8 +1354,7 @@ async function doPayMerchant() {
     closeModal('payMerchantModal');
     checkoutItems.payMerchant = [];
     document.getElementById('payAmount').value = '';
-    loadDashboard();
-    if (state.currentTab === 'funds') loadFunds();
+    refreshFinancialState();
   } else {
     const err = r.data;
     if (err.is_category_mismatch) {
@@ -1691,8 +1783,7 @@ async function doFPMemberPay() {
     closeModal('fpMemberPayModal');
     checkoutItems.fpMember = [];
     document.getElementById('fpPayAmount').value = '';
-    loadFamilyPass();
-    loadDashboard();
+    refreshFinancialState();
   } else {
     showToast('error', r.data.error || 'Payment failed');
   }
