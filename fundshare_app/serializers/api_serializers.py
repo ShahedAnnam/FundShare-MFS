@@ -9,9 +9,13 @@ from fundshare_app.models import (
 
 
 class UserSerializer(serializers.ModelSerializer):
+    role = serializers.CharField(source='effective_role', read_only=True)
+    effective_role = serializers.CharField(read_only=True)
+    effective_role_display = serializers.CharField(source='get_effective_role_display', read_only=True)
+
     class Meta:
         model = User
-        fields = ['id', 'username', 'full_name', 'email', 'phone', 'role', 'avatar_url']
+        fields = ['id', 'username', 'full_name', 'email', 'phone', 'role', 'effective_role', 'effective_role_display', 'avatar_url']
 
 
 class WalletSerializer(serializers.ModelSerializer):
@@ -99,7 +103,6 @@ class ContactSerializer(serializers.ModelSerializer):
         }
 
 
-
 class FundTransferSerializer(serializers.ModelSerializer):
     source_fund_name = serializers.CharField(source='source_fund.name', read_only=True)
     destination_fund_name = serializers.CharField(source='destination_fund.name', read_only=True)
@@ -117,13 +120,15 @@ class FamilyPassSerializer(serializers.ModelSerializer):
     remaining_limit = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     is_valid = serializers.BooleanField(source='is_valid_and_active', read_only=True)
     usage_pct = serializers.SerializerMethodField()
+    purpose_display = serializers.CharField(source='purpose_label', read_only=True)
 
     class Meta:
         model = FamilyPass
         fields = [
             'id', 'owner', 'owner_name', 'owner_username', 'member', 'member_name', 'member_username',
             'limit_amount', 'used_amount', 'remaining_limit', 'start_date', 'expiry_date',
-            'allowed_action', 'status', 'purpose_label', 'is_valid', 'usage_pct', 'created_at'
+            'allowed_action', 'status', 'purpose', 'custom_purpose', 'purpose_label', 'purpose_display',
+            'is_valid', 'usage_pct', 'created_at'
         ]
 
     def get_usage_pct(self, obj):

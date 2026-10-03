@@ -20,22 +20,38 @@ class CustomUserChangeForm(UserChangeForm):
         model = User
 
 
+class ReceivedFamilyPassInline(admin.TabularInline):
+    model = FamilyPass
+    fk_name = 'member'
+    extra = 0
+    fields = ('owner', 'purpose_label', 'limit_amount', 'used_amount', 'status', 'start_date', 'expiry_date')
+    readonly_fields = ('owner', 'purpose_label', 'limit_amount', 'used_amount', 'status', 'start_date', 'expiry_date')
+    can_delete = False
+    verbose_name = 'Assigned FamilyPass'
+    verbose_name_plural = 'Assigned FamilyPasses (Active, Revoked, Expired)'
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
     form = CustomUserChangeForm
     add_form = CustomUserCreationForm
     list_display = (
         'username', 'full_name', 'email', 'phone',
-        'role', 'is_active', 'is_staff', 'is_superuser'
+        'effective_role_display', 'role', 'is_active', 'is_staff', 'is_superuser'
     )
     list_filter = ('role', 'is_staff', 'is_superuser', 'is_active', 'date_joined')
     search_fields = ('username', 'full_name', 'email', 'phone')
     ordering = ('username',)
+    readonly_fields = ('effective_role_display', 'last_login', 'date_joined')
+    inlines = [ReceivedFamilyPassInline]
 
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
         ('Personal Info', {'fields': ('full_name', 'first_name', 'last_name', 'email', 'phone', 'avatar_url')}),
-        ('FUNDShare Role & Access', {'fields': ('role', 'is_active', 'is_staff', 'is_superuser')}),
+        ('FUNDShare Role & Access', {'fields': ('effective_role_display', 'role', 'is_active', 'is_staff', 'is_superuser')}),
         ('Advanced Permissions', {'fields': ('groups', 'user_permissions'), 'classes': ('collapse',)}),
         ('Important Dates', {'fields': ('last_login', 'date_joined')}),
     )
@@ -46,6 +62,10 @@ class CustomUserAdmin(UserAdmin):
             'fields': ('username', 'phone', 'full_name', 'role', 'password1', 'password2'),
         }),
     )
+
+    @admin.display(description='Effective Role')
+    def effective_role_display(self, obj):
+        return obj.get_effective_role_display()
 
 
 @admin.register(Wallet)
@@ -98,19 +118,23 @@ class FundTransferAdmin(admin.ModelAdmin):
 @admin.register(FamilyPass)
 class FamilyPassAdmin(admin.ModelAdmin):
     list_display = (
-        'id', 'owner', 'member', 'limit_amount', 'used_amount',
-        'remaining_limit_display', 'allowed_action', 'status',
+        'id', 'owner', 'member', 'purpose_display', 'limit_amount', 'used_amount',
+        'remaining_limit_display', 'status',
         'start_date', 'expiry_date'
     )
-    list_filter = ('status', 'allowed_action', 'start_date', 'expiry_date')
-    search_fields = ('owner__username', 'member__username', 'purpose_label')
+    list_filter = ('status', 'purpose', 'allowed_action', 'start_date', 'expiry_date')
+    search_fields = ('owner__username', 'member__username', 'purpose_label', 'custom_purpose')
     readonly_fields = ('created_at', 'updated_at', 'remaining_limit_display')
     raw_id_fields = ('owner', 'member')
     ordering = ('-created_at',)
 
+    @admin.display(description='Purpose')
+    def purpose_display(self, obj):
+        return obj.purpose_label
+
     @admin.display(description='Remaining Limit (৳)')
     def remaining_limit_display(self, obj):
-        return f"৳{obj.remaining_limit}"
+        return f"৳{obj.remaining_limit:,.2f}"
 
 
 class TransactionItemInline(admin.TabularInline):

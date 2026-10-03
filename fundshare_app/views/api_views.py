@@ -14,7 +14,8 @@ from fundshare_app.models import (
     FamilyPass, FamilyPassStatus, FamilyPassAction,
     Transaction, TransactionType, PaymentSource, TransactionStatus,
     Notification, NotificationType, AnomalyResult, BudgetForecast, AIInsight,
-    ExperimentRecord, ExperimentCondition, Contact, FundStatus
+    ExperimentRecord, ExperimentCondition, Contact, FundStatus,
+    FamilyPassPurpose, BusinessCategory
 )
 
 from fundshare_app.serializers.api_serializers import (
@@ -84,12 +85,15 @@ class LoginView(APIView):
             user = authenticate(request, username=username, password=password)
         if user:
             login(request, user)
+            user.sync_role()
             wallet, _ = Wallet.objects.get_or_create(owner=user)
             return Response({
                 "message": "Login successful",
                 "user": UserSerializer(user).data,
                 "wallet_balance": float(wallet.balance),
-                "role": user.role
+                "role": user.effective_role,
+                "effective_role": user.effective_role,
+                "effective_role_display": user.get_effective_role_display()
             })
         return Response({"error": "Invalid phone number or password"}, status=status.HTTP_401_UNAUTHORIZED)
 
@@ -105,14 +109,19 @@ class MeView(APIView):
         user, err = require_auth(request)
         if err:
             return err
+        user.sync_role()
         wallet, _ = Wallet.objects.get_or_create(owner=user)
         unread_notifications = Notification.objects.filter(user=user, is_read=False).count()
 
         # Check if user has active received FamilyPasses
-        received_passes = FamilyPass.objects.filter(member=user, status=FamilyPassStatus.ACTIVE)
+        today = timezone.localdate() if timezone.is_aware(timezone.now()) else timezone.now().date()
+        received_passes = FamilyPass.objects.filter(member=user, status=FamilyPassStatus.ACTIVE, expiry_date__gte=today)
 
         return Response({
             "user": UserSerializer(user).data,
+            "role": user.effective_role,
+            "effective_role": user.effective_role,
+            "effective_role_display": user.get_effective_role_display(),
             "wallet_balance": float(wallet.balance),
             "unread_notifications": unread_notifications,
             "received_family_passes_count": received_passes.count()
@@ -139,10 +148,14 @@ class SwitchRoleView(APIView):
 
         if user:
             login(request, user)
+            user.sync_role()
             wallet, _ = Wallet.objects.get_or_create(owner=user)
             return Response({
-                "message": f"Switched to {user.full_name or user.username} ({user.get_role_display()})",
+                "message": f"Switched to {user.full_name or user.username} ({user.get_effective_role_display()})",
                 "user": UserSerializer(user).data,
+                "role": user.effective_role,
+                "effective_role": user.effective_role,
+                "effective_role_display": user.get_effective_role_display(),
                 "wallet_balance": float(wallet.balance)
             })
         return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -606,8 +619,7 @@ class PayMerchantView(APIView):
                 "success": False,
                 "error": e.message,
                 "code": e.code,
-                "is_category_mismatch": e.code == "CATEGORY_RESTRICTION_ERROR",
-                "is_family_pass_error": "FAMILYPASS" in e.code or "OWNER" in e.code
+                "is_category_mismatch": e.code == "CATEGORY_RESTRICTION_ERROR"
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -640,16 +652,40 @@ class FamilyPassListView(APIView):
         if err:
             return err
 
+        user.sync_role()
+        today = timezone.localdate() if timezone.is_aware(timezone.now()) else timezone.now().date()
+
+        # Expire any overdue active passes
+        overdue = FamilyPass.objects.filter(status=FamilyPassStatus.ACTIVE, expiry_date__lt=today)
+        if overdue.exists():
+            for odp in overdue:
+                odp.status = FamilyPassStatus.EXPIRED
+                odp.save(update_fields=['status', 'updated_at'])
+                odp.member.sync_role()
+
         # 1. Passes issued by user (Owner view)
         issued_passes = FamilyPass.objects.filter(owner=user).order_by('-created_at')
 
         # 2. Passes received by user (Member view)
-        received_passes = FamilyPass.objects.filter(member=user, status=FamilyPassStatus.ACTIVE)
+        received_passes = FamilyPass.objects.filter(member=user, status=FamilyPassStatus.ACTIVE, expiry_date__gte=today)
+
+        # Build purpose options metadata for frontend UI dropdowns
+        purpose_options = [
+            {
+                "value": p.value,
+                "label": p.label,
+                "requires_custom": p == FamilyPassPurpose.OTHER
+            }
+            for p in FamilyPassPurpose
+        ]
 
         return Response({
             "issued_passes": FamilyPassSerializer(issued_passes, many=True).data,
             "received_passes": FamilyPassSerializer(received_passes, many=True).data,
-            "user_role": user.role
+            "user_role": user.effective_role,
+            "effective_role": user.effective_role,
+            "effective_role_display": user.get_effective_role_display(),
+            "purpose_options": purpose_options,
         })
 
     def post(self, request):
@@ -657,11 +693,52 @@ class FamilyPassListView(APIView):
         if err:
             return err
         try:
-            member_identifier = request.data.get('member')
-            limit_amount = Decimal(str(request.data.get('limit_amount', '0')))
-            duration_days = int(request.data.get('duration_days', 30))
+            member_identifier = request.data.get('member') or request.data.get('member_identifier')
+            raw_limit = request.data.get('limit_amount', '0')
+            try:
+                limit_amount = Decimal(str(raw_limit))
+            except Exception:
+                return Response({"error": "Invalid allowance limit format."}, status=status.HTTP_400_BAD_REQUEST)
+
+            if limit_amount <= Decimal('0.00'):
+                return Response({"error": "Allowance limit must be greater than zero."}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                duration_days = int(request.data.get('duration_days') or request.data.get('validity_days') or 30)
+            except Exception:
+                duration_days = 30
+
+            if duration_days <= 0:
+                return Response({"error": "Duration must be at least 1 day."}, status=status.HTTP_400_BAD_REQUEST)
+
             action = request.data.get('allowed_action', FamilyPassAction.MERCHANT_PAYMENT)
-            purpose_label = request.data.get('purpose_label', 'Family Spending')
+            if action not in FamilyPassAction.values:
+                action = FamilyPassAction.MERCHANT_PAYMENT
+
+            # Purpose validation with dropdown restriction
+            raw_purpose = request.data.get('purpose')
+            raw_purpose_label = (request.data.get('purpose_label') or '').strip()
+            custom_purpose = (request.data.get('custom_purpose') or '').strip()
+
+            if raw_purpose:
+                if raw_purpose not in FamilyPassPurpose.values:
+                    return Response({
+                        "error": f"Invalid purpose '{raw_purpose}'. Must be one of: {', '.join(FamilyPassPurpose.values)}."
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                purpose = raw_purpose
+            elif raw_purpose_label in FamilyPassPurpose.values:
+                purpose = raw_purpose_label
+            elif raw_purpose_label:
+                purpose = FamilyPassPurpose.OTHER
+                if not custom_purpose:
+                    custom_purpose = raw_purpose_label
+            else:
+                purpose = FamilyPassPurpose.OTHER
+
+            if purpose == FamilyPassPurpose.OTHER:
+                purpose_label = f"Other: {custom_purpose}" if custom_purpose else "Other"
+            else:
+                purpose_label = purpose
 
             is_eligible, err_msg, member = ContactService.check_recipient_eligibility(member_identifier, feature='FAMILY_PASS')
 
@@ -670,7 +747,6 @@ class FamilyPassListView(APIView):
                     {"error": err_msg or "Member not found. Check username or phone."},
                     status=status.HTTP_404_NOT_FOUND if "not found" in (err_msg or "").lower() else status.HTTP_400_BAD_REQUEST
                 )
-
 
             if member == user:
                 return Response({"error": "Cannot grant FamilyPass to yourself."}, status=status.HTTP_400_BAD_REQUEST)
@@ -687,15 +763,27 @@ class FamilyPassListView(APIView):
                 expiry_date=expiry_date,
                 allowed_action=action,
                 status=FamilyPassStatus.ACTIVE,
+                purpose=purpose,
+                custom_purpose=custom_purpose,
                 purpose_label=purpose_label
             )
+
+            # Sync recipient role immediately to FamilyPass Member
+            member.sync_role()
 
             # Send Notification to Member
             Notification.objects.create(
                 user=member,
                 title="🎁 New FamilyPass Granted",
-                message=f"{user.full_name or user.username} granted you a FamilyPass with ৳{limit_amount:,.2f} spending limit valid until {expiry_date}.",
-                notification_type=NotificationType.FAMILY_PASS
+                message=f"{user.full_name or user.username} granted you a FamilyPass for '{fp.purpose_label}' with ৳{limit_amount:,.2f} spending limit valid until {expiry_date}.",
+                notification_type=NotificationType.FAMILY_PASS,
+                metadata={
+                    "family_pass_id": fp.id,
+                    "owner": user.username,
+                    "purpose": fp.purpose,
+                    "limit_amount": float(limit_amount),
+                    "expiry_date": str(expiry_date)
+                }
             )
 
             return Response(FamilyPassSerializer(fp).data, status=status.HTTP_201_CREATED)
@@ -703,26 +791,187 @@ class FamilyPassListView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
+class FamilyPassDetailView(APIView):
+    """
+    Handles retrieving and editing a granted FamilyPass permission.
+    Strictly verifies ownership, prevents editing revoked/expired passes,
+    rejects limits below already-used amounts, and updates the recipient's role/state.
+    """
+    def get(self, request, pk):
+        user, err = require_auth(request)
+        if err:
+            return err
+        fp = get_object_or_404(FamilyPass, id=pk)
+        if fp.owner != user and fp.member != user:
+            return Response({"error": "Unauthorized access to FamilyPass details."}, status=status.HTTP_403_FORBIDDEN)
+        return Response(FamilyPassSerializer(fp).data)
+
+    def patch(self, request, pk):
+        return self._update(request, pk)
+
+    def put(self, request, pk):
+        return self._update(request, pk)
+
+    def post(self, request, pk):
+        return self._update(request, pk)
+
+    def _update(self, request, pk):
+        user, err = require_auth(request)
+        if err:
+            return err
+        fp = get_object_or_404(FamilyPass, id=pk)
+
+        # 1. Authorization: Only the granting owner may edit
+        if fp.owner != user:
+            return Response(
+                {"error": "Unauthorized: You can only edit FamilyPass permissions that you granted."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # 2. Status validation: Cannot edit revoked or expired passes
+        today = timezone.localdate() if timezone.is_aware(timezone.now()) else timezone.now().date()
+        if fp.status != FamilyPassStatus.ACTIVE:
+            return Response(
+                {"error": f"Cannot edit FamilyPass with status '{fp.status}'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if fp.expiry_date < today:
+            fp.status = FamilyPassStatus.EXPIRED
+            fp.save(update_fields=['status', 'updated_at'])
+            fp.member.sync_role()
+            return Response(
+                {"error": f"Cannot edit an expired FamilyPass (expired on {fp.expiry_date})."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 3. Allowance limit validation
+        if 'limit_amount' in request.data:
+            try:
+                new_limit = Decimal(str(request.data['limit_amount']))
+            except Exception:
+                return Response({"error": "Invalid allowance limit format."}, status=status.HTTP_400_BAD_REQUEST)
+
+            if new_limit <= Decimal('0.00'):
+                return Response({"error": "Allowance limit must be greater than zero."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Reject new allowance limit that is lower than amount already spent
+            if new_limit < fp.used_amount:
+                return Response(
+                    {"error": f"New allowance limit (৳{new_limit:,.2f}) cannot be lower than the amount already spent (৳{fp.used_amount:,.2f})."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            fp.limit_amount = new_limit
+
+        # 4. Expiry date validation
+        if 'expiry_date' in request.data and request.data['expiry_date']:
+            try:
+                raw_exp = request.data['expiry_date']
+                if isinstance(raw_exp, str):
+                    new_expiry = datetime.date.fromisoformat(raw_exp.strip())
+                else:
+                    new_expiry = raw_exp
+                if new_expiry < today:
+                    return Response({"error": "Expiry date cannot be in the past."}, status=status.HTTP_400_BAD_REQUEST)
+                fp.expiry_date = new_expiry
+            except Exception:
+                return Response({"error": "Invalid expiry date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+        elif 'duration_days' in request.data:
+            try:
+                days = int(request.data['duration_days'])
+                if days <= 0:
+                    return Response({"error": "Duration must be at least 1 day."}, status=status.HTTP_400_BAD_REQUEST)
+                fp.expiry_date = today + datetime.timedelta(days=days)
+            except Exception:
+                return Response({"error": "Invalid duration format."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 5. Purpose dropdown validation
+        if 'purpose' in request.data:
+            purpose_val = request.data['purpose']
+            if purpose_val not in FamilyPassPurpose.values:
+                return Response(
+                    {"error": f"Invalid purpose '{purpose_val}'. Supported options: {', '.join(FamilyPassPurpose.values)}."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            fp.purpose = purpose_val
+            if fp.purpose == FamilyPassPurpose.OTHER:
+                fp.custom_purpose = request.data.get('custom_purpose', '').strip()
+                fp.purpose_label = f"Other: {fp.custom_purpose}" if fp.custom_purpose else "Other"
+            else:
+                fp.custom_purpose = ''
+                fp.purpose_label = fp.purpose
+        elif 'custom_purpose' in request.data and fp.purpose == FamilyPassPurpose.OTHER:
+            fp.custom_purpose = request.data['custom_purpose'].strip()
+            fp.purpose_label = f"Other: {fp.custom_purpose}" if fp.custom_purpose else "Other"
+        elif 'purpose_label' in request.data and not fp.purpose:
+            fp.purpose_label = request.data['purpose_label'].strip()
+
+        # 6. Allowed Action
+        if 'allowed_action' in request.data:
+            action_val = request.data['allowed_action']
+            if action_val in FamilyPassAction.values:
+                fp.allowed_action = action_val
+
+        fp.save()
+
+        # Notify Member about the edit
+        Notification.objects.create(
+            user=fp.member,
+            title="✏️ FamilyPass Updated",
+            message=f"{user.full_name or user.username} updated your FamilyPass ({fp.purpose_label}). New limit: ৳{fp.limit_amount:,.2f}, valid until {fp.expiry_date}.",
+            notification_type=NotificationType.FAMILY_PASS,
+            metadata={
+                "family_pass_id": fp.id,
+                "new_limit": float(fp.limit_amount),
+                "remaining_limit": float(fp.remaining_limit),
+                "expiry_date": str(fp.expiry_date),
+                "purpose": fp.purpose
+            }
+        )
+
+        return Response({
+            "success": True,
+            "message": "FamilyPass updated successfully.",
+            "family_pass": FamilyPassSerializer(fp).data
+        })
+
+
 class FamilyPassRevokeView(APIView):
     def post(self, request, pk):
         user, err = require_auth(request)
         if err:
             return err
-        fp = get_object_or_404(FamilyPass, id=pk, owner=user)
+        fp = FamilyPass.objects.filter(id=pk).first()
+        if not fp:
+            return Response({"error": "FamilyPass not found."}, status=status.HTTP_404_NOT_FOUND)
+        if fp.owner != user:
+            return Response({"error": "Only the pass owner can revoke this permission."}, status=status.HTTP_403_FORBIDDEN)
         fp.status = FamilyPassStatus.REVOKED
         fp.save(update_fields=['status', 'updated_at'])
 
+        # Recalculate recipient's effective role immediately
+        member = fp.member
+        member.sync_role()
+
         # Notify Member
         Notification.objects.create(
-            user=fp.member,
-            title="FamilyPass Revoked",
-            message=f"{user.full_name or user.username} revoked your FamilyPass ({fp.purpose_label}).",
-            notification_type=NotificationType.FAMILY_PASS
+            user=member,
+            title="🚫 FamilyPass Revoked",
+            message=f"{user.full_name or user.username} revoked your FamilyPass ({fp.purpose_label}). This permission is no longer active.",
+            notification_type=NotificationType.FAMILY_PASS,
+            metadata={
+                "family_pass_id": fp.id,
+                "revoked_by": user.username,
+                "member_new_role": member.effective_role
+            }
         )
 
         return Response({
-            "message": f"FamilyPass for {fp.member.full_name or fp.member.username} has been immediately revoked.",
-            "family_pass": FamilyPassSerializer(fp).data
+            "success": True,
+            "message": f"FamilyPass for {member.full_name or member.username} has been immediately revoked.",
+            "family_pass": FamilyPassSerializer(fp).data,
+            "member_id": member.id,
+            "member_effective_role": member.effective_role,
+            "member_role_display": member.get_effective_role_display()
         })
 
 
@@ -1163,7 +1412,9 @@ class ContactResolveView(APIView):
                 "username": matched_user.username,
                 "full_name": matched_user.full_name,
                 "phone": matched_user.phone,
-                "role": matched_user.role,
+                "role": matched_user.effective_role,
+                "effective_role": matched_user.effective_role,
+                "effective_role_display": matched_user.get_effective_role_display(),
                 "avatar_url": getattr(matched_user, 'avatar_url', ''),
             } if matched_user else None
         })

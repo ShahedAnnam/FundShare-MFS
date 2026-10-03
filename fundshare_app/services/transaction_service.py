@@ -6,7 +6,8 @@ from fundshare_app.models import (
     User, Wallet, Merchant, PurposeFund, FundTransfer,
     FamilyPass, FamilyPassTransaction, Transaction, TransactionItem,
     TransactionType, PaymentSource, TransactionStatus,
-    FamilyPassStatus, Notification, NotificationType, AnomalyResult
+    FamilyPassStatus, Notification, NotificationType, AnomalyResult,
+    BusinessCategory
 )
 
 
@@ -329,9 +330,13 @@ class TransactionService:
                     return txn
 
                 elif payment_source == PaymentSource.FAMILY_PASS:
-                    # CRITICAL SECURITY MODEL: 7-POINT BACKEND VERIFICATION FOR FAMILYPASS
+                    # CRITICAL SECURITY MODEL: 8-POINT BACKEND VERIFICATION FOR FAMILYPASS
                     if not family_pass:
-                        raise TransactionValidationError("FamilyPass instance is required.")
+                        raise TransactionValidationError("FamilyPass instance is required.", code="FAMILYPASS_REQUIRED")
+
+                    # Lock FamilyPass and Owner Wallet to prevent concurrent overspending
+                    family_pass = FamilyPass.objects.select_for_update().get(id=family_pass.id)
+                    owner_wallet, _ = Wallet.objects.select_for_update().get_or_create(owner=family_pass.owner)
 
                     # 1. Active status check
                     if family_pass.status != FamilyPassStatus.ACTIVE:
@@ -342,6 +347,7 @@ class TransactionService:
                     if family_pass.expiry_date < today:
                         family_pass.status = FamilyPassStatus.EXPIRED
                         family_pass.save(update_fields=['status', 'updated_at'])
+                        family_pass.member.sync_role()
                         raise TransactionValidationError(f"FamilyPass expired on {family_pass.expiry_date}.", code="FAMILYPASS_EXPIRED")
 
                     # 3. Member authentication match (must NOT share credentials)
@@ -349,23 +355,21 @@ class TransactionService:
                         raise TransactionValidationError("Unauthorized user for this FamilyPass delegation.", code="FAMILYPASS_UNAUTHORIZED")
 
                     # 4. Action permission check
-                    # FamilyPass allows MERCHANT_PAYMENT by default
                     if family_pass.allowed_action not in ['MERCHANT_PAYMENT', 'ALL']:
                         raise TransactionValidationError("Action not permitted under current FamilyPass policy.", code="FAMILYPASS_ACTION_DENIED")
 
                     # 5. Remaining spending limit check
                     if family_pass.remaining_limit < amount:
                         raise TransactionValidationError(
-                            f"FamilyPass spending limit exceeded. Remaining: ৳{family_pass.remaining_limit:,.2f}, requested: ৳{amount:,.2f}",
+                            f"FamilyPass spending limit exceeded. Remaining allowance: ৳{family_pass.remaining_limit:,.2f}, requested: ৳{amount:,.2f}",
                             code="FAMILYPASS_LIMIT_EXCEEDED"
                         )
 
                     # 6. Owner normal wallet balance sufficiency check
-                    owner_wallet, _ = Wallet.objects.get_or_create(owner=family_pass.owner)
                     if owner_wallet.balance < amount:
                         raise TransactionValidationError("Owner's wallet balance is insufficient to cover this transaction.", code="OWNER_BALANCE_INSUFFICIENT")
 
-                    # Execute FamilyPass transaction
+                    # 7. Execute FamilyPass transaction atomically
                     owner_wallet.balance -= amount
                     owner_wallet.save(update_fields=['balance', 'updated_at'])
 

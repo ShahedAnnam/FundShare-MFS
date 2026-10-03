@@ -31,8 +31,43 @@ class User(AbstractUser):
     full_name = models.CharField(max_length=150, blank=True)
     avatar_url = models.CharField(max_length=255, blank=True, default='')
 
+    @property
+    def effective_role(self):
+        """
+        Derives the effective user role dynamically:
+        - Merchants and Admins retain their role.
+        - Customers become MEMBER if they hold at least one active, non-expired FamilyPass.
+        - When all assigned passes are revoked or expired, reverts to CUSTOMER.
+        """
+        if self.is_superuser or self.is_staff or self.role in [UserRole.ADMIN, UserRole.MERCHANT]:
+            return self.role
+        today = timezone.localdate() if timezone.is_aware(timezone.now()) else timezone.now().date()
+        has_active_pass = self.received_family_passes.filter(
+            status=FamilyPassStatus.ACTIVE,
+            expiry_date__gte=today
+        ).exists()
+        return UserRole.MEMBER if has_active_pass else UserRole.CUSTOMER
+
+    def get_effective_role_display(self):
+        role_val = self.effective_role
+        try:
+            return UserRole(role_val).label
+        except (ValueError, KeyError):
+            return role_val
+
+    def sync_role(self):
+        """
+        Safely synchronizes the stored role field with effective_role
+        without altering account identity, wallet, or other permissions.
+        """
+        eff = self.effective_role
+        if self.role in [UserRole.CUSTOMER, UserRole.MEMBER] and self.role != eff:
+            self.role = eff
+            self.save(update_fields=['role'])
+        return eff
+
     def __str__(self):
-        return f"{self.username} ({self.get_role_display()})"
+        return f"{self.username} ({self.get_effective_role_display()})"
 
 
 class Wallet(models.Model):
@@ -111,6 +146,18 @@ class FamilyPassAction(models.TextChoices):
     GROCERY_AND_MEDICINE = 'GROCERY_MEDICINE', 'Grocery & Medicine Only'
 
 
+class FamilyPassPurpose(models.TextChoices):
+    GROCERY = 'Grocery', 'Grocery'
+    EDUCATION = 'Education', 'Education'
+    MEDICAL = 'Medical', 'Medical'
+    SHOPPING = 'Shopping', 'Shopping'
+    DINING = 'Dining', 'Dining'
+    TRANSPORT = 'Transport', 'Transport'
+    BILLS_UTILITIES = 'Bills & Utilities', 'Bills & Utilities'
+    EMERGENCY = 'Emergency', 'Emergency'
+    OTHER = 'Other', 'Other'
+
+
 class FamilyPass(models.Model):
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='issued_family_passes')
     member = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_family_passes')
@@ -120,6 +167,9 @@ class FamilyPass(models.Model):
     expiry_date = models.DateField()
     allowed_action = models.CharField(max_length=50, choices=FamilyPassAction.choices, default=FamilyPassAction.MERCHANT_PAYMENT)
     status = models.CharField(max_length=20, choices=FamilyPassStatus.choices, default=FamilyPassStatus.ACTIVE)
+    purpose = models.CharField(max_length=50, choices=FamilyPassPurpose.choices, default=FamilyPassPurpose.OTHER)
+    custom_purpose = models.CharField(max_length=150, blank=True, default='')
+    allowed_categories = models.JSONField(default=list, blank=True)
     purpose_label = models.CharField(max_length=150, blank=True, default='Family Spending')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -130,6 +180,15 @@ class FamilyPass(models.Model):
         return max(Decimal('0.00'), rem)
 
     @property
+    def is_active(self):
+        return self.status == FamilyPassStatus.ACTIVE
+
+    @property
+    def is_expired(self):
+        today = timezone.localdate() if timezone.is_aware(timezone.now()) else timezone.now().date()
+        return self.expiry_date < today
+
+    @property
     def is_valid_and_active(self):
         if self.status != FamilyPassStatus.ACTIVE:
             return False
@@ -138,8 +197,61 @@ class FamilyPass(models.Model):
             return False
         return self.remaining_limit > Decimal('0.00')
 
+    def save(self, *args, **kwargs):
+        # Synchronize purpose and purpose_label
+        if not self.purpose:
+            if self.purpose_label in FamilyPassPurpose.values:
+                self.purpose = self.purpose_label
+            else:
+                lbl_lower = (self.purpose_label or "").lower()
+                matched_purpose = None
+                for p_val, p_lbl in FamilyPassPurpose.choices:
+                    if p_val == FamilyPassPurpose.OTHER:
+                        continue
+                    if p_val.lower() in lbl_lower or p_lbl.lower() in lbl_lower:
+                        matched_purpose = p_val
+                        break
+                if not matched_purpose:
+                    # Also check common synonyms
+                    if any(w in lbl_lower for w in ['pharmacy', 'health', 'clinic', 'hospital', 'doctor']):
+                        matched_purpose = FamilyPassPurpose.MEDICAL
+                    elif any(w in lbl_lower for w in ['school', 'college', 'tuition', 'exam']):
+                        matched_purpose = FamilyPassPurpose.EDUCATION
+                    elif any(w in lbl_lower for w in ['food', 'bazaar', 'kitchen']):
+                        matched_purpose = FamilyPassPurpose.GROCERY
+                    elif any(w in lbl_lower for w in ['electricity', 'water', 'gas', 'bill']):
+                        matched_purpose = FamilyPassPurpose.BILLS_UTILITIES
+                    elif any(w in lbl_lower for w in ['uber', 'ride', 'fare', 'bus', 'train']):
+                        matched_purpose = FamilyPassPurpose.TRANSPORT
+                    elif 'emergency' in lbl_lower:
+                        matched_purpose = FamilyPassPurpose.EMERGENCY
+
+                if matched_purpose:
+                    self.purpose = matched_purpose
+                else:
+                    self.purpose = FamilyPassPurpose.OTHER
+                    if not self.custom_purpose and self.purpose_label:
+                        self.custom_purpose = self.purpose_label
+
+        if self.purpose == FamilyPassPurpose.OTHER:
+            if self.custom_purpose:
+                self.purpose_label = f"Other: {self.custom_purpose}"
+            else:
+                self.purpose_label = "Other"
+        elif not self.purpose_label or self.purpose_label == 'Family Spending' or self.purpose_label in FamilyPassPurpose.values:
+            self.purpose_label = self.purpose
+
+        super().save(*args, **kwargs)
+
+        # Trigger safe role sync for member
+        if self.member_id:
+            try:
+                self.member.sync_role()
+            except Exception:
+                pass
+
     def __str__(self):
-        return f"FamilyPass: {self.owner.username} -> {self.member.username} (৳{self.used_amount}/৳{self.limit_amount})"
+        return f"FamilyPass: {self.owner.username} -> {self.member.username} [{self.purpose_label}] (৳{self.used_amount}/৳{self.limit_amount})"
 
 
 class TransactionType(models.TextChoices):

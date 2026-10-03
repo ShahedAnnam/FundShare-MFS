@@ -226,6 +226,8 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
 }
 .fp-action-revoke { background: var(--danger-light); color: var(--danger); }
 .fp-action-revoke:hover { background: var(--danger); color: #fff; }
+.fp-action-edit { background: var(--info-light); color: var(--info); }
+.fp-action-edit:hover { background: var(--info); color: #fff; }
 .fp-action-view { background: var(--primary-light); color: var(--primary-dark); }
 .fp-action-view:hover { background: var(--primary); color: #fff; }
 
@@ -1538,11 +1540,85 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
       </select>
     </div>
     <div class="form-group">
-      <label class="form-label">Purpose Label</label>
-      <input type="text" class="form-input" id="fpPurpose" placeholder="e.g., Household groceries, School expenses">
+      <label class="form-label">Purpose</label>
+      <select class="form-select" id="fpPurposeSelect" onchange="onFPPurposeSelectChange('create')">
+        <option value="Grocery" selected>🛒 Grocery</option>
+        <option value="Education">📚 Education</option>
+        <option value="Medical">💊 Medical</option>
+        <option value="Shopping">🛍️ Shopping</option>
+        <option value="Dining">🍽️ Dining</option>
+        <option value="Transport">🚌 Transport</option>
+        <option value="Bills & Utilities">⚡ Bills & Utilities</option>
+        <option value="Emergency">🚨 Emergency</option>
+        <option value="Other">📦 Other (Custom Label)</option>
+      </select>
+    </div>
+    <div class="form-group" id="fpCustomPurposeGroup" style="display:none;">
+      <label class="form-label">Custom Purpose Label</label>
+      <input type="text" class="form-input" id="fpCustomPurpose" placeholder="e.g., Books & School Supplies, Pet Care">
     </div>
     <button class="btn-primary" onclick="doCreateFamilyPass()">Grant FamilyPass</button>
     <div style="margin-top:10px"><button class="btn-secondary w-full" onclick="closeModal('createFPModal')">Cancel</button></div>
+  </div>
+</div>
+
+<!-- Edit FamilyPass Modal -->
+<div class="modal-overlay" id="editFPModal">
+  <div class="modal-sheet" style="max-height:90vh;overflow-y:auto;">
+    <div class="modal-handle"></div>
+    <div class="modal-title">✏️ Edit FamilyPass Permission</div>
+    <div class="modal-subtitle" id="editFPSubtitle">Update spending limit, purpose, or validity</div>
+    <div class="card" style="background:var(--bg);border:1px solid var(--border);padding:12px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:6px;">
+        <span style="color:var(--text-secondary);">Recipient Member:</span>
+        <strong id="editFPMemberName" style="color:var(--text);">---</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:6px;">
+        <span style="color:var(--text-secondary);">Already Spent:</span>
+        <strong id="editFPUsedAmount" style="color:var(--danger);">৳0.00</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;">
+        <span style="color:var(--text-secondary);">Current Limit:</span>
+        <strong id="editFPCurrentLimit" style="color:var(--primary);">৳0.00</strong>
+      </div>
+    </div>
+    <input type="hidden" id="editFPId">
+    <div class="form-group">
+      <label class="form-label">Allowance / Spending Limit (৳)</label>
+      <input type="number" class="form-input form-amount" id="editFPLimit" placeholder="0" min="1">
+      <div class="form-hint" id="editFPLimitHint">Must be at least the amount already spent</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Purpose</label>
+      <select class="form-select" id="editFPPurposeSelect" onchange="onFPPurposeSelectChange('edit')">
+        <option value="Grocery">🛒 Grocery</option>
+        <option value="Education">📚 Education</option>
+        <option value="Medical">💊 Medical</option>
+        <option value="Shopping">🛍️ Shopping</option>
+        <option value="Dining">🍽️ Dining</option>
+        <option value="Transport">🚌 Transport</option>
+        <option value="Bills & Utilities">⚡ Bills & Utilities</option>
+        <option value="Emergency">🚨 Emergency</option>
+        <option value="Other">📦 Other (Custom Label)</option>
+      </select>
+    </div>
+    <div class="form-group" id="editFPCustomPurposeGroup" style="display:none;">
+      <label class="form-label">Custom Purpose Label</label>
+      <input type="text" class="form-input" id="editFPCustomPurpose" placeholder="e.g., Household supplies">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Expiry Date</label>
+      <input type="date" class="form-input" id="editFPExpiryDate">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Allowed Action</label>
+      <select class="form-select" id="editFPAction">
+        <option value="MERCHANT_PAYMENT">Merchant Payment Only</option>
+        <option value="ALL">All Actions</option>
+      </select>
+    </div>
+    <button class="btn-primary" onclick="doSaveEditFamilyPass()">Save Changes</button>
+    <div style="margin-top:10px"><button class="btn-secondary w-full" onclick="closeModal('editFPModal')">Cancel</button></div>
   </div>
 </div>
 
@@ -1551,7 +1627,7 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
   <div class="modal-sheet">
     <div class="modal-handle"></div>
     <div class="modal-title">🔄 Reset Demo Data</div>
-    <div class="modal-subtitle">Re-seed the database with fresh demo data for evaluation</div>
+    <div class="modal-subtitle" id="seedDataSubtitle">Re-seed the database with fresh demo data for evaluation</div>
     <div class="card" style="background:var(--warning-light);border:1.5px solid var(--warning);">
       <div style="font-size:13px;color:#92400E;line-height:1.5;">⚠️ <strong>Warning:</strong> This will reset all data. Demo accounts and transactions will be restored to default state.</div>
     </div>
@@ -1567,6 +1643,12 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
     <div class="modal-handle"></div>
     <div class="modal-title">💳 Pay via FamilyPass</div>
     <div class="modal-subtitle" id="fpMemberPaySub">Using FamilyPass from: ---</div>
+
+    <!-- Pass Details Card (Purpose, Owner, Allowance, Expiry) -->
+    <div class="card" style="background:var(--primary-light);margin-bottom:12px;" id="fpPayLimitInfo">
+      <div style="font-size:12px;color:var(--primary-dark);">Remaining limit: loading...</div>
+    </div>
+
     <div class="form-group">
       <label class="form-label">Select Merchant</label>
       <select class="form-select" id="fpMerchantSelect" onchange="onFPMerchantSelectChange()"></select>
@@ -1589,9 +1671,6 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
     <div class="form-group" style="margin-top:10px;">
       <label class="form-label">Amount (৳)</label>
       <input type="number" class="form-input form-amount" id="fpPayAmount" placeholder="0" min="1">
-    </div>
-    <div class="card" style="background:var(--primary-light);" id="fpPayLimitInfo">
-      <div style="font-size:12px;color:var(--primary-dark);">Remaining limit: loading...</div>
     </div>
     <div style="height:12px"></div>
     <button class="btn-primary" onclick="doFPMemberPay()">Pay via FamilyPass</button>

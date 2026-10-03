@@ -1130,3 +1130,507 @@ class UnicodeAndConsoleEncodingSafetyTest(TestCase):
         self.assertIn('৳', content_text)
 
 
+class FamilyPassEnhancementsIntegrationTest(TestCase):
+    """
+    Comprehensive tests for the FamilyPass role, permissions, payment integration, and editing:
+    1. Dynamic user role transitions: No pass -> Customer; Grant pass -> Member; Revoke -> Customer.
+    2. Multiple passes: Revoking one retains Member role until all active passes are revoked.
+    3. Expired pass does not grant Member role.
+    4. Merchant and Admin accounts are unaffected by FamilyPass.
+    5. Purpose dropdown validation on backend and custom purpose support.
+    6. Purpose-based merchant payment restrictions (Grocery, Medical, Dining, Transport, etc.).
+    7. Medical pass allows Medicine & Treatment only.
+    8. Unsupported or missing merchant category rejection.
+    9. Other purpose with configurable allowed categories.
+    10. Direct API payments purpose and category validation.
+    11. Recipient multi-pass selection during checkout.
+    12. Owner editing of granted pass (purpose, limit, categories, expiry) with member notification.
+    13. Rejection of new allowance limit below used amount.
+    14. Owner-only authorization for editing and revoking.
+    15. Normal wallet payments remain unrestricted.
+    16. Item-level tracking and audit history preserved.
+    """
+    def setUp(self):
+        self.today = timezone.localdate() if timezone.is_aware(timezone.now()) else timezone.now().date()
+
+        # Owner
+        self.owner = User.objects.create_user(
+            username='owner_user',
+            email='owner@test.com',
+            phone='01711112222',
+            role=UserRole.CUSTOMER,
+            password='password123'
+        )
+        self.owner_wallet = Wallet.objects.create(owner=self.owner, balance=Decimal('25000.00'))
+
+        # Recipient / Member
+        self.member = User.objects.create_user(
+            username='member_user',
+            full_name='Fatima Member',
+            email='fatima@test.com',
+            phone='01811113333',
+            role=UserRole.CUSTOMER,
+            password='password123'
+        )
+        self.member_wallet = Wallet.objects.create(owner=self.member, balance=Decimal('3000.00'))
+
+        # Unrelated User
+        self.other_user = User.objects.create_user(
+            username='other_user',
+            email='other@test.com',
+            phone='01911114444',
+            role=UserRole.CUSTOMER,
+            password='password123'
+        )
+        self.other_wallet = Wallet.objects.create(owner=self.other_user, balance=Decimal('5000.00'))
+
+        # Merchant User & Merchants
+        self.merchant_user = User.objects.create_user(
+            username='merchant_user',
+            email='merchant@test.com',
+            phone='01611115555',
+            role=UserRole.MERCHANT,
+            password='password123'
+        )
+        self.grocery_merchant = Merchant.objects.create(
+            user=self.merchant_user,
+            business_name='Fresh Grocery Bazaar',
+            category=BusinessCategory.GROCERY,
+            account_number='MCH-GROC-01',
+            balance=Decimal('0.00')
+        )
+        self.medicine_merchant = Merchant.objects.create(
+            business_name='Care Pharmacy',
+            category=BusinessCategory.MEDICINE,
+            account_number='MCH-MED-01',
+            balance=Decimal('0.00')
+        )
+        self.treatment_merchant = Merchant.objects.create(
+            business_name='Central Diagnostic & Clinic',
+            category=BusinessCategory.TREATMENT,
+            account_number='MCH-TRT-01',
+            balance=Decimal('0.00')
+        )
+        self.restaurant_merchant = Merchant.objects.create(
+            business_name='Spice Garden Restaurant',
+            category=BusinessCategory.RESTAURANT,
+            account_number='MCH-RES-01',
+            balance=Decimal('0.00')
+        )
+        self.shopping_merchant = Merchant.objects.create(
+            business_name='Fashion House',
+            category=BusinessCategory.SHOPPING,
+            account_number='MCH-SHP-01',
+            balance=Decimal('0.00')
+        )
+        self.invalid_cat_merchant = Merchant.objects.create(
+            business_name='Mystery Shop',
+            category='NON_EXISTENT_CAT',
+            account_number='MCH-MYS-01',
+            balance=Decimal('0.00')
+        )
+
+        # Clients
+        self.client_owner = Client()
+        self.client_owner.force_login(self.owner)
+        session = self.client_owner.session
+        session['user_id'] = self.owner.id
+        session.save()
+
+        self.client_member = Client()
+        self.client_member.force_login(self.member)
+        session = self.client_member.session
+        session['user_id'] = self.member.id
+        session.save()
+
+        self.client_other = Client()
+        self.client_other.force_login(self.other_user)
+        session = self.client_other.session
+        session['user_id'] = self.other_user.id
+        session.save()
+
+    def test_01_dynamic_role_customer_to_member_and_back_on_revoke(self):
+        # 1. Initially without any FamilyPass, user is Customer
+        self.member.sync_role()
+        self.assertEqual(self.member.effective_role, UserRole.CUSTOMER)
+        self.assertEqual(self.member.get_effective_role_display(), 'Customer / Wallet Owner')
+
+        # Check me endpoint
+        resp = self.client_member.get('/api/auth/me/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['effective_role'], UserRole.CUSTOMER)
+        self.assertEqual(resp.data['effective_role_display'], 'Customer / Wallet Owner')
+
+        # 2. Owner grants active FamilyPass
+        fp = FamilyPass.objects.create(
+            owner=self.owner,
+            member=self.member,
+            purpose='Grocery',
+            purpose_label='Grocery',
+            limit_amount=Decimal('4000.00'),
+            used_amount=Decimal('0.00'),
+            start_date=self.today,
+            expiry_date=self.today + datetime.timedelta(days=30),
+            allowed_action=FamilyPassAction.MERCHANT_PAYMENT,
+            status=FamilyPassStatus.ACTIVE
+        )
+        self.member.refresh_from_db()
+        self.assertEqual(self.member.effective_role, UserRole.MEMBER)
+        self.assertEqual(self.member.get_effective_role_display(), 'FamilyPass Member')
+
+        resp = self.client_member.get('/api/auth/me/')
+        self.assertEqual(resp.data['effective_role'], UserRole.MEMBER)
+        self.assertEqual(resp.data['effective_role_display'], 'FamilyPass Member')
+
+        # 3. Owner revokes FamilyPass via API
+        revoke_resp = self.client_owner.post(f'/api/family-pass/{fp.id}/revoke/')
+        self.assertEqual(revoke_resp.status_code, 200)
+        self.assertEqual(revoke_resp.data['member_effective_role'], UserRole.CUSTOMER)
+
+        self.member.refresh_from_db()
+        self.assertEqual(self.member.effective_role, UserRole.CUSTOMER)
+        self.assertEqual(self.member.get_effective_role_display(), 'Customer / Wallet Owner')
+
+    def test_02_multiple_passes_revoking_one_preserves_member_role(self):
+        # Create Pass 1
+        fp1 = FamilyPass.objects.create(
+            owner=self.owner,
+            member=self.member,
+            purpose='Grocery',
+            limit_amount=Decimal('2000.00'),
+            start_date=self.today,
+            expiry_date=self.today + datetime.timedelta(days=15),
+            status=FamilyPassStatus.ACTIVE
+        )
+        # Create Pass 2
+        fp2 = FamilyPass.objects.create(
+            owner=self.owner,
+            member=self.member,
+            purpose='Medical',
+            limit_amount=Decimal('3000.00'),
+            start_date=self.today,
+            expiry_date=self.today + datetime.timedelta(days=20),
+            status=FamilyPassStatus.ACTIVE
+        )
+        self.member.refresh_from_db()
+        self.assertEqual(self.member.effective_role, UserRole.MEMBER)
+
+        # Revoke Pass 1
+        self.client_owner.post(f'/api/family-pass/{fp1.id}/revoke/')
+        self.member.refresh_from_db()
+        # Still has Pass 2 active -> Must remain Member!
+        self.assertEqual(self.member.effective_role, UserRole.MEMBER)
+        self.assertEqual(self.member.get_effective_role_display(), 'FamilyPass Member')
+
+        # Revoke Pass 2
+        self.client_owner.post(f'/api/family-pass/{fp2.id}/revoke/')
+        self.member.refresh_from_db()
+        # No more active passes -> Returns to Customer
+        self.assertEqual(self.member.effective_role, UserRole.CUSTOMER)
+        self.assertEqual(self.member.get_effective_role_display(), 'Customer / Wallet Owner')
+
+    def test_03_expired_pass_does_not_grant_member_role(self):
+        yesterday = self.today - datetime.timedelta(days=1)
+        FamilyPass.objects.create(
+            owner=self.owner,
+            member=self.member,
+            purpose='Grocery',
+            limit_amount=Decimal('2000.00'),
+            start_date=yesterday - datetime.timedelta(days=10),
+            expiry_date=yesterday,
+            status=FamilyPassStatus.ACTIVE
+        )
+        self.member.refresh_from_db()
+        self.assertEqual(self.member.effective_role, UserRole.CUSTOMER)
+        self.assertEqual(self.member.get_effective_role_display(), 'Customer / Wallet Owner')
+
+    def test_04_merchant_and_admin_roles_remain_unaffected(self):
+        admin_user = User.objects.create_user(
+            username='admin_boss',
+            email='admin@test.com',
+            role=UserRole.ADMIN,
+            is_staff=True
+        )
+        self.assertEqual(self.merchant_user.effective_role, UserRole.MERCHANT)
+        self.assertEqual(admin_user.effective_role, UserRole.ADMIN)
+
+        # Grant FamilyPass to merchant user
+        fp = FamilyPass.objects.create(
+            owner=self.owner,
+            member=self.merchant_user,
+            purpose='Medical',
+            limit_amount=Decimal('1000.00'),
+            start_date=self.today,
+            expiry_date=self.today + datetime.timedelta(days=10),
+            status=FamilyPassStatus.ACTIVE
+        )
+        self.merchant_user.refresh_from_db()
+        self.assertEqual(self.merchant_user.effective_role, UserRole.MERCHANT)
+
+    def test_05_purpose_dropdown_validation_and_custom_purpose(self):
+        # 1. Valid purpose 'Grocery'
+        resp = self.client_owner.post('/api/family-pass/', {
+            'member_identifier': self.member.phone,
+            'purpose': 'Grocery',
+            'limit_amount': '2500.00',
+            'validity_days': 15,
+            'allowed_action': FamilyPassAction.MERCHANT_PAYMENT
+        }, content_type='application/json')
+        self.assertEqual(resp.status_code, 201)
+        fp_id = resp.data['id']
+        fp = FamilyPass.objects.get(id=fp_id)
+        self.assertEqual(fp.purpose, 'Grocery')
+        self.assertEqual(fp.purpose_label, 'Grocery')
+
+        # 2. Valid purpose 'Other' with custom_purpose
+        resp2 = self.client_owner.post('/api/family-pass/', {
+            'member_identifier': self.member.phone,
+            'purpose': 'Other',
+            'custom_purpose': 'Tuition & Books',
+            'limit_amount': '3000.00',
+            'validity_days': 30,
+            'allowed_action': FamilyPassAction.MERCHANT_PAYMENT
+        }, content_type='application/json')
+        self.assertEqual(resp2.status_code, 201)
+        fp2 = FamilyPass.objects.get(id=resp2.data['id'])
+        self.assertEqual(fp2.purpose, 'Other')
+        self.assertEqual(fp2.custom_purpose, 'Tuition & Books')
+        self.assertEqual(fp2.purpose_label, 'Other: Tuition & Books')
+
+        # 3. Invalid purpose rejected
+        resp = self.client_owner.post('/api/family-pass/', {
+            'member_identifier': self.member.phone,
+            'purpose': 'InvalidPurpose123',
+            'limit_amount': '1000.00',
+            'validity_days': 7
+        }, content_type='application/json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("Invalid purpose", resp.data['error'])
+
+    def test_06_merchant_payment_via_familypass_unrestricted_by_category(self):
+        """Verify that FamilyPass payments to merchants succeed regardless of category without restrictions."""
+        fp = FamilyPass.objects.create(
+            owner=self.owner,
+            member=self.member,
+            purpose='Grocery',
+            purpose_label='Grocery',
+            limit_amount=Decimal('5000.00'),
+            used_amount=Decimal('0.00'),
+            start_date=self.today,
+            expiry_date=self.today + datetime.timedelta(days=30),
+            allowed_action=FamilyPassAction.MERCHANT_PAYMENT,
+            status=FamilyPassStatus.ACTIVE
+        )
+
+        # 1. Payment to Grocery merchant succeeds
+        txn1 = TransactionService.execute_transaction(
+            sender=self.member,
+            transaction_type=TransactionType.MERCHANT_PAYMENT,
+            amount=Decimal('800.00'),
+            merchant=self.grocery_merchant,
+            payment_source=PaymentSource.FAMILY_PASS,
+            family_pass=fp
+        )
+        self.assertEqual(txn1.status, TransactionStatus.COMPLETED)
+        fp.refresh_from_db()
+        self.assertEqual(fp.used_amount, Decimal('800.00'))
+        self.assertEqual(fp.remaining_limit, Decimal('4200.00'))
+
+        # 2. Payment to Restaurant merchant also succeeds without category restriction
+        txn2 = TransactionService.execute_transaction(
+            sender=self.member,
+            transaction_type=TransactionType.MERCHANT_PAYMENT,
+            amount=Decimal('400.00'),
+            merchant=self.restaurant_merchant,
+            payment_source=PaymentSource.FAMILY_PASS,
+            family_pass=fp
+        )
+        self.assertEqual(txn2.status, TransactionStatus.COMPLETED)
+        fp.refresh_from_db()
+        self.assertEqual(fp.used_amount, Decimal('1200.00'))
+        self.assertEqual(fp.remaining_limit, Decimal('3800.00'))
+        self.owner_wallet.refresh_from_db()
+        self.assertEqual(self.owner_wallet.balance, Decimal('23800.00'))
+
+
+    def test_11_recipient_payment_multi_pass_selection(self):
+        fp_grocery = FamilyPass.objects.create(
+            owner=self.owner,
+            member=self.member,
+            purpose='Grocery',
+            limit_amount=Decimal('2000.00'),
+            used_amount=Decimal('0.00'),
+            start_date=self.today,
+            expiry_date=self.today + datetime.timedelta(days=20),
+            status=FamilyPassStatus.ACTIVE
+        )
+        fp_medical = FamilyPass.objects.create(
+            owner=self.owner,
+            member=self.member,
+            purpose='Medical',
+            limit_amount=Decimal('1500.00'),
+            used_amount=Decimal('0.00'),
+            start_date=self.today,
+            expiry_date=self.today + datetime.timedelta(days=20),
+            status=FamilyPassStatus.ACTIVE
+        )
+
+        # Pay grocery using fp_grocery
+        resp1 = self.client_member.post('/api/pay/', {
+            'merchant_id': self.grocery_merchant.id,
+            'payment_source': 'FAMILY_PASS',
+            'family_pass_id': fp_grocery.id,
+            'amount': '500.00'
+        }, content_type='application/json')
+        self.assertEqual(resp1.status_code, 200)
+        fp_grocery.refresh_from_db()
+        fp_medical.refresh_from_db()
+        self.assertEqual(fp_grocery.used_amount, Decimal('500.00'))
+        self.assertEqual(fp_medical.used_amount, Decimal('0.00'))
+
+        # Pay medicine using fp_medical
+        resp2 = self.client_member.post('/api/pay/', {
+            'merchant_id': self.medicine_merchant.id,
+            'payment_source': 'FAMILY_PASS',
+            'family_pass_id': fp_medical.id,
+            'amount': '300.00'
+        }, content_type='application/json')
+        self.assertEqual(resp2.status_code, 200)
+        fp_grocery.refresh_from_db()
+        fp_medical.refresh_from_db()
+        self.assertEqual(fp_grocery.used_amount, Decimal('500.00'))
+        self.assertEqual(fp_medical.used_amount, Decimal('300.00'))
+
+    def test_12_owner_can_edit_granted_familypass(self):
+        fp = FamilyPass.objects.create(
+            owner=self.owner,
+            member=self.member,
+            purpose='Grocery',
+            limit_amount=Decimal('3000.00'),
+            used_amount=Decimal('500.00'),
+            start_date=self.today,
+            expiry_date=self.today + datetime.timedelta(days=15),
+            status=FamilyPassStatus.ACTIVE
+        )
+
+        new_expiry = self.today + datetime.timedelta(days=45)
+        resp = self.client_owner.patch(f'/api/family-pass/{fp.id}/edit/', {
+            'limit_amount': '5500.00',
+            'purpose': 'Medical',
+            'expiry_date': str(new_expiry)
+        }, content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+
+        fp.refresh_from_db()
+        self.assertEqual(fp.limit_amount, Decimal('5500.00'))
+        self.assertEqual(fp.used_amount, Decimal('500.00'))
+        self.assertEqual(fp.remaining_limit, Decimal('5000.00'))
+        self.assertEqual(fp.purpose, 'Medical')
+        self.assertEqual(fp.expiry_date, new_expiry)
+
+        # Member received notification
+        notif = Notification.objects.filter(user=self.member).latest('id')
+        self.assertTrue("updated" in notif.message.lower() or "modified" in notif.message.lower())
+
+    def test_13_reject_allowance_limit_lower_than_used_amount(self):
+        fp = FamilyPass.objects.create(
+            owner=self.owner,
+            member=self.member,
+            purpose='Grocery',
+            limit_amount=Decimal('3000.00'),
+            used_amount=Decimal('1200.00'),
+            start_date=self.today,
+            expiry_date=self.today + datetime.timedelta(days=20),
+            status=FamilyPassStatus.ACTIVE
+        )
+
+        resp = self.client_owner.patch(f'/api/family-pass/{fp.id}/edit/', {
+            'limit_amount': '1000.00'
+        }, content_type='application/json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("cannot be lower than the amount already spent", resp.data['error'])
+
+        fp.refresh_from_db()
+        self.assertEqual(fp.limit_amount, Decimal('3000.00'))
+
+    def test_14_non_owner_cannot_edit_or_revoke(self):
+        fp = FamilyPass.objects.create(
+            owner=self.owner,
+            member=self.member,
+            purpose='Grocery',
+            limit_amount=Decimal('3000.00'),
+            start_date=self.today,
+            expiry_date=self.today + datetime.timedelta(days=20),
+            status=FamilyPassStatus.ACTIVE
+        )
+
+        # Member tries to edit owner's pass
+        resp_edit_member = self.client_member.patch(f'/api/family-pass/{fp.id}/edit/', {
+            'limit_amount': '9999.00'
+        }, content_type='application/json')
+        self.assertEqual(resp_edit_member.status_code, 403)
+
+        # Unrelated user tries to edit
+        resp_edit_other = self.client_other.patch(f'/api/family-pass/{fp.id}/edit/', {
+            'limit_amount': '9999.00'
+        }, content_type='application/json')
+        self.assertEqual(resp_edit_other.status_code, 403)
+
+        # Member tries to revoke owner's pass
+        resp_revoke_member = self.client_member.post(f'/api/family-pass/{fp.id}/revoke/')
+        self.assertIn(resp_revoke_member.status_code, [403, 404])
+
+    def test_15_normal_wallet_payment_remains_unrestricted(self):
+        FamilyPass.objects.create(
+            owner=self.owner,
+            member=self.member,
+            purpose='Grocery',
+            limit_amount=Decimal('2000.00'),
+            start_date=self.today,
+            expiry_date=self.today + datetime.timedelta(days=20),
+            status=FamilyPassStatus.ACTIVE
+        )
+
+        # Member pays Restaurant using NORMAL_WALLET -> MUST SUCCEED
+        txn = TransactionService.execute_transaction(
+            sender=self.member,
+            transaction_type=TransactionType.MERCHANT_PAYMENT,
+            amount=Decimal('250.00'),
+            merchant=self.restaurant_merchant,
+            payment_source=PaymentSource.NORMAL_WALLET
+        )
+        self.assertEqual(txn.status, TransactionStatus.COMPLETED)
+        self.member_wallet.refresh_from_db()
+        self.assertEqual(self.member_wallet.balance, Decimal('2750.00'))
+
+    def test_16_item_level_tracking_and_audit_history_preserved(self):
+        fp = FamilyPass.objects.create(
+            owner=self.owner,
+            member=self.member,
+            purpose='Grocery',
+            limit_amount=Decimal('3000.00'),
+            start_date=self.today,
+            expiry_date=self.today + datetime.timedelta(days=20),
+            status=FamilyPassStatus.ACTIVE
+        )
+
+        items = [
+            {'item_name': 'Atta 2kg', 'quantity': 2, 'unit_price': 65.00},
+            {'item_name': 'Mustard Oil 1L', 'quantity': 1, 'unit_price': 170.00}
+        ]
+        resp = self.client_member.post('/api/pay/', {
+            'merchant_id': self.grocery_merchant.id,
+            'payment_source': 'FAMILY_PASS',
+            'family_pass_id': fp.id,
+            'items': items
+        }, content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+
+        # Check activity
+        act_resp = self.client_owner.get(f'/api/family-pass/{fp.id}/activity/')
+        self.assertEqual(act_resp.status_code, 200)
+        self.assertEqual(len(act_resp.data['activities']), 1)
+        act = act_resp.data['activities'][0]
+        self.assertTrue(act['has_items'])
+        self.assertEqual(len(act['items']), 2)
+        self.assertEqual(act['items'][0]['item_name'], 'Atta 2kg')

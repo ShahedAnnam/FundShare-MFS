@@ -13,8 +13,11 @@ class IndexView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['user'] = self.request.user
-        ctx['user_role'] = self.request.user.role
+        if self.request.user.is_authenticated:
+            self.request.user.sync_role()
+            ctx['user'] = self.request.user
+            ctx['user_role'] = self.request.user.effective_role
+            ctx['user_role_display'] = self.request.user.get_effective_role_display()
         return ctx
 
 

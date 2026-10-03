@@ -210,10 +210,12 @@ function renderHeader() {
 // ROLE-BASED UI
 // ============================================================
 function checkRoleBasedUI() {
-  const role = state.user?.role;
+  const role = state.user?.effective_role || state.user?.role || 'CUSTOMER';
   // Show/hide nav items based on role
   const fundsNav = document.getElementById('nav-funds');
   const fpNav = document.getElementById('nav-familypass');
+  const ov = document.getElementById('fpOwnerView');
+  const mv = document.getElementById('fpMemberView');
 
   if (role === 'MERCHANT') {
     // Merchant: hide funds and familypass nav
@@ -222,21 +224,27 @@ function checkRoleBasedUI() {
   } else if (role === 'MEMBER') {
     // Member: show familypass but no fund creation
     if (fundsNav) fundsNav.style.display = 'none';
+    if (fpNav) fpNav.style.display = 'flex';
+    if (ov) ov.style.display = 'none';
+    if (mv) mv.style.display = 'block';
+  } else {
+    // Customer / Wallet Owner: full normal access
+    if (fundsNav) fundsNav.style.display = 'flex';
+    if (fpNav) fpNav.style.display = 'flex';
+    if (ov) ov.style.display = 'block';
+    if (mv) mv.style.display = 'none';
   }
 
   // Role badge on profile
   const roleBadge = document.getElementById('profileRoleBadge');
   if (roleBadge) {
-    const labels = { CUSTOMER: '👤 Customer', MEMBER: '👥 FamilyPass Member', MERCHANT: '🏪 Merchant', ADMIN: '🔑 Admin' };
+    const labels = {
+      CUSTOMER: '👤 Customer / Wallet Owner',
+      MEMBER: '👥 FamilyPass Member',
+      MERCHANT: '🏪 Merchant',
+      ADMIN: '🔑 Admin / Evaluator'
+    };
     roleBadge.textContent = labels[role] || role;
-  }
-
-  // FamilyPass view switching
-  if (role === 'MEMBER') {
-    const ov = document.getElementById('fpOwnerView');
-    const mv = document.getElementById('fpMemberView');
-    if (ov) ov.style.display = 'none';
-    if (mv) mv.style.display = 'block';
   }
 }
 
@@ -484,11 +492,12 @@ function buildPaymentSourceSelector(merchant) {
   // FamilyPass for members
   const receivedPasses = (state.familyPasses.received || []).filter(fp => fp.status === 'ACTIVE');
   receivedPasses.forEach(fp => {
+    const pIcon = PURPOSE_ICONS[fp.purpose] || '🎯';
     html += `<div class="source-option" onclick="selectSource(this,'FAMILY_PASS',${fp.id})">
       <span class="source-radio"></span>
       <div class="source-info">
-        <div class="source-name">👨‍👩‍👧 FamilyPass from ${fp.owner_name || 'Owner'}</div>
-        <div class="source-balance">Remaining: ৳${fmt(fp.remaining_limit)}</div>
+        <div class="source-name">👨‍👩‍👧 ${pIcon} ${fp.purpose_label} (from ${fp.owner_name || 'Owner'})</div>
+        <div class="source-balance">Available: ৳${fmt(fp.remaining_limit)} / Limit: ৳${fmt(fp.limit_amount)} • Expires: ${fp.expiry_date}</div>
       </div>
       <span class="source-badge source-badge-purple">FamilyPass</span>
     </div>`;
@@ -510,17 +519,51 @@ function selectSource(el, source, id) {
 }
 
 // ============================================================
+// FAMILYPASS PURPOSE CONFIGURATION & METADATA
+// ============================================================
+const PURPOSE_ICONS = {
+  'Grocery': '🛒',
+  'Education': '📚',
+  'Medical': '💊',
+  'Shopping': '🛍️',
+  'Dining': '🍽️',
+  'Transport': '🚌',
+  'Bills & Utilities': '⚡',
+  'Emergency': '🚨',
+  'Other': '📦'
+};
+
+function onFPPurposeSelectChange(mode) {
+  const prefix = mode === 'edit' ? 'editFP' : 'fp';
+  const sel = document.getElementById(`${prefix}PurposeSelect`);
+  const purpose = sel ? sel.value : 'Grocery';
+  const customGroup = document.getElementById(`${prefix}CustomPurposeGroup`);
+
+  if (purpose === 'Other') {
+    if (customGroup) customGroup.style.display = 'block';
+  } else {
+    if (customGroup) customGroup.style.display = 'none';
+  }
+}
+
+// ============================================================
 // FAMILYPASS
 // ============================================================
 async function loadFamilyPass() {
   const data = await apiGet('/api/family-pass/');
   if (!data) return;
   state.familyPasses = { issued: data.issued_passes || [], received: data.received_passes || [] };
+  if (data.effective_role && state.user) {
+    state.user.role = data.effective_role;
+    state.user.effective_role = data.effective_role;
+    state.user.effective_role_display = data.effective_role_display;
+    checkRoleBasedUI();
+  }
   renderFamilyPass();
 }
 
 function renderFamilyPass() {
-  const role = state.user?.role;
+  const role = state.user?.effective_role || state.user?.role;
   if (role === 'MEMBER') {
     renderFPMemberView();
   } else {
@@ -547,13 +590,17 @@ function renderFPOwnerView() {
     const pct = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
     const statusClass = { ACTIVE: 'fp-status-active', REVOKED: 'fp-status-revoked', EXPIRED: 'fp-status-expired' }[fp.status] || 'fp-status-expired';
     const initials = (fp.member_name || fp.member_username || 'M').substring(0, 2).toUpperCase();
+    const pIcon = PURPOSE_ICONS[fp.purpose] || '🎯';
+
     return `<div class="fp-card">
       <div class="fp-header">
         <div class="fp-member">
           <div class="fp-avatar">${initials}</div>
           <div>
-            <div class="fp-member-name">${fp.member_name || fp.member_username}</div>
-            <div class="fp-member-phone">${fp.purpose_label || 'Family Spending'}</div>
+            <div class="fp-member-name">${fp.member_name || fp.member_username} (@${fp.member_username})</div>
+            <div style="margin-top:2px;">
+              <span class="pill pill-green" style="font-size:10px;font-weight:700;">${pIcon} ${fp.purpose_label || 'Family Spending'}</span>
+            </div>
           </div>
         </div>
         <span class="fp-status-badge ${statusClass}">${fp.status}</span>
@@ -577,14 +624,17 @@ function renderFPOwnerView() {
           <span class="fp-meta-label">Expires</span>
         </div>
         <div class="fp-meta-item">
-          <span class="fp-meta-value">${fp.allowed_action || 'Pay'}</span>
-          <span class="fp-meta-label">Action</span>
+          <span class="fp-meta-value">${fp.allowed_action === 'ALL' ? 'All Actions' : 'Merchant Pay'}</span>
+          <span class="fp-meta-label">Permission</span>
         </div>
       </div>
       ${fp.status === 'ACTIVE' ? `<div class="fp-actions">
+        <button class="fp-action-btn fp-action-edit" onclick="openEditFPModal(${fp.id})">✏️ Edit</button>
         <button class="fp-action-btn fp-action-revoke" onclick="revokeFP(${fp.id})">🚫 Revoke</button>
         <button class="fp-action-btn fp-action-view" onclick="viewFPActivity(${fp.id})">📋 View Activity</button>
-      </div>` : ''}
+      </div>` : `<div class="fp-actions">
+        <button class="fp-action-btn fp-action-view" style="flex:1;" onclick="viewFPActivity(${fp.id})">📋 View Activity</button>
+      </div>`}
     </div>`;
   }).join('');
 }
@@ -604,12 +654,19 @@ function renderFPMemberView() {
     const limit = parseFloat(fp.limit_amount) || 0;
     const used = parseFloat(fp.used_amount) || 0;
     const rem = parseFloat(fp.remaining_limit) || (limit - used);
+    const pIcon = PURPOSE_ICONS[fp.purpose] || '🎯';
+
     return `<div class="received-fp-card">
-      <div class="rfp-owner">From: ${fp.owner_name || fp.owner_username}</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+        <div class="rfp-owner">From: <strong>${fp.owner_name || fp.owner_username}</strong></div>
+        <span class="pill pill-purple" style="font-size:11px;background:rgba(255,255,255,0.25);color:#fff;font-weight:700;">${pIcon} ${fp.purpose_label}</span>
+      </div>
       <div class="rfp-limit">৳${fmt(limit)}</div>
       <div class="rfp-limit-label">Total Spending Limit</div>
       <div class="rfp-remaining">৳${fmt(rem)} remaining</div>
-      <div class="rfp-expiry">Expires: ${fp.expiry_date || '---'} • ${fp.purpose_label || 'General'}</div>
+      <div class="rfp-expiry" style="margin-top:6px;">
+        📅 Valid until: <strong>${fp.expiry_date || '---'}</strong>
+      </div>
       <div style="height:16px"></div>
       <button class="btn-primary" style="background:rgba(255,255,255,0.25);border:1.5px solid rgba(255,255,255,0.4);" 
         onclick="openFPMemberPay(${fp.id},'${fp.owner_name || fp.owner_username}',${rem})">
@@ -1210,8 +1267,6 @@ async function doPayMerchant() {
     const err = r.data;
     if (err.is_category_mismatch) {
       showToast('error', `🚫 Category Restriction: Cannot pay ${merchant.category} merchant using this fund`, 6000);
-    } else if (err.is_family_pass_error) {
-      showToast('error', `🚫 FamilyPass Error: ${err.error}`, 6000);
     } else {
       showToast('error', err.error || 'Payment failed');
     }
@@ -1219,38 +1274,138 @@ async function doPayMerchant() {
 }
 
 async function doCreateFamilyPass() {
-  const member = document.getElementById('fpMember').value;
+  const member = document.getElementById('fpMember').value.trim();
   const limit = document.getElementById('fpLimit').value;
   const duration = document.getElementById('fpDuration').value;
-  const purpose = document.getElementById('fpPurpose').value;
+  const purpose = document.getElementById('fpPurposeSelect') ? document.getElementById('fpPurposeSelect').value : 'Grocery';
+  const customPurpose = document.getElementById('fpCustomPurpose') ? document.getElementById('fpCustomPurpose').value.trim() : '';
+
   if (!member) { showToast('error', 'Enter member phone or username'); return; }
-  if (!limit || limit <= 0) { showToast('error', 'Enter a valid spending limit'); return; }
-  const r = await apiPost('/api/family-pass/', {
-    member, limit_amount: limit, duration_days: duration,
-    purpose_label: purpose || 'Family Spending'
-  });
+  if (!limit || parseFloat(limit) <= 0) { showToast('error', 'Enter a valid spending limit greater than zero'); return; }
+
+  const payload = {
+    member,
+    limit_amount: limit,
+    duration_days: duration,
+    purpose,
+    custom_purpose: customPurpose
+  };
+
+  const r = await apiPost('/api/family-pass/', payload);
   if (!r) return;
   if (r.ok) {
     showToast('success', `✅ FamilyPass granted to ${member}!`);
     closeModal('createFPModal');
     document.getElementById('fpMember').value = '';
     document.getElementById('fpLimit').value = '';
-    document.getElementById('fpPurpose').value = '';
+    if (document.getElementById('fpCustomPurpose')) document.getElementById('fpCustomPurpose').value = '';
     loadFamilyPass();
   } else {
     showToast('error', r.data.error || 'Failed to create FamilyPass');
   }
 }
 
+let currentEditingPass = null;
+
+async function openEditFPModal(id) {
+  const passes = state.familyPasses.issued || [];
+  let fp = passes.find(p => p.id === id);
+  if (!fp) {
+    const res = await apiGet(`/api/family-pass/${id}/`);
+    if (res) fp = res;
+  }
+  if (!fp) {
+    showToast('error', 'FamilyPass not found');
+    return;
+  }
+  currentEditingPass = fp;
+
+  document.getElementById('editFPId').value = fp.id;
+  document.getElementById('editFPMemberName').textContent = `${fp.member_name || fp.member_username} (@${fp.member_username})`;
+  document.getElementById('editFPUsedAmount').textContent = `৳${fmt(fp.used_amount)}`;
+  document.getElementById('editFPCurrentLimit').textContent = `৳${fmt(fp.limit_amount)}`;
+  document.getElementById('editFPLimit').value = fp.limit_amount;
+  document.getElementById('editFPLimit').min = fp.used_amount;
+  document.getElementById('editFPLimitHint').textContent = `Must be at least ৳${fmt(fp.used_amount)} (amount already spent)`;
+  document.getElementById('editFPExpiryDate').value = fp.expiry_date || '';
+  if (document.getElementById('editFPAction')) {
+    document.getElementById('editFPAction').value = fp.allowed_action || 'MERCHANT_PAYMENT';
+  }
+
+  const pSel = document.getElementById('editFPPurposeSelect');
+  if (pSel) {
+    pSel.value = fp.purpose || 'Other';
+    onFPPurposeSelectChange('edit');
+    if (fp.purpose === 'Other') {
+      document.getElementById('editFPCustomPurpose').value = fp.custom_purpose || '';
+    }
+  }
+
+  openModal('editFPModal');
+}
+
+async function doSaveEditFamilyPass() {
+  if (!currentEditingPass) return;
+  const id = document.getElementById('editFPId').value;
+  const limit = document.getElementById('editFPLimit').value;
+  const purpose = document.getElementById('editFPPurposeSelect').value;
+  const customPurpose = document.getElementById('editFPCustomPurpose').value.trim();
+  const expiryDate = document.getElementById('editFPExpiryDate').value;
+  const action = document.getElementById('editFPAction') ? document.getElementById('editFPAction').value : 'MERCHANT_PAYMENT';
+
+  if (!limit || parseFloat(limit) <= 0) {
+    showToast('error', 'Enter a valid spending limit greater than zero.');
+    return;
+  }
+
+  const used = parseFloat(currentEditingPass.used_amount) || 0;
+  if (parseFloat(limit) < used) {
+    showToast('error', `New limit (৳${fmt(limit)}) cannot be lower than amount already spent (৳${fmt(used)}).`);
+    return;
+  }
+
+  if (!expiryDate) {
+    showToast('error', 'Please select an expiry date.');
+    return;
+  }
+
+  // Confirmation before saving important permission changes
+  if (!confirm(`Are you sure you want to save changes to this FamilyPass for ${currentEditingPass.member_name || currentEditingPass.member_username}?`)) {
+    return;
+  }
+
+  const payload = {
+    limit_amount: limit,
+    expiry_date: expiryDate,
+    purpose: purpose,
+    custom_purpose: customPurpose,
+    allowed_action: action
+  };
+
+  const r = await apiPatch(`/api/family-pass/${id}/`, payload);
+  if (!r) return;
+  if (r.ok) {
+    showToast('success', 'FamilyPass updated successfully!');
+    closeModal('editFPModal');
+    loadFamilyPass();
+  } else {
+    showToast('error', r.data.error || 'Failed to update FamilyPass');
+  }
+}
+
 async function revokeFP(id) {
-  if (!confirm('Revoke this FamilyPass? This cannot be undone.')) return;
+  if (!confirm('Are you sure you want to revoke this FamilyPass? The recipient will immediately lose spending permission.')) return;
   const r = await apiPost(`/api/family-pass/${id}/revoke/`, {});
   if (!r) return;
   if (r.ok) {
-    showToast('success', 'FamilyPass revoked successfully');
+    showToast('success', r.data.message || 'FamilyPass revoked successfully');
     loadFamilyPass();
+    // If the logged in user was the member, recalculate their state
+    if (state.user && state.user.id === r.data.member_id) {
+      loadMe();
+    }
   } else {
-    showToast('error', r.data.error || 'Failed to revoke');
+    showToast('error', r.data.error || 'Failed to revoke FamilyPass');
   }
 }
 
@@ -1488,6 +1643,7 @@ async function doFPMemberPay() {
 
   const items = checkoutItems.fpMember;
   let amount = document.getElementById('fpPayAmount').value;
+  const remLimit = parseFloat(state.selectedFamilyPass.remaining_limit || state.selectedFamilyPass.remaining) || 0;
 
   if (items.length > 0) {
     for (let itm of items) {
@@ -1505,14 +1661,14 @@ async function doFPMemberPay() {
       }
     }
     const total = items.reduce((s, it) => s + (it.quantity * it.unit_price), 0);
-    if (total > state.selectedFamilyPass.remaining) {
-      showToast('error', `Spending exceeds remaining FamilyPass allowance (৳${fmt(state.selectedFamilyPass.remaining)})`);
+    if (total > remLimit) {
+      showToast('error', `Spending exceeds remaining FamilyPass allowance (৳${fmt(remLimit)})`);
       return;
     }
   } else {
     if (!amount || amount <= 0) { showToast('error', 'Enter a valid amount'); return; }
-    if (parseFloat(amount) > state.selectedFamilyPass.remaining) {
-      showToast('error', `Amount exceeds remaining FamilyPass allowance (৳${fmt(state.selectedFamilyPass.remaining)})`);
+    if (parseFloat(amount) > remLimit) {
+      showToast('error', `Amount exceeds remaining FamilyPass allowance (৳${fmt(remLimit)})`);
       return;
     }
   }
@@ -1536,6 +1692,7 @@ async function doFPMemberPay() {
     checkoutItems.fpMember = [];
     document.getElementById('fpPayAmount').value = '';
     loadFamilyPass();
+    loadDashboard();
   } else {
     showToast('error', r.data.error || 'Payment failed');
   }
