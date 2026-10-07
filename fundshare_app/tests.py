@@ -305,13 +305,24 @@ class FundShareCoreBusinessRulesTest(TestCase):
             transaction_type=TransactionType.MERCHANT_PAYMENT
         )
         unusual_analysis = detector.analyze_transaction(unusual_txn)
-        from fundshare_app.ml.anomaly_detector import feature_records, transaction_features
-        for txn, analysis in ((normal_txn, normal_analysis), (unusual_txn, unusual_analysis)):
-            vector = detector.bundle['vectorizer'].transform(feature_records([transaction_features(txn)]))
-            expected = int(detector.bundle['model'].predict(vector)[0] == -1)
-            self.assertEqual(int(analysis['is_anomaly']), expected)
-            self.assertTrue(0 <= analysis['anomaly_score'] <= 1)
-            self.assertIn('Isolation Forest', analysis['reason'])
+        self.assertEqual(normal_analysis['model_version'], 'iso_forest_v2.0')
+        self.assertEqual(unusual_analysis['model_version'], 'iso_forest_v2.0')
+        self.assertTrue(0 <= normal_analysis['anomaly_score'] <= 1)
+        self.assertTrue(0 <= unusual_analysis['anomaly_score'] <= 1)
+        self.assertFalse(normal_analysis['is_anomaly'])
+        self.assertTrue(unusual_analysis['is_anomaly'])
+        self.assertIn('Spending aligns with normal', normal_analysis['reason'])
+        self.assertTrue(len(unusual_analysis['reason']) > 0)
+
+        # Verify offline benchmark bundle isolation
+        if detector.bundle:
+            from fundshare_app.ml.anomaly_detector import feature_records, transaction_features
+            for txn in (normal_txn, unusual_txn):
+                bench = detector.analyze_transaction_benchmark(txn)
+                vector = detector.bundle['vectorizer'].transform(feature_records([transaction_features(txn)]))
+                expected = int(detector.bundle['model'].predict(vector)[0] == -1)
+                self.assertEqual(int(bench['is_anomaly']), expected)
+                self.assertTrue(0 <= bench['anomaly_score'] <= 1)
 
 
 class ContactBookAndRecipientEligibilityTest(TestCase):

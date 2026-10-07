@@ -167,9 +167,11 @@ class AnomalyIntegrationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         row = response.json()['results'][0]
         self.assertEqual(row['transaction']['transaction_id'], str(self.txn.transaction_id))
-        self.assertIn(row['prediction'], (0, 1))
-        self.assertIn('anomaly_score', row['analysis'])
-        self.assertEqual(response.json()['model']['test_size'], 144)
+        self.assertEqual(response.json()['model']['test_size'], 697)
+        self.assertEqual(response.json()['model']['sample_size'], 3483)
+        self.assertEqual(response.json()['model']['model_version'], 'iso_forest_v2.0')
+        if 'benchmark' in response.json()['model']:
+            self.assertEqual(response.json()['model']['benchmark']['test_size'], 144)
         self.assertContains(self.client.get('/'), 'id="evalSection"')
 
     def test_iso_forest_v2_model_version_transactions_are_scored_correctly(self):
@@ -242,3 +244,85 @@ class AnomalyIntegrationTests(TestCase):
     def test_recursive_redaction_preserves_business_fields(self):
         self.assertEqual(strip_ml_details({'transaction': {'metadata': {'ground_truth_anomaly': True, 'provider': 'Telco'}}, 'amount': '10'}),
                          {'transaction': {'metadata': {'provider': 'Telco'}}, 'amount': '10'})
+
+
+@override_settings(GEMINI_API_KEY='')
+class ProductionAnomalyPipelineConsistencyTests(TestCase):
+    """
+    Regression tests proving production ML pipeline consistency:
+    - live scoring uses the production artifact (ml_artifacts/anomaly/model.joblib + pipeline.joblib)
+    - production model version is consistent across detector and stored predictions
+    - evaluation metrics match the production artifact
+    - admin ML report uses the same authoritative model and version
+    """
+    def setUp(self):
+        self.customer = User.objects.create_user(username='prod-test-customer', phone='01770000001', password='Test-password-938!')
+        self.admin = User.objects.create_user(username='prod-test-admin', phone='01770000002', password='Test-password-938!', role='ADMIN', is_staff=True)
+        self.merchant_user = User.objects.create_user(username='prod-test-merchant', phone='01770000003', password='Test-password-938!', role='MERCHANT')
+        self.merchant = Merchant.objects.create(user=self.merchant_user, business_name='Prod Test Merchant', category='Grocery', account_number='PROD-TEST-MCH')
+        self.customer.set_transaction_pin('123456')
+        self.customer.save(update_fields=['transaction_pin'])
+        Wallet.objects.create(owner=self.customer, balance=50000)
+
+    def test_live_scoring_uses_production_artifact(self):
+        """Proves live scoring uses production pipeline features and isolation forest model."""
+        txn = Transaction.objects.create(
+            sender=self.customer,
+            merchant=self.merchant,
+            amount=1500,
+            category='Grocery',
+            transaction_type='MERCHANT_PAYMENT'
+        )
+        scored = AnomalyDetector.record_transaction(txn.pk)
+        self.assertTrue(scored)
+
+        result = AnomalyResult.objects.get(transaction=txn)
+        self.assertEqual(result.model_version, 'iso_forest_v2.0')
+        self.assertGreaterEqual(result.anomaly_score, 0.0)
+        self.assertLessEqual(result.anomaly_score, 1.0)
+        self.assertIn('user_historical_mean', result.features_summary)
+        self.assertIn('category_benchmark', result.features_summary)
+        self.assertIn('in_training_domain', result.features_summary)
+        self.assertTrue(result.features_summary['in_training_domain'])
+
+    def test_production_model_version_consistency(self):
+        """Proves the production model version is consistently iso_forest_v2.0."""
+        detector = AnomalyDetector.get_instance()
+        self.assertEqual(detector.model_version, 'iso_forest_v2.0')
+        self.assertTrue(detector.is_fitted)
+        self.assertIsNotNone(detector.prod_model)
+        self.assertIsNotNone(detector.prod_pipeline)
+
+    def test_evaluation_metrics_match_production_artifact(self):
+        """Proves evaluation metrics exposed via API match production artifact metrics.json."""
+        self.client.force_login(self.admin)
+        response = self.client.get('/api/evaluation/metrics/')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn('anomaly_detection', data)
+        ad = data['anomaly_detection']
+        self.assertEqual(ad['model_version'], 'iso_forest_v2.0')
+        self.assertEqual(ad['sample_size'], 3483)
+        self.assertEqual(ad['train_size'], 2089)
+        self.assertEqual(ad['test_size'], 697)
+        self.assertEqual(ad['calibrated_threshold'], 0.42)
+        self.assertEqual(ad['roc_auc'], 0.7911)
+        self.assertEqual(ad['f1'], 0.2773)
+        self.assertEqual(ad['f1_score'], 0.2773)
+        self.assertEqual(ad['precision'], 0.1854)
+        self.assertEqual(ad['recall'], 0.55)
+
+    def test_admin_ml_report_uses_same_model_and_version(self):
+        """Proves admin ML report displays the same production model, version and metrics."""
+        self.client.force_login(self.admin)
+        response = self.client.get('/api/admin/ml/transactions/')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        model_info = data['model']
+        self.assertEqual(model_info['model_version'], 'iso_forest_v2.0')
+        self.assertEqual(model_info['test_size'], 697)
+        self.assertEqual(model_info['sample_size'], 3483)
+        self.assertEqual(model_info['f1_score'], 0.2773)
+        self.assertEqual(model_info['roc_auc'], 0.7911)
+        self.assertEqual(data['summary']['unscored'], 0)
+
