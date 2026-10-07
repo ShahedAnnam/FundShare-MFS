@@ -67,6 +67,7 @@ urlpatterns = [
     path('reports/', api_views.ReportsView.as_view(), name='api-reports'),
 
     # Evaluations & Experiments (Admin / Judges)
+    path('admin/ml/transactions/', api_views.MLTransactionReportView.as_view(), name='api-ml-transactions'),
     path('evaluation/metrics/', api_views.EvaluationMetricsView.as_view(), name='api-evaluation-metrics'),
     path('evaluation/experiments/', api_views.ExperimentRecordsView.as_view(), name='api-evaluation-experiments'),
     path('admin/ml/transactions/', api_views.MLTransactionReportView.as_view(), name='api-ml-transactions'),

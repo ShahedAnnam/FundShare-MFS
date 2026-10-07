@@ -25,6 +25,7 @@ these rules. Explain unfamiliar restrictions simply. App alerts/forecasts are gu
 must not trigger automatic actions. There is no real external settlement in this prototype.
 For general feature questions, do not dump unrequested financial summaries."""
 
+SUPPORT_INSTRUCTION += "\nAnomaly classifications and ML evaluation reports are ADMIN-only. Never infer, disclose or invent anomaly labels or model scores for customers or merchants."
 
 def get_support_context(user):
     report = ReportService.generate_report(user, 'monthly')
@@ -57,7 +58,7 @@ def get_support_context(user):
                      'direction': 'shared_by_you' if txn.family_pass_id and txn.family_pass.owner_id == user.id and txn.sender_id != user.id
                      else 'sent' if txn.sender_id == user.id else 'received'} for txn in recent]
     wallet = getattr(user, 'wallet', None)
-    return {'as_of': timezone.now().isoformat(), 'currency': 'BDT', 'limited_recent_records': True,
+    context = {'as_of': timezone.now().isoformat(), 'currency': 'BDT', 'limited_recent_records': True,
             'wallet_balance': str(wallet.balance) if wallet else None,
             'monthly_summary': {key: overview.get(key) for key in ('total_income', 'total_spent', 'net_savings', 'savings_rate_pct', 'total_transactions')},
             'category_spending': dict(list(report.get('by_category', {}).items())[:6]),
@@ -65,5 +66,7 @@ def get_support_context(user):
             'family_passes_issued': passes(FamilyPass.objects.filter(owner=user, status='ACTIVE'), 'issued'),
             'family_passes_received': passes(FamilyPass.objects.filter(member=user, status='ACTIVE'), 'received'),
             'recent_transactions': transactions,
-            'insight_types': list(AIInsight.objects.filter(user=user, is_dismissed=False).order_by('-created_at').values_list('insight_type', flat=True)[:4]),
-            'unusual_activity': list(AnomalyResult.objects.filter(user=user, is_anomaly=True).order_by('-created_at').values('anomaly_score')[:4])}
+            'insight_types': list(AIInsight.objects.filter(user=user, is_dismissed=False).exclude(insight_type='ANOMALY').order_by('-created_at').values_list('insight_type', flat=True)[:4])}
+    if user.effective_role == 'ADMIN':
+        context['unusual_activity'] = list(AnomalyResult.objects.filter(user=user, is_anomaly=True).order_by('-created_at').values('anomaly_score')[:4])
+    return context

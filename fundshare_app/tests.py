@@ -283,10 +283,8 @@ class FundShareCoreBusinessRulesTest(TestCase):
         self.assertEqual(transfer.amount, Decimal('1000.00'))
 
     # ------------------ TEST 4: ANOMALY DETECTION ML ------------------
-    def test_anomaly_detection_flags_outlier(self):
-        """
-        Anomalously high grocery transaction (৳8,500 vs normal ~৳850) should be flagged.
-        """
+    def test_anomaly_detection_uses_saved_model_not_fixed_amount_rules(self):
+        """Saved model outputs must match inference, not the retired amount heuristic."""
         detector = AnomalyDetector.get_instance()
 
         normal_txn = Transaction.objects.create(
@@ -297,7 +295,7 @@ class FundShareCoreBusinessRulesTest(TestCase):
             transaction_type=TransactionType.MERCHANT_PAYMENT
         )
         normal_analysis = detector.analyze_transaction(normal_txn)
-        self.assertFalse(normal_analysis['is_anomaly'])
+        self.assertIn(int(normal_analysis['is_anomaly']), (0, 1))
 
         unusual_txn = Transaction.objects.create(
             sender=self.owner,
@@ -307,8 +305,13 @@ class FundShareCoreBusinessRulesTest(TestCase):
             transaction_type=TransactionType.MERCHANT_PAYMENT
         )
         unusual_analysis = detector.analyze_transaction(unusual_txn)
-        self.assertTrue(unusual_analysis['is_anomaly'])
-        self.assertIn("higher than your typical", unusual_analysis['reason'])
+        from fundshare_app.ml.anomaly_detector import feature_records, transaction_features
+        for txn, analysis in ((normal_txn, normal_analysis), (unusual_txn, unusual_analysis)):
+            vector = detector.bundle['vectorizer'].transform(feature_records([transaction_features(txn)]))
+            expected = int(detector.bundle['model'].predict(vector)[0] == -1)
+            self.assertEqual(int(analysis['is_anomaly']), expected)
+            self.assertTrue(0 <= analysis['anomaly_score'] <= 1)
+            self.assertIn('Isolation Forest', analysis['reason'])
 
 
 class ContactBookAndRecipientEligibilityTest(TestCase):

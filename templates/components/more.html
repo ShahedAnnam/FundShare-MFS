@@ -32,6 +32,7 @@
       </div>
     </div>
 
+    {% if user_role == 'ADMIN' %}
     <!-- Admin/Evaluator Section -->
     <div id="evalSection" style="display:none">
       <div class="section-title">AI / ML Transaction Report & Evaluation</div>
@@ -48,6 +49,6 @@
       <div id="mlReport" class="ml-report" aria-live="polite"></div>
       <div class="ml-pagination"><span id="mlPageLabel"></span><button id="mlPrev" class="icon-button" title="Previous page" aria-label="Previous page" onclick="loadMLReport(mlPage-1)" disabled><i data-lucide="chevron-left"></i></button><button id="mlNext" class="icon-button" title="Next page" aria-label="Next page" onclick="loadMLReport(mlPage+1)" disabled><i data-lucide="chevron-right"></i></button></div>
     </div>
-
+    {% endif %}
 
 </div>

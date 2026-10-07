@@ -42,6 +42,7 @@ venv/
 .venv/
 env/
 ENV/
+.local/
 
 # Static files & Media
 staticfiles/

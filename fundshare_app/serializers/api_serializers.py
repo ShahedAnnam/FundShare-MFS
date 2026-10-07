@@ -180,8 +180,6 @@ class TransactionSerializer(serializers.ModelSerializer):
     purpose_fund_name = serializers.CharField(source='purpose_fund.name', read_only=True)
     items = TransactionItemSerializer(many=True, read_only=True)
     has_items = serializers.SerializerMethodField()
-    has_anomaly = serializers.SerializerMethodField()
-    anomaly_reason = serializers.SerializerMethodField()
 
     class Meta:
         model = Transaction
@@ -190,19 +188,15 @@ class TransactionSerializer(serializers.ModelSerializer):
             'receiver', 'receiver_name', 'merchant', 'merchant_name', 'merchant_location', 'amount',
             'transaction_type', 'payment_source', 'purpose_fund', 'purpose_fund_name',
             'family_pass', 'category', 'status', 'rejection_reason', 'reference',
-            'metadata', 'timestamp', 'has_anomaly', 'anomaly_reason', 'items', 'has_items'
+            'metadata', 'timestamp', 'items', 'has_items'
         ]
 
     def get_has_items(self, obj):
         return obj.items.exists()
 
-    def get_has_anomaly(self, obj):
-        return hasattr(obj, 'anomaly_analysis') and obj.anomaly_analysis.is_anomaly
-
-    def get_anomaly_reason(self, obj):
-        if hasattr(obj, 'anomaly_analysis') and obj.anomaly_analysis.is_anomaly:
-            return obj.anomaly_analysis.reason
-        return ''
+    def to_representation(self, instance):
+        from fundshare_app.ml.privacy import strip_ml_details
+        return strip_ml_details(super().to_representation(instance))
 
 
 class FamilyPassTransactionSerializer(serializers.ModelSerializer):
@@ -262,6 +256,7 @@ class NotificationSerializer(serializers.ModelSerializer):
 
 
 class AnomalyResultSerializer(serializers.ModelSerializer):
+    prediction = serializers.IntegerField(read_only=True)
     transaction_id = serializers.CharField(source='transaction.transaction_id', read_only=True)
     amount = serializers.DecimalField(source='transaction.amount', max_digits=12, decimal_places=2, read_only=True)
     category = serializers.CharField(source='transaction.category', read_only=True)
@@ -269,7 +264,7 @@ class AnomalyResultSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = AnomalyResult
-        fields = ['id', 'transaction_id', 'amount', 'category', 'merchant_name', 'is_anomaly', 'anomaly_score', 'reason', 'features_summary', 'model_version', 'created_at']
+        fields = ['id', 'transaction_id', 'amount', 'category', 'merchant_name', 'prediction', 'is_anomaly', 'anomaly_score', 'reason', 'features_summary', 'model_version', 'created_at']
 
 
 class BudgetForecastSerializer(serializers.ModelSerializer):

@@ -376,7 +376,7 @@ class ConcurrentTransactionTests(SecurityFixtures, TransactionTestCase):
         key = str(uuid.uuid4())
         jobs = [self.payment_job(self.owner, key) for _ in range(2)]
         results = self.run_parallel(jobs)
-        # SQLite shared-memory tests may reject a busy attempt; the same key is retried.
+        # A transient database failure is retried with the original idempotency key.
         for i, result in enumerate(results):
             if result.status_code == 503:
                 results[i] = jobs[i]()

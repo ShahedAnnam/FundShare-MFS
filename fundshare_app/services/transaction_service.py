@@ -1,13 +1,12 @@
 import uuid
 from decimal import Decimal
-from django.db import transaction as db_transaction, connection
-from django.db.models import F
+from django.db import transaction as db_transaction
 from django.utils import timezone
 from fundshare_app.models import (
     User, Wallet, Merchant, PurposeFund, FundTransfer,
     FamilyPass, FamilyPassTransaction, Transaction, TransactionItem,
     TransactionType, PaymentSource, TransactionStatus,
-    FamilyPassStatus, Notification, NotificationType, AnomalyResult,
+    FamilyPassStatus, Notification, NotificationType,
     BusinessCategory, FundStatus, UserRole
 )
 
@@ -51,8 +50,6 @@ class TransactionService:
     def lock_wallets(owner_ids):
         for owner_id in sorted(set(owner_ids)):
             Wallet.objects.get_or_create(owner_id=owner_id)
-        if connection.vendor == 'sqlite':
-            Wallet.objects.filter(owner_id__in=owner_ids).update(balance=F('balance'))
         return list(Wallet.objects.select_for_update().filter(owner_id__in=owner_ids).order_by('owner_id'))
 
     @classmethod
@@ -951,36 +948,6 @@ class TransactionService:
 
     @classmethod
     def _check_anomaly_and_record(cls, txn: Transaction):
-        """
-        Runs real-time spending anomaly detection on completed transactions.
-        """
-        if connection.in_atomic_block:
-            db_transaction.on_commit(lambda: cls._check_anomaly_and_record(txn))
-            return
-        try:
-            from fundshare_app.ml.anomaly_detector import AnomalyDetector
-            detector = AnomalyDetector.get_instance()
-            analysis = detector.analyze_transaction(txn)
-            if analysis:
-                AnomalyResult.objects.update_or_create(
-                    transaction=txn,
-                    defaults={
-                        'user': txn.sender,
-                        'is_anomaly': analysis['is_anomaly'],
-                        'anomaly_score': analysis['anomaly_score'],
-                        'reason': analysis['reason'],
-                        'features_summary': analysis['features_summary'],
-                        'model_version': analysis['model_version']
-                    }
-                )
-                if analysis['is_anomaly'] and txn.sender:
-                    Notification.objects.create(
-                        user=txn.sender,
-                        title="⚠️ Unusual Spending Flagged",
-                        message=f"Transaction of ৳{txn.amount:,.2f} in {txn.category or 'General'} was flagged as unusual: {analysis['reason'][:120]}...",
-                        notification_type=NotificationType.ANOMALY_ALERT,
-                        metadata={'transaction_id': txn.transaction_id, 'score': analysis['anomaly_score']}
-                    )
-        except Exception as e:
-            # Anomaly check failure must not rollback the transaction
-            pass
+        # All transaction types are scored by the central post-commit signal.
+        # Keep the compatibility hook without duplicating inference or customer alerts.
+        return None

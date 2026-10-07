@@ -12,6 +12,7 @@ class FundshareAppConfig(AppConfig):
     verbose_name = 'FUNDShare MFS'
 
     def ready(self):
+        from fundshare_app import signals  # noqa: F401
         try:
             from fundshare_app.encoding import setup_console_encoding
             setup_console_encoding()

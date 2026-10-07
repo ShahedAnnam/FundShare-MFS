@@ -262,7 +262,7 @@ class FinancialGoalAdmin(admin.ModelAdmin):
 
 
 @admin.register(AnomalyResult)
-class AnomalyResultAdmin(admin.ModelAdmin):
+class AnomalyResultAdmin(FinancialReadOnlyAdmin):
     list_display = (
         'id', 'transaction', 'user', 'is_anomaly',
         'anomaly_score', 'model_version', 'created_at'

@@ -213,7 +213,6 @@ WSGI_APPLICATION = 'fundshare_core.wsgi.application'
 # ============================================================
 
 import dj_database_url
-
 database_url = os.environ.get('DATABASE_URL', '').strip()
 if database_url:
     DATABASES = {'default': dj_database_url.parse(database_url, conn_max_age=0 if DEBUG else 60, conn_health_checks=True)}

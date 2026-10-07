@@ -1052,7 +1052,7 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
       <button class="ai-prompt-chip" onclick="sendQuickPrompt('Which fund is at risk of overrun?')">⚠️ Fund risks</button>
       <button class="ai-prompt-chip" onclick="sendQuickPrompt('Recommend next month allocations')">📊 Next month</button>
       <button class="ai-prompt-chip" onclick="sendQuickPrompt('Show FamilyPass spending status')">👥 FamilyPass</button>
-      <button class="ai-prompt-chip" onclick="sendQuickPrompt('Explain unusual flagged transactions')">🔍 Anomalies</button>
+      {% if user_role == 'ADMIN' %}<button class="ai-prompt-chip" onclick="sendQuickPrompt('Explain unusual flagged transactions')">🔍 Anomalies</button>{% endif %}
       <button class="ai-prompt-chip" onclick="sendQuickPrompt('Give me my financial health summary')">📑 Summary</button>
     </div>
 
