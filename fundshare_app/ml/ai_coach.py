@@ -126,7 +126,10 @@ class FinancialAIService:
     @classmethod
     def get_user_financial_context(cls, user) -> Dict[str, Any]:
         """Gathers context strictly for this authenticated user."""
-        return MLContextBuilder.build_user_context(user)
+        ctx = MLContextBuilder.build_user_context(user)
+        if getattr(user, 'effective_role', None) != 'ADMIN' and getattr(user, 'role', None) != 'ADMIN':
+            ctx.pop('anomalies', None)
+        return ctx
 
     @classmethod
     def explain_transaction(cls, user, transaction: Transaction) -> Dict[str, Any]:
@@ -190,47 +193,6 @@ class FinancialAIService:
             return cls._handle_action_refusal(question, lang)
 
         try:
-            from google import genai
-            from google.genai import types
-
-            client = genai.Client(api_key=gemini_key, http_options=types.HttpOptions(timeout=10000))
-
-            mo = facts['monthly_overview']
-            system_instruction = (
-                "You are the AI Financial Coach for FundShare, an innovative MFS (Mobile Financial Services) platform in Bangladesh.\n"
-                "Your role is STRICTLY ADVISORY. You explain information conversationally based ONLY on the supplied user context.\n\n"
-                "MANDATORY OPERATIONAL RULES:\n"
-                "1. Use ONLY the supplied user financial facts. Never invent balances, transactions, forecasts, anomaly scores, or dates.\n"
-                "2. Never access, infer, or discuss another user's information.\n"
-                "3. Never claim an anomaly means fraud. Explicitly state that unusual behavior does not mean fraudulent activity.\n"
-                "4. Clearly distinguish: (a) ML model predictions, (b) deterministic business rules, (c) historical ledger facts, and (d) AI explanation.\n"
-                "5. If requested information is missing, state truthfully that sufficient historical data is unavailable.\n"
-                "6. Do not fabricate confidence values or future transactions.\n"
-                "7. DO NOT authorize payments, DO NOT transfer money, DO NOT modify funds, and DO NOT change limits.\n"
-                "8. If the user asks you to execute a financial action (e.g. transfer money), explain that you cannot execute actions directly and guide them to use FundShare's authorized PIN confirmation flow.\n"
-                "9. When discussing forecasts, use phrases like 'the model predicts', 'based on recent spending', 'the system detected'. Never present predictions as guaranteed outcomes.\n"
-                "10. All currency in Bangladeshi Taka (৳). Language: " + ('Bengali' if lang == 'bn' else 'English') + ".\n"
-            )
-
-            user_prompt = (
-                f"AUTHENTICATED USER FINANCIAL CONTEXT:\n"
-                f"- Name: {facts['user']['name']} ({facts['user']['username']})\n"
-                f"- Wallet Balance: ৳{facts['wallet']['balance']:,.2f}\n"
-                f"- This Month's Income: ৳{mo['total_income']:,.2f}\n"
-                f"- This Month's Spent: ৳{mo['total_spent']:,.2f}\n"
-                f"- Net Savings: ৳{mo['net_savings']:,.2f} (Savings Rate: {mo['savings_rate_pct']}%)\n"
-                f"- Category Breakdown: {mo['by_category']}\n"
-                f"- Active Purpose Funds & Forecasts: {facts['purpose_funds']}\n"
-                f"- FamilyPass Issued: {facts['family_passes_issued']}\n"
-                f"- FamilyPass Received: {facts['family_passes_received']}\n"
-                f"- Recent Transactions: {facts['recent_spending']}\n"
-                f"- Flagged Anomalies: {facts['anomalies']}\n"
-                f"- Financial Health Signals: {facts['financial_signals']}\n\n"
-                f"USER QUESTION: {question}\n\n"
-                f"Provide a concise, grounded, empathetic answer:"
-            )
-
-            # Build support context and contents
             from google import genai
             from google.genai import types
 
@@ -465,6 +427,12 @@ class FinancialAIService:
 
         facts = cls.get_user_financial_context(user)
         intent = cls.detect_intent(question)
+        if intent == 'ANOMALY' and getattr(user, 'effective_role', None) != 'ADMIN' and getattr(user, 'role', None) != 'ADMIN':
+            return {
+                'answer': 'Transaction anomaly classifications and model evaluation reports are available to ADMIN users only. You can still review History, spending summaries and budget forecasts.',
+                'source': 'offline',
+                'intent': intent
+            }
 
         # Immediate refusal of any autonomous financial action
         if intent == "ACTION_REQUEST":
