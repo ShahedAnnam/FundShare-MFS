@@ -59,7 +59,11 @@ urlpatterns = [
     # AI & Intelligence
     path('intelligence/dashboard/', api_views.IntelligenceDashboardView.as_view(), name='api-intelligence-dashboard'),
     path('ai/query/', api_views.AICoachQueryView.as_view(), name='api-ai-coach'),         # JS uses /api/ai/query/
+    path('ai/coach/', api_views.AICoachQueryView.as_view(), name='api-ai-coach-post'),
     path('intelligence/coach/', api_views.AICoachQueryView.as_view(), name='api-ai-coach2'),
+    path('ai/recommendations/', api_views.AIRecommendationsView.as_view(), name='api-ai-recommendations'),
+    path('ai/forecast/', api_views.AIForecastView.as_view(), name='api-ai-forecast'),
+    path('ai/transaction/<str:txn_id>/explain/', api_views.AITransactionExplainView.as_view(), name='api-ai-transaction-explain'),
     path('reports/', api_views.ReportsView.as_view(), name='api-reports'),
 
     # Evaluations & Experiments (Admin / Judges)

@@ -1,0 +1,17 @@
+{
+  "features": [
+    "amount",
+    "hour",
+    "weekday",
+    "is_weekend",
+    "user_amount_ratio",
+    "user_z_score",
+    "cat_amount_ratio",
+    "cat_z_score",
+    "merchant_freq",
+    "cat_freq",
+    "hour_sin",
+    "hour_cos"
+  ],
+  "version": "iso_forest_v2.0_causal"
+}

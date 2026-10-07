@@ -222,6 +222,16 @@ DATABASES = {
 if os.environ.get('DATABASE_URL'):
     import dj_database_url
     DATABASES['default'] = dj_database_url.parse(os.environ['DATABASE_URL'], conn_max_age=60)
+elif os.environ.get('POSTGRES_DB') or os.environ.get('DB_NAME'):
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('POSTGRES_DB') or os.environ.get('DB_NAME'),
+        'USER': os.environ.get('POSTGRES_USER') or os.environ.get('DB_USER', 'postgres'),
+        'PASSWORD': os.environ.get('POSTGRES_PASSWORD') or os.environ.get('DB_PASSWORD', ''),
+        'HOST': os.environ.get('POSTGRES_HOST') or os.environ.get('DB_HOST', 'localhost'),
+        'PORT': os.environ.get('POSTGRES_PORT') or os.environ.get('DB_PORT', '5432'),
+        'CONN_MAX_AGE': 60,
+    }
 elif not DEBUG:
     raise RuntimeError('DATABASE_URL must specify PostgreSQL when DEBUG=False.')
 if not DEBUG and DATABASES['default']['ENGINE'] != 'django.db.backends.postgresql':

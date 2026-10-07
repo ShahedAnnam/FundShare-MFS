@@ -1,0 +1,71 @@
+{
+  "dataset_name": "FUNDShare Synthetic Historical Financial Dataset",
+  "notice": "SYNTHETIC DATA \u2014 NOT REAL UPAY CUSTOMER DATA",
+  "random_seed": 2026,
+  "date_range": {
+    "start_date": "2026-04-11",
+    "end_date": "2026-10-07",
+    "total_days": 179
+  },
+  "volume_statistics": {
+    "total_customer_users": 25,
+    "total_merchants": 32,
+    "total_purpose_funds": 77,
+    "total_family_passes": 10,
+    "total_transactions": 3310,
+    "average_transactions_per_user": 132.4,
+    "completed_transactions": 3255,
+    "rejected_transactions": 55,
+    "failed_transactions": 0,
+    "itemized_transactions": 213
+  },
+  "distribution_percentages": {
+    "purpose_fund_spending_pct": 35.1,
+    "family_pass_spending_pct": 12.1,
+    "normal_wallet_spending_pct": 26.7,
+    "utility_and_bill_payments_pct": 10.4,
+    "inflows_and_allocations_pct": 21.6
+  },
+  "anomaly_statistics": {
+    "behavioral_anomalies_ground_truth": 150,
+    "policy_violation_rejections": 55,
+    "behavioral_anomaly_rate_pct": 4.53
+  },
+  "breakdown_by_category": {
+    "Grocery": 509,
+    "Transport": 418,
+    "Restaurant/Food": 352,
+    "Recharge": 316,
+    "Shopping": 293,
+    "Electricity": 242,
+    "Education": 224,
+    "Medicine": 213,
+    "Rent": 201,
+    "Transfer": 177,
+    "Deposit": 175,
+    "Treatment": 105,
+    "Cash Out": 80,
+    "Other": 5
+  },
+  "breakdown_by_transaction_type": {
+    "MERCHANT_PAYMENT": 1929,
+    "FUND_ALLOCATION": 539,
+    "MOBILE_RECHARGE": 316,
+    "SEND_MONEY": 177,
+    "CASH_IN": 175,
+    "BILL_PAYMENT": 94,
+    "CASH_OUT": 80
+  },
+  "breakdown_by_payment_source": {
+    "NORMAL_WALLET": 1693,
+    "PURPOSE_FUND": 1184,
+    "FAMILY_PASS": 433
+  },
+  "validation_results": {
+    "referential_integrity": "PASSED",
+    "balance_integrity": "PASSED",
+    "purpose_fund_category_consistency": "PASSED",
+    "family_pass_category_consistency": "PASSED",
+    "temporal_order_integrity": "PASSED"
+  }
+}

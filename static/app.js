@@ -446,6 +446,73 @@ async function loadDashboard() {
   if (data.overrun_funds_count > 0) {
     showToast('warning', `⚠️ ${data.overrun_funds_count} fund(s) may exceed budget this month`);
   }
+
+  // AI Recommendations
+  loadAIRecommendations();
+}
+
+async function loadAIRecommendations() {
+  try {
+    const res = await apiGet('/api/ai/recommendations/');
+    const recs = res?.recommendations || [];
+    const section = document.getElementById('aiInsightsSection');
+    const list = document.getElementById('aiInsightsList');
+    if (!section || !list) return;
+
+    if (!recs.length) {
+      section.style.display = 'none';
+      return;
+    }
+
+    section.style.display = 'block';
+    list.innerHTML = recs.slice(0, 3).map(r => {
+      let tagClass = 'insight';
+      let tagLabel = 'AI INSIGHT';
+      if (r.type === 'anomaly_warning') {
+        tagClass = 'anomaly';
+        tagLabel = 'UNUSUAL ACTIVITY';
+      } else if (r.type === 'forecast_warning') {
+        tagClass = 'forecast';
+        tagLabel = 'FORECAST';
+      } else if (r.type === 'budget_warning' || r.type === 'low_fund_balance') {
+        tagClass = 'budget';
+        tagLabel = 'BUDGET ALERT';
+      } else if (r.type === 'family_pass_warning') {
+        tagClass = 'family';
+        tagLabel = 'FAMILYPASS';
+      }
+
+      let evidenceHtml = '';
+      if (r.evidence && typeof r.evidence === 'object') {
+        const parts = [];
+        if (r.evidence.predicted_spending !== undefined) parts.push(`Predicted: ৳${fmt(r.evidence.predicted_spending)}`);
+        if (r.evidence.current_balance !== undefined) parts.push(`Balance: ৳${fmt(r.evidence.current_balance)}`);
+        if (r.evidence.amount !== undefined) parts.push(`Amount: ৳${fmt(r.evidence.amount)}`);
+        if (r.evidence.difference !== undefined) parts.push(`Deficit: ৳${fmt(r.evidence.difference)}`);
+        if (parts.length) {
+          evidenceHtml = `<div class="ai-insight-evidence">${parts.join(' • ')}</div>`;
+        }
+      }
+
+      return `
+        <div class="ai-insight-card priority-${escapeHtml(r.priority || 'medium')}">
+          <span class="ai-insight-tag ${tagClass}">${tagLabel}</span>
+          <div class="ai-insight-title">${escapeHtml(r.title)}</div>
+          <div class="ai-insight-msg">${escapeHtml(r.message)}</div>
+          ${evidenceHtml}
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('Error loading AI recommendations:', err);
+  }
+}
+
+function explainTransaction(txnId) {
+  navigateTo('ai');
+  const input = document.getElementById('chatInput');
+  if (input) input.value = `Why was transaction ${txnId} flagged as unusual?`;
+  sendAiMessage();
 }
 
 function renderTxnItemHtml(t) {
@@ -483,6 +550,10 @@ function renderTxnItemHtml(t) {
     meta = `Paid via FamilyPass • ${timeAgo(t.timestamp)}`;
   }
 
+  if (t.has_anomaly) {
+    meta += ` • <span class="pill pill-red" style="font-size:9px;cursor:pointer;" onclick="explainTransaction('${t.transaction_id || t.id}')" title="Click to explain with AI">⚠️ Flagged Unusual</span>`;
+  }
+
   let amountHtml = '';
   if (isRejected) {
     amountHtml = `<div class="txn-amount" style="color:var(--danger);font-size:12px;font-weight:700;text-align:right;">
@@ -504,7 +575,7 @@ function renderTxnItemHtml(t) {
     <div class="txn-icon ${isRejected ? 'debit' : (isCredit ? 'credit' : (isFp ? 'purple' : 'debit'))}">${icon}</div>
     <div class="txn-info">
       <div class="txn-name">${title}</div>
-      <div class="txn-meta">${escapeHtml(meta)}</div>
+      <div class="txn-meta">${meta}</div>
     </div>
     ${amountHtml}
   </div>`;

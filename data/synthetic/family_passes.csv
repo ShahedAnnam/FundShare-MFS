@@ -1,0 +1,11 @@
+family_pass_id,owner_id,member_id,limit_amount,used_amount,remaining_limit,start_date,expiry_date,allowed_action,status,purpose,allowed_categories,purpose_label,created_at
+1,1,10,4500.00,0.00,4500.00,2026-04-11,2026-10-22,MERCHANT_PAYMENT,ACTIVE,Education,"[""Education""]",Tuition & Exam Allowance,2026-04-11 08:00:00
+2,1,16,9000.00,0.00,9000.00,2026-04-11,2026-10-22,MERCHANT_PAYMENT,ACTIVE,Grocery,"[""Grocery""]",Household Grocery Allowance,2026-04-11 08:00:00
+3,2,11,3500.00,0.00,3500.00,2026-04-11,2026-10-22,MERCHANT_PAYMENT,ACTIVE,Dining,"[""Restaurant/Food""]",Campus Food Allowance,2026-04-11 08:00:00
+4,2,17,10000.00,0.00,10000.00,2026-04-11,2026-10-22,MERCHANT_PAYMENT,ACTIVE,Grocery,"[""Grocery""]",Kitchen & Food Allowance,2026-04-11 08:00:00
+5,3,12,4000.00,0.00,4000.00,2026-04-11,2026-10-22,MERCHANT_PAYMENT,ACTIVE,Transport,"[""Transport""]",Commute & Transit Allowance,2026-04-11 08:00:00
+6,4,18,12000.00,0.00,12000.00,2026-04-11,2026-10-22,GROCERY_MEDICINE,ACTIVE,Grocery,"[""Grocery"", ""Medicine""]",Family Grocery & Pharmacy Allowance,2026-04-11 08:00:00
+7,5,13,3000.00,0.00,3000.00,2026-04-11,2026-10-22,MERCHANT_PAYMENT,ACTIVE,Education,"[""Education""]",Books & Study Materials,2026-04-11 08:00:00
+8,20,14,6000.00,0.00,6000.00,2026-04-11,2026-10-22,MERCHANT_PAYMENT,ACTIVE,Dining,"[""Restaurant/Food""]",Social & Campus Dining,2026-04-11 08:00:00
+9,20,19,15000.00,0.00,15000.00,2026-04-11,2026-10-22,MERCHANT_PAYMENT,ACTIVE,Grocery,"[""Grocery""]",Monthly Estate Groceries,2026-04-11 08:00:00
+10,23,15,3500.00,0.00,3500.00,2026-04-11,2026-10-22,MERCHANT_PAYMENT,ACTIVE,Transport,"[""Transport""]",Ride Share Allowance,2026-04-11 08:00:00

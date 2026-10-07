@@ -1,0 +1,151 @@
+transaction_id,is_anomaly,anomaly_type,reason,amount,category,payment_source,timestamp
+TXN-ANOM-20260523-003106,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,12170.00,Treatment,NORMAL_WALLET,2026-05-23 13:31:00
+TXN-ANOM-20260808-003107,True,LARGE_AMOUNT,Amount (৳12150.00) is over 4.5× higher than user's typical Shopping average,12150.00,Shopping,NORMAL_WALLET,2026-08-08 17:40:00
+TXN-ANOM-20260624-003108,True,LARGE_AMOUNT,Amount (৳15569.00) is over 4.5× higher than user's typical Shopping average,15569.00,Shopping,NORMAL_WALLET,2026-06-24 19:14:00
+TXN-ANOM-20260804-003109,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),2370.00,Restaurant/Food,NORMAL_WALLET,2026-08-04 21:17:00
+TXN-ANOM-20260930-003110,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,12003.00,Treatment,NORMAL_WALLET,2026-09-30 17:49:00
+TXN-ANOM-20260508-003111,True,UNUSUAL_TIME,"Transaction executed at 04:06 AM, deviating from daytime pattern",2669.00,Transport,NORMAL_WALLET,2026-05-08 04:06:00
+TXN-ANOM-20260420-003112,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),2796.00,Restaurant/Food,NORMAL_WALLET,2026-04-20 21:17:00
+TXN-ANOM-20260428-003113,True,LARGE_AMOUNT,Amount (৳9825.00) is over 4.5× higher than user's typical Shopping average,9825.00,Shopping,NORMAL_WALLET,2026-04-28 18:13:00
+TXN-ANOM-20260831-003114,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,14346.00,Treatment,NORMAL_WALLET,2026-08-31 12:16:00
+TXN-ANOM-20260917-003115,True,LARGE_AMOUNT,Amount (৳16908.00) is over 4.5× higher than user's typical Shopping average,16908.00,Shopping,NORMAL_WALLET,2026-09-17 20:52:00
+TXN-ANOM-20260820-003116,True,UNUSUAL_TIME,"Transaction executed at 04:07 AM, deviating from daytime pattern",2376.00,Transport,NORMAL_WALLET,2026-08-20 04:07:00
+TXN-ANOM-20260726-003117,True,UNUSUAL_TIME,"Transaction executed at 01:07 AM, deviating from daytime pattern",2239.00,Transport,NORMAL_WALLET,2026-07-26 01:07:00
+TXN-ANOM-20260516-003118,True,LARGE_AMOUNT,Amount (৳11477.00) is over 4.5× higher than user's typical Shopping average,11477.00,Shopping,NORMAL_WALLET,2026-05-16 19:25:00
+TXN-ANOM-20260722-003119,True,LARGE_AMOUNT,Amount (৳17966.00) is over 4.5× higher than user's typical Shopping average,17966.00,Shopping,NORMAL_WALLET,2026-07-22 16:03:00
+TXN-ANOM-20260904-003120,True,UNUSUAL_TIME,"Transaction executed at 03:29 AM, deviating from daytime pattern",1670.00,Transport,NORMAL_WALLET,2026-09-04 03:29:00
+TXN-ANOM-20260907-003121,True,LARGE_AMOUNT,Amount (৳13101.00) is over 4.5× higher than user's typical Shopping average,13101.00,Shopping,NORMAL_WALLET,2026-09-07 17:52:00
+TXN-ANOM-20260622-003122,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),3144.00,Restaurant/Food,NORMAL_WALLET,2026-06-22 21:12:00
+TXN-ANOM-20260821-003123,True,UNUSUAL_TIME,"Transaction executed at 01:23 AM, deviating from daytime pattern",2209.00,Transport,NORMAL_WALLET,2026-08-21 01:23:00
+TXN-ANOM-20260909-003124,True,LARGE_AMOUNT,Amount (৳12609.00) is over 4.5× higher than user's typical Shopping average,12609.00,Shopping,NORMAL_WALLET,2026-09-09 14:58:00
+TXN-ANOM-20260710-003125,True,UNUSUAL_TIME,"Transaction executed at 03:35 AM, deviating from daytime pattern",1653.00,Transport,NORMAL_WALLET,2026-07-10 03:35:00
+TXN-ANOM-20260914-003126,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),2386.00,Restaurant/Food,NORMAL_WALLET,2026-09-14 21:24:00
+TXN-ANOM-20260916-003127,True,LARGE_AMOUNT,Amount (৳10831.00) is over 4.5× higher than user's typical Shopping average,10831.00,Shopping,NORMAL_WALLET,2026-09-16 17:54:00
+TXN-ANOM-20260421-003128,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),3620.00,Restaurant/Food,NORMAL_WALLET,2026-04-21 21:13:00
+TXN-ANOM-20260526-003129,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),3110.00,Restaurant/Food,NORMAL_WALLET,2026-05-26 21:23:00
+TXN-ANOM-20260629-003130,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,13316.00,Treatment,NORMAL_WALLET,2026-06-29 13:14:00
+TXN-ANOM-20260818-003131,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,14041.00,Treatment,NORMAL_WALLET,2026-08-18 14:47:00
+TXN-ANOM-20260913-003132,True,UNUSUAL_TIME,"Transaction executed at 03:09 AM, deviating from daytime pattern",3032.00,Transport,NORMAL_WALLET,2026-09-13 03:09:00
+TXN-ANOM-20260616-003133,True,LARGE_AMOUNT,Amount (৳13936.00) is over 4.5× higher than user's typical Shopping average,13936.00,Shopping,NORMAL_WALLET,2026-06-16 17:41:00
+TXN-ANOM-20260522-003134,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),2271.00,Restaurant/Food,NORMAL_WALLET,2026-05-22 21:14:00
+TXN-ANOM-20260424-003135,True,LARGE_AMOUNT,Amount (৳17067.00) is over 4.5× higher than user's typical Shopping average,17067.00,Shopping,NORMAL_WALLET,2026-04-24 14:12:00
+TXN-ANOM-20260517-003136,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),3022.00,Restaurant/Food,NORMAL_WALLET,2026-05-17 21:25:00
+TXN-ANOM-20260602-003137,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),3689.00,Restaurant/Food,NORMAL_WALLET,2026-06-02 21:25:00
+TXN-ANOM-20260717-003138,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,13151.00,Treatment,NORMAL_WALLET,2026-07-17 11:38:00
+TXN-ANOM-20260704-003139,True,LARGE_AMOUNT,Amount (৳11324.00) is over 4.5× higher than user's typical Shopping average,11324.00,Shopping,NORMAL_WALLET,2026-07-04 15:03:00
+TXN-ANOM-20260521-003140,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),3133.00,Restaurant/Food,NORMAL_WALLET,2026-05-21 21:14:00
+TXN-ANOM-20260813-003141,True,UNUSUAL_TIME,"Transaction executed at 01:26 AM, deviating from daytime pattern",2050.00,Transport,NORMAL_WALLET,2026-08-13 01:26:00
+TXN-ANOM-20260604-003142,True,UNUSUAL_TIME,"Transaction executed at 04:33 AM, deviating from daytime pattern",1684.00,Transport,NORMAL_WALLET,2026-06-04 04:33:00
+TXN-ANOM-20260504-003143,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,13647.00,Treatment,NORMAL_WALLET,2026-05-04 16:32:00
+TXN-ANOM-20260802-003144,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,12803.00,Treatment,NORMAL_WALLET,2026-08-02 17:17:00
+TXN-ANOM-20260511-003145,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,14813.00,Treatment,NORMAL_WALLET,2026-05-11 14:05:00
+TXN-ANOM-20260901-003146,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),2545.00,Restaurant/Food,NORMAL_WALLET,2026-09-01 21:17:00
+TXN-ANOM-20260510-003147,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),2201.00,Restaurant/Food,NORMAL_WALLET,2026-05-10 21:15:00
+TXN-ANOM-20260501-003148,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),3356.00,Restaurant/Food,NORMAL_WALLET,2026-05-01 21:15:00
+TXN-ANOM-20260725-003149,True,UNUSUAL_TIME,"Transaction executed at 04:23 AM, deviating from daytime pattern",1671.00,Transport,NORMAL_WALLET,2026-07-25 04:23:00
+TXN-ANOM-20260805-003150,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),2954.00,Restaurant/Food,NORMAL_WALLET,2026-08-05 21:16:00
+TXN-ANOM-20260531-003151,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,13162.00,Treatment,NORMAL_WALLET,2026-05-31 10:52:00
+TXN-ANOM-20260830-003152,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),2560.00,Restaurant/Food,NORMAL_WALLET,2026-08-30 21:14:00
+TXN-ANOM-20260810-003153,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,14011.00,Treatment,NORMAL_WALLET,2026-08-10 17:47:00
+TXN-ANOM-20260806-003154,True,LARGE_AMOUNT,Amount (৳13620.00) is over 4.5× higher than user's typical Shopping average,13620.00,Shopping,NORMAL_WALLET,2026-08-06 17:50:00
+TXN-ANOM-20260819-003155,True,UNUSUAL_TIME,"Transaction executed at 04:17 AM, deviating from daytime pattern",1359.00,Transport,NORMAL_WALLET,2026-08-19 04:17:00
+TXN-ANOM-20260613-003156,True,LARGE_AMOUNT,Amount (৳14652.00) is over 4.5× higher than user's typical Shopping average,14652.00,Shopping,NORMAL_WALLET,2026-06-13 16:39:00
+TXN-ANOM-20260921-003157,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,15755.00,Treatment,NORMAL_WALLET,2026-09-21 16:53:00
+TXN-ANOM-20260703-003158,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,13513.00,Treatment,NORMAL_WALLET,2026-07-03 10:14:00
+TXN-ANOM-20260520-003159,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),2809.00,Restaurant/Food,NORMAL_WALLET,2026-05-20 21:23:00
+TXN-ANOM-20260829-003160,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),2808.00,Restaurant/Food,NORMAL_WALLET,2026-08-29 21:22:00
+TXN-ANOM-20260529-003161,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,15306.00,Treatment,NORMAL_WALLET,2026-05-29 12:59:00
+TXN-ANOM-20260603-003162,True,UNUSUAL_TIME,"Transaction executed at 01:21 AM, deviating from daytime pattern",1538.00,Transport,NORMAL_WALLET,2026-06-03 01:21:00
+TXN-ANOM-20260625-003163,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,15922.00,Treatment,NORMAL_WALLET,2026-06-25 14:21:00
+TXN-ANOM-20260605-003164,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),3066.00,Restaurant/Food,NORMAL_WALLET,2026-06-05 21:20:00
+TXN-ANOM-20260621-003165,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,12614.00,Treatment,NORMAL_WALLET,2026-06-21 16:31:00
+TXN-ANOM-20260903-003166,True,UNUSUAL_TIME,"Transaction executed at 03:20 AM, deviating from daytime pattern",2136.00,Transport,NORMAL_WALLET,2026-09-03 03:20:00
+TXN-ANOM-20260822-003167,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,14547.00,Treatment,NORMAL_WALLET,2026-08-22 15:32:00
+TXN-ANOM-20260525-003168,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,15698.00,Treatment,NORMAL_WALLET,2026-05-25 10:59:00
+TXN-ANOM-20260708-003169,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,12919.00,Treatment,NORMAL_WALLET,2026-07-08 11:57:00
+TXN-ANOM-20260925-003170,True,UNUSUAL_TIME,"Transaction executed at 02:14 AM, deviating from daytime pattern",2558.00,Transport,NORMAL_WALLET,2026-09-25 02:14:00
+TXN-ANOM-20260601-003171,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),2904.00,Restaurant/Food,NORMAL_WALLET,2026-06-01 21:15:00
+TXN-ANOM-20260713-003172,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),2749.00,Restaurant/Food,NORMAL_WALLET,2026-07-13 21:13:00
+TXN-ANOM-20260828-003173,True,LARGE_AMOUNT,Amount (৳11820.00) is over 4.5× higher than user's typical Shopping average,11820.00,Shopping,NORMAL_WALLET,2026-08-28 15:57:00
+TXN-ANOM-20260716-003174,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,8780.00,Treatment,NORMAL_WALLET,2026-07-16 15:52:00
+TXN-ANOM-20260709-003175,True,LARGE_AMOUNT,Amount (৳14572.00) is over 4.5× higher than user's typical Shopping average,14572.00,Shopping,NORMAL_WALLET,2026-07-09 18:04:00
+TXN-ANOM-20260626-003176,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,14258.00,Treatment,NORMAL_WALLET,2026-06-26 13:22:00
+TXN-ANOM-20260430-003177,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,10084.00,Treatment,NORMAL_WALLET,2026-04-30 15:55:00
+TXN-ANOM-20260816-003178,True,UNUSUAL_TIME,"Transaction executed at 01:50 AM, deviating from daytime pattern",3165.00,Transport,NORMAL_WALLET,2026-08-16 01:50:00
+TXN-ANOM-20260918-003179,True,UNUSUAL_TIME,"Transaction executed at 03:42 AM, deviating from daytime pattern",1200.00,Transport,NORMAL_WALLET,2026-09-18 03:42:00
+TXN-ANOM-20260730-003180,True,UNUSUAL_TIME,"Transaction executed at 04:22 AM, deviating from daytime pattern",2195.00,Transport,NORMAL_WALLET,2026-07-30 04:22:00
+TXN-ANOM-20260902-003181,True,LARGE_AMOUNT,Amount (৳12293.00) is over 4.5× higher than user's typical Shopping average,12293.00,Shopping,NORMAL_WALLET,2026-09-02 15:05:00
+TXN-ANOM-20260801-003182,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),3571.00,Restaurant/Food,NORMAL_WALLET,2026-08-01 21:25:00
+TXN-ANOM-20260922-003183,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,14913.00,Treatment,NORMAL_WALLET,2026-09-22 11:50:00
+TXN-ANOM-20260518-003184,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,15756.00,Treatment,NORMAL_WALLET,2026-05-18 10:48:00
+TXN-ANOM-20260422-003185,True,UNUSUAL_TIME,"Transaction executed at 02:25 AM, deviating from daytime pattern",1674.00,Transport,NORMAL_WALLET,2026-04-22 02:25:00
+TXN-ANOM-20260720-003186,True,LARGE_AMOUNT,Amount (৳13075.00) is over 4.5× higher than user's typical Shopping average,13075.00,Shopping,NORMAL_WALLET,2026-07-20 14:10:00
+TXN-ANOM-20260617-003187,True,LARGE_AMOUNT,Amount (৳16005.00) is over 4.5× higher than user's typical Shopping average,16005.00,Shopping,NORMAL_WALLET,2026-06-17 20:55:00
+TXN-ANOM-20260812-003188,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),3667.00,Restaurant/Food,NORMAL_WALLET,2026-08-12 21:18:00
+TXN-ANOM-20260924-003189,True,UNUSUAL_TIME,"Transaction executed at 04:13 AM, deviating from daytime pattern",1546.00,Transport,NORMAL_WALLET,2026-09-24 04:13:00
+TXN-ANOM-20260731-003190,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,14240.00,Treatment,NORMAL_WALLET,2026-07-31 10:55:00
+TXN-ANOM-20260612-003191,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,15854.00,Treatment,NORMAL_WALLET,2026-06-12 10:29:00
+TXN-ANOM-20260728-003192,True,UNUSUAL_TIME,"Transaction executed at 01:09 AM, deviating from daytime pattern",2775.00,Transport,NORMAL_WALLET,2026-07-28 01:09:00
+TXN-ANOM-20260715-003193,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,9714.00,Treatment,NORMAL_WALLET,2026-07-15 14:25:00
+TXN-ANOM-20260417-003194,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,13663.00,Treatment,NORMAL_WALLET,2026-04-17 11:41:00
+TXN-ANOM-20260503-003195,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),2768.00,Restaurant/Food,NORMAL_WALLET,2026-05-03 21:18:00
+TXN-ANOM-20260515-003196,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,9533.00,Treatment,NORMAL_WALLET,2026-05-15 14:47:00
+TXN-ANOM-20260702-003197,True,LARGE_AMOUNT,Amount (৳9572.00) is over 4.5× higher than user's typical Shopping average,9572.00,Shopping,NORMAL_WALLET,2026-07-02 16:14:00
+TXN-ANOM-20260714-003198,True,LARGE_AMOUNT,Amount (৳12253.00) is over 4.5× higher than user's typical Shopping average,12253.00,Shopping,NORMAL_WALLET,2026-07-14 16:06:00
+TXN-ANOM-20260619-003199,True,UNUSUAL_TIME,"Transaction executed at 04:44 AM, deviating from daytime pattern",2070.00,Transport,NORMAL_WALLET,2026-06-19 04:44:00
+TXN-ANOM-20260929-003200,True,UNUSUAL_TIME,"Transaction executed at 03:37 AM, deviating from daytime pattern",2813.00,Transport,NORMAL_WALLET,2026-09-29 03:37:00
+TXN-ANOM-20260609-003201,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,9964.00,Treatment,NORMAL_WALLET,2026-06-09 13:28:00
+TXN-ANOM-20260627-003202,True,LARGE_AMOUNT,Amount (৳13426.00) is over 4.5× higher than user's typical Shopping average,13426.00,Shopping,NORMAL_WALLET,2026-06-27 16:43:00
+TXN-ANOM-20260611-003203,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),3650.00,Restaurant/Food,NORMAL_WALLET,2026-06-11 21:11:00
+TXN-ANOM-20260707-003204,True,LARGE_AMOUNT,Amount (৳16671.00) is over 4.5× higher than user's typical Shopping average,16671.00,Shopping,NORMAL_WALLET,2026-07-07 17:13:00
+TXN-ANOM-20260817-003205,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),2775.00,Restaurant/Food,NORMAL_WALLET,2026-08-17 21:13:00
+TXN-ANOM-20260905-003206,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),3383.00,Restaurant/Food,NORMAL_WALLET,2026-09-05 21:11:00
+TXN-ANOM-20260630-003207,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,9696.00,Treatment,NORMAL_WALLET,2026-06-30 16:21:00
+TXN-ANOM-20260524-003208,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),3219.00,Restaurant/Food,NORMAL_WALLET,2026-05-24 21:20:00
+TXN-ANOM-20260606-003209,True,LARGE_AMOUNT,Amount (৳14270.00) is over 4.5× higher than user's typical Shopping average,14270.00,Shopping,NORMAL_WALLET,2026-06-06 17:04:00
+TXN-ANOM-20260825-003210,True,UNUSUAL_TIME,"Transaction executed at 03:30 AM, deviating from daytime pattern",2812.00,Transport,NORMAL_WALLET,2026-08-25 03:30:00
+TXN-ANOM-20260506-003211,True,LARGE_AMOUNT,Amount (৳13972.00) is over 4.5× higher than user's typical Shopping average,13972.00,Shopping,NORMAL_WALLET,2026-05-06 20:18:00
+TXN-ANOM-20260615-003212,True,LARGE_AMOUNT,Amount (৳15322.00) is over 4.5× higher than user's typical Shopping average,15322.00,Shopping,NORMAL_WALLET,2026-06-15 15:53:00
+TXN-ANOM-20260426-003213,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),3558.00,Restaurant/Food,NORMAL_WALLET,2026-04-26 21:13:00
+TXN-ANOM-20260513-003214,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),3443.00,Restaurant/Food,NORMAL_WALLET,2026-05-13 21:25:00
+TXN-ANOM-20260811-003215,True,LARGE_AMOUNT,Amount (৳16096.00) is over 4.5× higher than user's typical Shopping average,16096.00,Shopping,NORMAL_WALLET,2026-08-11 14:14:00
+TXN-ANOM-20260623-003216,True,UNUSUAL_TIME,"Transaction executed at 03:07 AM, deviating from daytime pattern",2124.00,Transport,NORMAL_WALLET,2026-06-23 03:07:00
+TXN-ANOM-20260427-003217,True,UNUSUAL_TIME,"Transaction executed at 02:13 AM, deviating from daytime pattern",2362.00,Transport,NORMAL_WALLET,2026-04-27 02:13:00
+TXN-ANOM-20260827-003218,True,LARGE_AMOUNT,Amount (৳10354.00) is over 4.5× higher than user's typical Shopping average,10354.00,Shopping,NORMAL_WALLET,2026-08-27 15:56:00
+TXN-ANOM-20260906-003219,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),2882.00,Restaurant/Food,NORMAL_WALLET,2026-09-06 21:14:00
+TXN-ANOM-20260607-003220,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),2508.00,Restaurant/Food,NORMAL_WALLET,2026-06-07 21:23:00
+TXN-ANOM-20260926-003221,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),3418.00,Restaurant/Food,NORMAL_WALLET,2026-09-26 21:22:00
+TXN-ANOM-20260807-003222,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,15133.00,Treatment,NORMAL_WALLET,2026-08-07 10:02:00
+TXN-ANOM-20260824-003223,True,LARGE_AMOUNT,Amount (৳13355.00) is over 4.5× higher than user's typical Shopping average,13355.00,Shopping,NORMAL_WALLET,2026-08-24 18:26:00
+TXN-ANOM-20260727-003224,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,11334.00,Treatment,NORMAL_WALLET,2026-07-27 17:28:00
+TXN-ANOM-20261001-003225,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,11372.00,Treatment,NORMAL_WALLET,2026-10-01 15:26:00
+TXN-ANOM-20260712-003226,True,LARGE_AMOUNT,Amount (৳17151.00) is over 4.5× higher than user's typical Shopping average,17151.00,Shopping,NORMAL_WALLET,2026-07-12 17:42:00
+TXN-ANOM-20260823-003227,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,15094.00,Treatment,NORMAL_WALLET,2026-08-23 10:37:00
+TXN-ANOM-20260815-003228,True,UNUSUAL_TIME,"Transaction executed at 01:14 AM, deviating from daytime pattern",3183.00,Transport,NORMAL_WALLET,2026-08-15 01:14:00
+TXN-ANOM-20260803-003229,True,UNUSUAL_TIME,"Transaction executed at 04:42 AM, deviating from daytime pattern",2974.00,Transport,NORMAL_WALLET,2026-08-03 04:42:00
+TXN-ANOM-20260711-003230,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,12944.00,Treatment,NORMAL_WALLET,2026-07-11 11:17:00
+TXN-ANOM-20260425-003231,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),3356.00,Restaurant/Food,NORMAL_WALLET,2026-04-25 21:25:00
+TXN-ANOM-20260705-003232,True,LARGE_AMOUNT,Amount (৳13082.00) is over 4.5× higher than user's typical Shopping average,13082.00,Shopping,NORMAL_WALLET,2026-07-05 16:49:00
+TXN-ANOM-20260910-003233,True,LARGE_AMOUNT,Amount (৳16662.00) is over 4.5× higher than user's typical Shopping average,16662.00,Shopping,NORMAL_WALLET,2026-09-10 18:10:00
+TXN-ANOM-20260729-003234,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),3800.00,Restaurant/Food,NORMAL_WALLET,2026-07-29 21:13:00
+TXN-ANOM-20260512-003235,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,11767.00,Treatment,NORMAL_WALLET,2026-05-12 11:02:00
+TXN-ANOM-20260618-003236,True,LARGE_AMOUNT,Amount (৳14853.00) is over 4.5× higher than user's typical Shopping average,14853.00,Shopping,NORMAL_WALLET,2026-06-18 14:27:00
+TXN-ANOM-20260418-003237,True,LARGE_AMOUNT,Amount (৳13522.00) is over 4.5× higher than user's typical Shopping average,13522.00,Shopping,NORMAL_WALLET,2026-04-18 17:00:00
+TXN-ANOM-20260610-003238,True,LARGE_AMOUNT,Amount (৳16277.00) is over 4.5× higher than user's typical Shopping average,16277.00,Shopping,NORMAL_WALLET,2026-06-10 17:06:00
+TXN-ANOM-20260923-003239,True,UNUSUAL_TIME,"Transaction executed at 01:50 AM, deviating from daytime pattern",2647.00,Transport,NORMAL_WALLET,2026-09-23 01:50:00
+TXN-ANOM-20260919-003240,True,LARGE_AMOUNT,Amount (৳12442.00) is over 4.5× higher than user's typical Shopping average,12442.00,Shopping,NORMAL_WALLET,2026-09-19 16:10:00
+TXN-ANOM-20260724-003241,True,LARGE_AMOUNT,Amount (৳13382.00) is over 4.5× higher than user's typical Shopping average,13382.00,Shopping,NORMAL_WALLET,2026-07-24 20:05:00
+TXN-ANOM-20260706-003242,True,LARGE_AMOUNT,Amount (৳14858.00) is over 4.5× higher than user's typical Shopping average,14858.00,Shopping,NORMAL_WALLET,2026-07-06 20:50:00
+TXN-ANOM-20260614-003243,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),3467.00,Restaurant/Food,NORMAL_WALLET,2026-06-14 21:10:00
+TXN-ANOM-20260928-003244,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,14093.00,Treatment,NORMAL_WALLET,2026-09-28 16:09:00
+TXN-ANOM-20260920-003245,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,8797.00,Treatment,NORMAL_WALLET,2026-09-20 10:27:00
+TXN-ANOM-20260718-003246,True,LARGE_AMOUNT,Amount (৳12804.00) is over 4.5× higher than user's typical Shopping average,12804.00,Shopping,NORMAL_WALLET,2026-07-18 20:48:00
+TXN-ANOM-20260423-003247,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),2828.00,Restaurant/Food,NORMAL_WALLET,2026-04-23 21:13:00
+TXN-ANOM-20260502-003248,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,12346.00,Treatment,NORMAL_WALLET,2026-05-02 17:14:00
+TXN-ANOM-20260826-003249,True,UNUSUAL_TIME,"Transaction executed at 01:19 AM, deviating from daytime pattern",2125.00,Transport,NORMAL_WALLET,2026-08-26 01:19:00
+TXN-ANOM-20260505-003250,True,LARGE_AMOUNT,Amount (৳9603.00) is over 4.5× higher than user's typical Shopping average,9603.00,Shopping,NORMAL_WALLET,2026-05-05 17:37:00
+TXN-ANOM-20260908-003251,True,UNUSUAL_CATEGORY,Infrequent category expenditure (Treatment) with high monetary impact,13950.00,Treatment,NORMAL_WALLET,2026-09-08 15:11:00
+TXN-ANOM-20260419-003252,True,LARGE_AMOUNT,Amount (৳10815.00) is over 4.5× higher than user's typical Shopping average,10815.00,Shopping,NORMAL_WALLET,2026-04-19 20:17:00
+TXN-ANOM-20260628-003253,True,LARGE_AMOUNT,Amount (৳15896.00) is over 4.5× higher than user's typical Shopping average,15896.00,Shopping,NORMAL_WALLET,2026-06-28 20:41:00
+TXN-ANOM-20260530-003254,True,SPENDING_BURST,Sudden spending burst (>3× category baseline within 1 hour),3275.00,Restaurant/Food,NORMAL_WALLET,2026-05-30 21:14:00
+TXN-ANOM-20260809-003255,True,UNUSUAL_TIME,"Transaction executed at 04:27 AM, deviating from daytime pattern",1557.00,Transport,NORMAL_WALLET,2026-08-09 04:27:00

@@ -1,0 +1,119 @@
+{
+  "model_type": "IsolationForest",
+  "random_seed": 42,
+  "timestamp": "2026-10-07T06:06:11.583792",
+  "train_period": "2026-04-07 13:37:50.859419+00:00 to 2026-07-01 13:37:50.859419+00:00",
+  "validation_period": "2026-07-01 13:41:09+00:00 to 2026-08-01 04:45:33+00:00",
+  "test_period": "2026-08-01 04:47:00+00:00 to 2026-10-05 10:48:00+00:00",
+  "samples": {
+    "total": 3483,
+    "train": 2089,
+    "validation": 697,
+    "test": 697
+  },
+  "anomalies": {
+    "train": 66,
+    "validation": 27,
+    "test": 60
+  },
+  "baselines": {
+    "amount_percentile_baseline": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "roc_auc": 0.602,
+      "pr_auc": 0.0982,
+      "confusion_matrix": [
+        [
+          574,
+          63
+        ],
+        [
+          60,
+          0
+        ]
+      ],
+      "normal_count": 637,
+      "anomaly_count": 60,
+      "prevalence": 0.0861,
+      "total_test_samples": 697
+    },
+    "statistical_deviation_baseline": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "roc_auc": 0.5284,
+      "pr_auc": 0.0825,
+      "confusion_matrix": [
+        [
+          597,
+          40
+        ],
+        [
+          60,
+          0
+        ]
+      ],
+      "normal_count": 637,
+      "anomaly_count": 60,
+      "prevalence": 0.0861,
+      "total_test_samples": 697
+    }
+  },
+  "model_performance": {
+    "precision": 0.1854,
+    "recall": 0.55,
+    "f1": 0.2773,
+    "roc_auc": 0.7911,
+    "pr_auc": 0.1865,
+    "confusion_matrix": [
+      [
+        492,
+        145
+      ],
+      [
+        27,
+        33
+      ]
+    ],
+    "normal_count": 637,
+    "anomaly_count": 60,
+    "prevalence": 0.0861,
+    "total_test_samples": 697
+  },
+  "ablation_study": {
+    "amount_only": {
+      "label": "Amount Only",
+      "precision": 0.096,
+      "recall": 0.2833,
+      "f1": 0.1435,
+      "roc_auc": 0.6371,
+      "pr_auc": 0.1058
+    },
+    "amount_temporal": {
+      "label": "Amount + Temporal",
+      "precision": 0.2588,
+      "recall": 0.3667,
+      "f1": 0.3034,
+      "roc_auc": 0.8363,
+      "pr_auc": 0.2313
+    },
+    "amount_temporal_behavioral": {
+      "label": "Amount + Temporal + Behavioral",
+      "precision": 0.1091,
+      "recall": 0.3,
+      "f1": 0.16,
+      "roc_auc": 0.723,
+      "pr_auc": 0.1376
+    },
+    "full": {
+      "label": "Full Features",
+      "precision": 0.1854,
+      "recall": 0.55,
+      "f1": 0.2773,
+      "roc_auc": 0.7911,
+      "pr_auc": 0.1865
+    }
+  },
+  "calibrated_threshold": 0.42
+}

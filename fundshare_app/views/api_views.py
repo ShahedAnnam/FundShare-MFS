@@ -1206,7 +1206,7 @@ class IntelligenceDashboardView(APIView):
         if err:
             return err
         behavioral = RecommendationEngine.get_behavioral_analysis(user)
-        recommendations = RecommendationEngine.get_next_month_recommendations(user)
+        recommendations = RecommendationEngine.generate_recommendations(user)
         transfer_suggestion = RecommendationEngine.get_interfund_transfer_recommendation(user)
 
         # Anomaly detector evaluation
@@ -1227,17 +1227,92 @@ class IntelligenceDashboardView(APIView):
 
 
 class AICoachQueryView(APIView):
+    """
+    POST /api/ai/coach/ and POST /api/ai/query/
+    Conversational AI coach grounded strictly in the authenticated user's financial state.
+    """
     def post(self, request):
         user, err = require_auth(request)
         if err:
             return err
-        question = request.data.get('question', '')
+        question = request.data.get('question') or request.data.get('message') or request.data.get('query', '')
         lang = request.data.get('lang', 'en')
-        if not question:
+        if not question or not str(question).strip():
             return Response({"error": "Question is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        response = AICoach.answer_query(user, question, lang)
+        response = AICoach.answer_query(user, str(question).strip(), lang)
         return Response(response)
+
+
+class AIRecommendationsView(APIView):
+    """
+    GET /api/ai/recommendations/
+    Deterministic, structured recommendations generated from ML forecasts,
+    Isolation Forest anomaly results, and current account rules for the authenticated user.
+    """
+    def get(self, request):
+        user, err = require_auth(request)
+        if err:
+            return err
+        recommendations = RecommendationEngine.generate_recommendations(user)
+        return Response({
+            "recommendations": recommendations,
+            "count": len(recommendations)
+        })
+
+
+class AIForecastView(APIView):
+    """
+    GET /api/ai/forecast/
+    Retrieves real out-of-sample budget forecasts for the authenticated user's active funds.
+    """
+    def get(self, request):
+        user, err = require_auth(request)
+        if err:
+            return err
+        funds = PurposeFund.objects.filter(owner=user, status='ACTIVE')
+        forecasts = [BudgetForecaster.forecast_fund(f) for f in funds]
+        return Response({
+            "forecasts": forecasts,
+            "count": len(forecasts)
+        })
+
+
+class AITransactionExplainView(APIView):
+    """
+    GET /api/ai/transaction/<str:txn_id>/explain/
+    Natural language explanation of why a transaction was flagged or its context.
+    Stops cross-user data leakage by enforcing user ownership.
+    """
+    def get(self, request, txn_id):
+        user, err = require_auth(request)
+        if err:
+            return err
+
+        txn = None
+        if str(txn_id).isdigit():
+            txn = Transaction.objects.filter(id=int(txn_id)).first()
+        if not txn:
+            txn = Transaction.objects.filter(transaction_id=str(txn_id)).first()
+
+        if not txn:
+            return Response({"error": "Transaction not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # STRICT OWNERSHIP CHECK: User must be sender, receiver, or fund owner
+        is_owner = (
+            txn.sender == user or
+            txn.receiver == user or
+            (txn.purpose_fund and txn.purpose_fund.owner == user) or
+            (txn.family_pass and txn.family_pass.owner == user)
+        )
+        if not is_owner:
+            return Response(
+                {"error": "Access denied. You can only explain your own transactions."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        explanation = AICoach.explain_transaction(user, txn)
+        return Response(explanation)
 
 
 class ReportsView(APIView):
