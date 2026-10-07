@@ -1,6 +1,8 @@
 from .settings import *
 GEMINI_API_KEY = ''  # Tests must never call the external AI service.
 
+GEMINI_API_KEY = ''  # Tests must never call the external AI service.
+
 # Fast fixture hashing; production continues to use Django's strong default hashers.
 PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
 CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}

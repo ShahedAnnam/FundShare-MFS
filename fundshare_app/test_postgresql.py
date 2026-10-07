@@ -19,6 +19,8 @@ from fundshare_app.management.commands.import_legacy_sqlite import Command
 
 class PostgreSQLAccountingTests(TestCase):
     def setUp(self):
+        if connection.vendor != 'postgresql':
+            self.skipTest('Requires PostgreSQL connection.')
         self.user = User.objects.create_user(username='postgres-owner', phone='01742000001')
         self.member = User.objects.create_user(username='postgres-recipient', phone='01742000002')
         self.wallet = Wallet.objects.create(owner=self.user, balance='100')
@@ -62,6 +64,8 @@ class PostgreSQLAccountingTests(TestCase):
 
 class LegacyImportTests(TransactionTestCase):
     def setUp(self):
+        if connection.vendor != 'postgresql':
+            self.skipTest('Requires PostgreSQL connection.')
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.source = Path(self.temporary.name) / 'source.sqlite3'

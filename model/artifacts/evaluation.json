@@ -2,8 +2,8 @@
   "available": true,
   "algorithm": "Isolation Forest",
   "model_version": "iforest_v2_0c0c2eb846f6",
-  "sklearn_version": "1.9.1",
-  "trained_at": "2026-10-07T06:15:54.425255+00:00",
+  "sklearn_version": "1.7.1",
+  "trained_at": "2026-10-07T14:16:43.485883+00:00",
   "dataset": "fundshare_anomaly_dataset_480.csv",
   "dataset_sha256": "0c0c2eb846f63aa4c1343ad99926b162c7ec4192a2d5734b867c87b9d1e7ec3c",
   "input_fields": [
@@ -32,6 +32,7 @@
   "precision": 0.5,
   "recall": 0.65,
   "f1": 0.5652173913043478,
+  "f1_score": 0.5652173913043478,
   "roc_auc": 0.8524193548387097,
   "confusion_matrix": [
     [

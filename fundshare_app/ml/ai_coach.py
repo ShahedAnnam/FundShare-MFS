@@ -1,24 +1,36 @@
+"""
+FUNDShare ML Pipeline - Grounded AI Coach & Decision Support Service
+Integrates:
+- MLContextBuilder for single-user grounded financial facts
+- Strict system prompt adhering to AI safety & anti-hallucination rules
+- Conversational Gemini inference with strict advisory-only scope
+- Graceful offline fallback to deterministic financial analytics
+- Transaction-level explainability ("unusual != fraudulent")
+"""
 import json
+import os
 import re
-import datetime
 from decimal import Decimal
-from django.utils import timezone
+from typing import Dict, Any, Optional
+
 from django.conf import settings
-from fundshare_app.models import PurposeFund, Transaction, FamilyPass, FamilyPassTransaction, AnomalyResult
-from fundshare_app.services.report_service import ReportService
+from django.utils import timezone
+from fundshare_app.models import Transaction, AnomalyResult, PurposeFund, FamilyPass
+from fundshare_app.ml.context_builder import MLContextBuilder
+from fundshare_app.ml.anomaly_detector import AnomalyDetector
 from fundshare_app.ml.budget_forecaster import BudgetForecaster
-from fundshare_app.ml.demo_qa import find_demo_answer, demo_response
+from fundshare_app.ml.recommendation_engine import RecommendationEngine
+from fundshare_app.ml.demo_qa import DEMO_QA, find_demo_answer, demo_response
 from fundshare_app.ml.support_context import get_support_context, SUPPORT_INSTRUCTION
 
 
 class FinancialAIService:
     """
-    Centralized Financial AI Service for FundShare:
-    - Detects user intent (General Conversation vs Structured Financial Query)
-    - Retrieves authoritative, grounded financial context from the active user's ledger
-    - Answers predefined product questions locally and uses Gemini 3.1 Flash-Lite for other queries
-    - Falls back smoothly to authoritative Deterministic Local Analytics on network failure or offline mode
-    - Product guidance is predefined; personal financial analytics never use mock balances
+    Authoritative Financial AI Service:
+    - Gathers user-specific context via MLContextBuilder (strict user isolation)
+    - Grounded natural language explanation via Gemini LLM
+    - Guaranteed fallback to deterministic analytics on API failure or offline mode
+    - Strict non-autonomous safety: NEVER executes transactions or changes balances
     """
 
     @classmethod
@@ -27,7 +39,18 @@ class FinancialAIService:
         if not q:
             return "GENERAL"
 
-        # Specific financial intents
+        # Check for autonomous action attempts first
+        action_keywords = [
+            "transfer", "send money", "pay", "deposit", "allocate", "change limit",
+            "set limit", "delete fund", "create fund", "modify", "execute",
+            "টাকা পাঠাও", "ট্রান্সফার করো", "পেমেন্ট করো"
+        ]
+        if any(k in q for k in action_keywords):
+            # Check if user is asking the AI to perform the action vs asking about an action
+            action_triggers = ["transfer ৳", "send ৳", "pay ৳", "transfer money", "send money to", "pay to", "please transfer", "can you send"]
+            if any(t in q for t in action_triggers):
+                return "ACTION_REQUEST"
+
         spending_keywords = [
             "how much did i spend", "total spend", "my expense", "how much spent",
             "how much i spent", "spent this month", "total expenditure", "spending overview",
@@ -45,7 +68,8 @@ class FinancialAIService:
         ]
         overrun_keywords = [
             "risk", "overrun", "exceed", "which fund", "budget limit",
-            "budget status", "at risk", "fund risk", "fund risks", "over budget"
+            "budget status", "at risk", "fund risk", "fund risks", "over budget",
+            "forecast", "how much might i spend", "projected"
         ]
         familypass_keywords = [
             "familypass", "family pass", "who spent", "member spending",
@@ -53,13 +77,23 @@ class FinancialAIService:
         ]
         recommend_keywords = [
             "next month", "recommend", "allocation", "allocate",
-            "suggestion", "suggested fund", "budget recommendation"
+            "suggestion", "suggested fund", "budget recommendation", "what should i watch"
         ]
         anomaly_keywords = [
             "unusual", "anomaly", "anomalies", "flagged",
-            "suspicious", "fraud", "irregular", "roc-auc", "roc auc", "f1-score",
-            "model evaluation", "ml report", "classify", "classification", "normal transaction"
+            "why was my", "why was this", "irregular", "flag"
         ]
+
+        # Action Request Defense (refuse autonomous financial movements)
+        action_patterns = [
+            "transfer ৳", "transfer tk", "transfer bdt", "transfer money", "transfer fund",
+            "send money", "pay merchant", "make payment", "pay ৳", "pay tk",
+            "withdraw cash"
+        ]
+        is_limit_change = any(v in q for v in ["change", "set", "update", "increase", "decrease"]) and "limit" in q
+        if q.startswith("transfer ") or is_limit_change or any(p in q for p in action_patterns):
+            if not any(q.startswith(w) for w in ["how to", "why did", "what is", "can i see", "explain"]):
+                return "ACTION_REQUEST"
 
         if any(k in q for k in anomaly_keywords):
             return "ANOMALY"
@@ -75,7 +109,7 @@ class FinancialAIService:
             return "FAMILYPASS"
         if any(k in q for k in recommend_keywords):
             return "RECOMMENDATIONS"
-        # Broad financial terms
+
         financial_terms = [
             "spend", "spent", "balance", "wallet", "save", "saving", "savings", "budget",
             "fund", "funds", "familypass", "family pass", "transaction", "transactions",
@@ -90,141 +124,73 @@ class FinancialAIService:
         return "GENERAL"
 
     @classmethod
-    def get_user_financial_context(cls, user) -> dict:
-        wallet = getattr(user, 'wallet', None)
-        wallet_bal = float(wallet.balance) if wallet else 0.0
+    def get_user_financial_context(cls, user) -> Dict[str, Any]:
+        """Gathers context strictly for this authenticated user."""
+        ctx = MLContextBuilder.build_user_context(user)
+        if getattr(user, 'effective_role', None) != 'ADMIN' and getattr(user, 'role', None) != 'ADMIN':
+            ctx.pop('anomalies', None)
+        return ctx
 
-        # Authoritative monthly financial report from database
-        report = ReportService.generate_report(user, 'monthly')
-        overview = report.get('overview', {})
-        by_category = report.get('by_category', {})
+    @classmethod
+    def explain_transaction(cls, user, transaction: Transaction) -> Dict[str, Any]:
+        """
+        Generates an authoritative, grounded explanation for a single transaction.
+        Language rule: "unusual != fraudulent".
+        """
+        amt = float(transaction.amount)
+        cat = transaction.category or 'General'
+        ts = transaction.timestamp.strftime("%Y-%m-%d %H:%M:%S")
 
-        # Active Purpose Funds
-        funds = PurposeFund.objects.filter(owner=user, status='ACTIVE')
-        funds_data = []
-        for f in funds:
-            alloc = float(f.allocated_amount)
-            curr = float(f.current_balance)
-            spent = max(0.0, alloc - curr)
-            fc = BudgetForecaster.forecast_fund(f)
-            funds_data.append({
-                "id": f.id,
-                "name": f.name,
-                "category": f.category,
-                "allocated_budget": alloc,
-                "current_spent": spent,
-                "current_balance": curr,
-                "burn_rate_predicted_spend": float(fc.get('predicted_amount', alloc)),
-                "potential_overrun": float(fc.get('potential_overrun', 0.0)),
-                "risk_level": fc.get('risk_level', 'SAFE'),
-                "pct_used": round((spent / alloc) * 100.0, 1) if alloc > 0 else 0.0
-            })
+        # Check existing ML anomaly record
+        anom_res = AnomalyResult.objects.filter(transaction=transaction).first()
+        is_anomaly = anom_res.is_anomaly if anom_res else False
+        score = float(anom_res.anomaly_score) if anom_res else 0.0
 
-        # FamilyPass data (Issued by user if owner)
-        family_passes_issued = FamilyPass.objects.filter(owner=user, status='ACTIVE')
-        fp_issued_data = []
-        for fp in family_passes_issued:
-            limit = float(fp.limit_amount)
-            used = float(fp.used_amount)
-            rem = float(fp.remaining_limit)
-            recent_logs = []
-            for item in fp.activity_logs.select_related('transaction', 'transaction__merchant').order_by('-timestamp')[:3]:
-                m_name = item.transaction.merchant.business_name if (item.transaction and item.transaction.merchant) else "Merchant"
-                recent_logs.append({
-                    "amount": float(item.amount),
-                    "merchant": m_name,
-                    "time": item.timestamp.strftime("%d %b %I:%M %p")
-                })
-            fp_issued_data.append({
-                "member_name": fp.member.full_name or fp.member.username,
-                "purpose": fp.purpose_label or fp.purpose,
-                "allowed_categories": fp.get_allowed_categories(),
-                "limit": limit,
-                "used": used,
-                "remaining": rem,
-                "recent_activity": recent_logs
-            })
+        detector = AnomalyDetector.get_instance()
+        analysis = detector.analyze_transaction(transaction)
 
-        # Received permissions coexist with this customer's own wallet and funds.
-        family_passes_received = FamilyPass.objects.filter(member=user, status='ACTIVE')
-        fp_received_data = []
-        for fp in family_passes_received:
-            limit = float(fp.limit_amount)
-            used = float(fp.used_amount)
-            rem = float(fp.remaining_limit)
-            recent_logs = []
-            for item in fp.activity_logs.select_related('transaction', 'transaction__merchant').order_by('-timestamp')[:3]:
-                m_name = item.transaction.merchant.business_name if (item.transaction and item.transaction.merchant) else "Merchant"
-                recent_logs.append({
-                    "amount": float(item.amount),
-                    "merchant": m_name,
-                    "time": item.timestamp.strftime("%d %b %I:%M %p")
-                })
-            fp_received_data.append({
-                "owner_name": fp.owner.full_name or fp.owner.username,
-                "purpose": fp.purpose_label or fp.purpose,
-                "allowed_categories": fp.get_allowed_categories(),
-                "limit": limit,
-                "used": used,
-                "remaining": rem,
-                "recent_activity": recent_logs
-            })
-
-        # Recent completed transactions (last 8)
-        recent_txns = []
-        for t in Transaction.objects.filter(sender=user).order_by('-timestamp')[:8]:
-            m_name = t.merchant.business_name if t.merchant else (t.receiver.username if t.receiver else "N/A")
-            recent_txns.append({
-                "id": t.transaction_id,
-                "amount": float(t.amount),
-                "type": t.transaction_type,
-                "source": t.payment_source,
-                "category": t.category,
-                "target": m_name,
-                "status": t.status,
-                "time": t.timestamp.strftime("%d %b %I:%M %p")
-            })
-
-        # Real Anomalies
-        anomalies = []
-        allowed_anomalies = AnomalyResult.objects.filter(user=user, is_anomaly=True) if user.effective_role == 'ADMIN' else AnomalyResult.objects.none()
-        for a in allowed_anomalies.order_by('-created_at')[:4]:
-            anomalies.append({
-                "txn_id": a.transaction.transaction_id if a.transaction else "TXN",
-                "amount": float(a.transaction.amount) if a.transaction else 0.0,
-                "category": a.transaction.category if a.transaction else "N/A",
-                "score": a.anomaly_score,
-                "reason": a.reason
-            })
+        if is_anomaly:
+            explanation = (
+                f"This transaction of ৳{amt:,.2f} in {cat} was flagged as unusual by the "
+                f"Isolation Forest anomaly detection model (anomaly score: {score:.2f}).\n\n"
+                f"Important: An unusual transaction reflects a statistical departure from your "
+                f"typical spending baseline (e.g. higher amount or non-standard timing); it does NOT "
+                f"mean the transaction is fraudulent.\n\n"
+                f"Key factors identified:\n{analysis['reason']}"
+            )
+        else:
+            explanation = (
+                f"This transaction of ৳{amt:,.2f} in {cat} on {ts} aligns with your normal "
+                f"historical financial patterns. The anomaly score is {score:.2f}, which is within "
+                f"normal statistical control thresholds."
+            )
 
         return {
-            "user_name": user.full_name or user.username,
-            "username": user.username,
-            "role": user.role,
-            "wallet_balance": wallet_bal,
-            "monthly_report": {
-                "total_income": overview.get("total_income", 0.0),
-                "total_spent": overview.get("total_spent", 0.0),
-                "net_savings": overview.get("net_savings", 0.0),
-                "savings_rate": overview.get("savings_rate_pct", 0.0),
-                "total_transactions": overview.get("total_transactions", 0),
-                "average_transaction": overview.get("average_transaction", 0.0),
-                "by_category": by_category
-            },
-            "purpose_funds": funds_data,
-            "family_passes_issued": fp_issued_data,
-            "family_passes_received": fp_received_data,
-            "recent_transactions": recent_txns,
-            **({'anomalies': anomalies} if user.effective_role == 'ADMIN' else {}),
-            "ml_forecasts_available": len(funds_data) > 0,
-            "market_signals": "Market signals unavailable (live external market feeds not connected)"
+            "transaction_id": transaction.transaction_id,
+            "amount": amt,
+            "category": cat,
+            "timestamp": ts,
+            "is_anomaly": is_anomaly,
+            "anomaly_score": round(score, 4),
+            "model_version": anom_res.model_version if anom_res else detector.model_version,
+            "explanation": explanation,
+            "rules_flagged": analysis.get('rules_flagged', []),
+            "features_summary": analysis.get('features_summary', {})
         }
 
     @classmethod
-    def generate_online_response(cls, user, question: str, intent: str, facts: dict, lang: str = 'en') -> dict:
+    def generate_online_response(cls, user, question: str, intent: str, facts: dict, lang: str = 'en') -> Optional[Dict[str, Any]]:
+        """
+        Invokes Gemini with the 19 strict grounded AI Coach guidelines.
+        Returns None if Gemini key is missing, call fails, or times out.
+        """
         gemini_key = getattr(settings, 'GEMINI_API_KEY', '').strip()
         if not gemini_key:
             return None
+
+        # Autonomous action defense: Intercept action requests immediately
+        if intent == "ACTION_REQUEST":
+            return cls._handle_action_refusal(question, lang)
 
         try:
             from google import genai
@@ -234,6 +200,7 @@ class FinancialAIService:
             model_name = getattr(settings, 'GEMINI_MODEL', 'gemini-3.1-flash-lite')
             system_instruction = SUPPORT_INSTRUCTION + f"\nReply in {'Bengali' if lang == 'bn' else 'English'}."
             contents = json.dumps({'authorized_context': context, 'user_question': question}, default=str)
+
             with genai.Client(api_key=gemini_key, http_options=types.HttpOptions(timeout=15000, retry_options=types.HttpRetryOptions(attempts=1))) as client:
                 response = client.models.generate_content(
                     model=model_name,
@@ -243,251 +210,190 @@ class FinancialAIService:
             if response and response.text and response.text.strip():
                 return {
                     "question": question,
-                    "answer": response.text,
-                    "source": "Gemini 3.1 Flash-Lite",
+                    "answer": response.text.strip(),
+                    "source": f"{model_name} (AI-Grounded)",
                     "ai_powered": True,
                     "online": True,
                     "intent": intent,
                     "grounded_facts": context,
                     "suggested_actions": cls._suggest_actions_for_intent(intent, context),
                 }
+
         except Exception:
-            # Never return or log provider exceptions: they can contain credentials.
             pass
+
         return None
 
     @classmethod
-    def deterministic_offline_analysis(cls, user, question: str, intent: str, facts: dict, lang: str = 'en') -> dict:
-        mr = facts['monthly_report']
+    def _handle_action_refusal(cls, question: str, lang: str = 'en') -> Dict[str, Any]:
+        """Refuses autonomous financial action execution with safe guidance."""
+        if lang == 'bn':
+            text = (
+                "🛡️ **নিরাপত্তা সতর্কতা:**\n\n"
+                "আমি আপনার পরামর্শক এআই কোচ, তাই আমি নিজে কোনো লেনদেন বা টাকা স্থানান্তর সম্পাদন করতে পারি না।\n\n"
+                "আপনার সুরক্ষার জন্য সকল লেনদেন অবশ্যই ফান্ডশেয়ার অ্যাপের মাধ্যমে আপনার **গোপন ট্রানজ্যাকশন পিন (PIN)** দিয়ে সম্পন্ন করতে হবে।\n"
+                "অনুগ্রহ করে ড্যাশবোর্ডের 'Send Money' বা 'Purpose Funds' মেনু থেকে লেনদেনটি সম্পন্ন করুন।"
+            )
+        else:
+            text = (
+                "🛡️ **Security Safeguard:**\n\n"
+                "As your advisory AI Financial Coach, I cannot directly execute financial transfers, make payments, or alter balances on your account.\n\n"
+                "For your security, all financial actions require explicit authorization and your **secure transaction PIN** through FundShare's authorized payment flows.\n\n"
+                "Please use the **Send Money** or **Purpose Funds** section in your dashboard to perform this transfer."
+            )
+        return {
+            "question": question,
+            "answer": text,
+            "source": "Security Policy Enforcement",
+            "ai_powered": False,
+            "online": True,
+            "intent": "ACTION_REQUEST",
+            "is_action_refusal": True,
+            "suggested_actions": [{"type": "NAVIGATE_FUNDS", "label": "Manage Funds"}]
+        }
 
-        if intent == "GENERAL":
-            if lang == "bn":
+    @classmethod
+    def deterministic_offline_analysis(cls, user, question: str, intent: str, facts: dict, lang: str = 'en') -> Dict[str, Any]:
+        """
+        Robust offline fallback providing 100% grounded analytics directly from ledger data.
+        Ensures the application functions smoothly without crashing when Gemini is offline.
+        """
+        mo = facts['monthly_overview']
+        wallet_bal = facts['wallet']['balance']
+
+        if intent == "ACTION_REQUEST":
+            return cls._handle_action_refusal(question, lang)
+
+        if intent == "ANOMALY":
+            anoms = facts['anomalies']
+            if anoms:
+                latest = anoms[0]
                 text = (
-                    "👋 **হ্যালো!** আমি ফান্ডশেয়ার (FundShare) ফিনান্সিয়াল ইন্টেলিজেন্স কোচ।\n\n"
-                    "বর্তমানে অফলাইন ডিটারমিনিস্টিক ইঞ্জিন সক্রিয় রয়েছে। সাধারণ জ্ঞান বা সাধারণ আলোচনার জন্য অনলাইন কানেকশন প্রয়োজন, তবে আপনি আপনার **ওয়ালেট ব্যালান্স, খরচ বিবরণ, পারপাস ফান্ড, বাজেট এবং ফ্যামিলিপাস** সম্পর্কে যেকোনো হিসাব জানতে পারেন!"
+                    f"🔍 **Unusual Spending Analysis:**\n\n"
+                    f"Transaction **{latest['transaction_id']}** (৳{latest['amount']:,.2f} in {latest['category']}) "
+                    f"was flagged as unusual by the anomaly detection model (Score: **{latest['anomaly_score']:.2f}**).\n\n"
+                    f"**Why?** {latest['reason']}\n\n"
+                    f"ℹ️ *Note: An anomaly flag indicates statistical variation from your typical baseline, not fraud.*"
                 )
             else:
                 text = (
-                    "👋 **Hello!** I am your FundShare Financial Intelligence Coach.\n\n"
-                    "Currently, the offline deterministic financial engine is active. While open-ended general conversations require an active online Gemini connection, you can ask me anything about your **account balance, spending breakdown, budget forecasts, purpose funds, or FamilyPass delegations** based directly on your ledger."
+                    f"✅ **No Unusual Activity Detected:**\n\n"
+                    f"None of your recent transactions deviate significantly from your historical spending benchmarks."
                 )
             return {
                 "question": question,
                 "answer": text,
-                "source": "Offline Financial Intelligence Engine",
+                "source": "Deterministic ML Analytics (Offline)",
                 "ai_powered": False,
                 "online": False,
                 "intent": intent,
-                "suggested_actions": []
+                "suggested_actions": [{"type": "NAVIGATE_HISTORY", "label": "View History"}]
             }
 
-        elif intent == "SPENDING_SUMMARY":
-            total_spent = mr['total_spent']
-            txns_count = mr['total_transactions']
-            avg_txn = mr['average_transaction']
-            by_cat = mr['by_category']
-            cat_lines = "\n".join([f"  • **{cat}:** ৳{amt:,.2f}" for cat, amt in by_cat.items()]) if by_cat else "  • No category expenses recorded."
-
-            if lang == "bn":
+        elif intent == "BUDGET_OVERRUN":
+            funds = facts['purpose_funds']
+            overruns = [f for f in funds if f['potential_overrun'] > 0]
+            if overruns:
+                lines = [
+                    f"• **{f['name']} ({f['category']}):** Predicted spend ৳{f['predicted_month_end_spend']:,.2f} "
+                    f"vs budget ৳{f['allocated_budget']:,.2f} (Potential overrun: **৳{f['potential_overrun']:,.2f}**)"
+                    for f in overruns
+                ]
                 text = (
-                    f"📊 **আপনার মাসিক খরচ সারসংক্ষেপ:**\n\n"
-                    f"• এই মাসে সর্বমোট খরচ: **৳{total_spent:,.2f}** ({txns_count} টি লেনদেন)\n"
-                    f"• গড়ে প্রতি লেনদেন: **৳{avg_txn:,.2f}**\n\n"
-                    f"**ক্যাটাগরি ভিত্তিক খরচ:**\n{cat_lines}"
+                    f"⚠️ **Purpose Fund Budget Forecast Alert:**\n\n"
+                    f"The machine learning forecaster predicts potential overruns in {len(overruns)} fund(s):\n" +
+                    "\n".join(lines) +
+                    f"\n\n**Recommendation:** Review allocations or rebalance from surplus funds."
                 )
             else:
                 text = (
-                    f"📊 **Monthly Spending Overview:**\n\n"
-                    f"• **Total Spent This Month:** **৳{total_spent:,.2f}** across {txns_count} completed transactions.\n"
-                    f"• **Average Transaction Amount:** **৳{avg_txn:,.2f}**\n\n"
-                    f"**Category Breakdown:**\n{cat_lines}"
+                    f"✅ **All Purpose Funds On Track:**\n\n"
+                    f"The ML forecasting model projects that all {len(funds)} active funds will remain within their allocated monthly budgets."
                 )
             return {
                 "question": question,
                 "answer": text,
-                "source": "Offline Financial Intelligence Engine",
-                "ai_powered": False,
-                "online": False,
-                "intent": intent,
-                "suggested_actions": [{"type": "NAVIGATE_HISTORY", "label": "View Transactions"}]
-            }
-
-        elif intent == "CATEGORY_SPENDING":
-            by_cat = mr['by_category']
-            if by_cat:
-                top_cat, top_amt = list(by_cat.items())[0]
-                cat_lines = "\n".join([f"• **{cat}:** ৳{amt:,.2f}" for cat, amt in by_cat.items()])
-                if lang == "bn":
-                    text = (
-                        f"🏆 **সর্বোচ্চ খরচের খাত: {top_cat} (৳{top_amt:,.2f})**\n\n"
-                        f"**সম্পূর্ণ ক্যাটাগরি তালিকা:**\n{cat_lines}"
-                    )
-                else:
-                    text = (
-                        f"🏆 **Top Spending Category: {top_cat} (৳{top_amt:,.2f})**\n\n"
-                        f"**Full Category Breakdown:**\n{cat_lines}"
-                    )
-            else:
-                text = "📊 You have not recorded any category expenses for this period."
-
-            return {
-                "question": question,
-                "answer": text,
-                "source": "Offline Financial Intelligence Engine",
-                "ai_powered": False,
-                "online": False,
-                "intent": intent,
-                "suggested_actions": []
-            }
-
-        elif intent == "SAVINGS_ANALYSIS":
-            income = mr['total_income']
-            spent = mr['total_spent']
-            savings = mr['net_savings']
-            rate = mr['savings_rate']
-            by_cat = mr['by_category']
-            top_cat = list(by_cat.keys())[0] if by_cat else "discretionary spending"
-
-            if lang == "bn":
-                text = (
-                    f"💰 **সঞ্চয় ও আর্থিক শৃঙ্খলা বিশ্লেষণ:**\n\n"
-                    f"• মোট আয়: **৳{income:,.2f}**\n"
-                    f"• মোট ব্যয়: **৳{spent:,.2f}**\n"
-                    f"• নিট সঞ্চয়: **৳{savings:,.2f}**\n"
-                    f"• সঞ্চয়ের হার: **{rate}%**\n\n"
-                    f"💡 **সাশ্রয়ী পরামর্শ:** আগামী মাসে সঞ্চয় বৃদ্ধি করতে আপনার প্রধান খরচের খাত ({top_cat}) এর উপর নজর রাখুন এবং পারপাস ফান্ড বাজেটের অতিরিক্ত ব্যবহার পরিহার করুন।"
-                )
-            else:
-                text = (
-                    f"💰 **Savings & Financial Discipline Analysis:**\n\n"
-                    f"• **Total Income:** **৳{income:,.2f}**\n"
-                    f"• **Total Spent:** **৳{spent:,.2f}**\n"
-                    f"• **Net Savings:** **৳{savings:,.2f}**\n"
-                    f"• **Savings Rate:** **{rate}%**\n\n"
-                    f"💡 **Actionable Advice:** To maximize savings next month, focus on moderating outlays in your largest spending category (**{top_cat}**) and allocate a fixed portion of income to your Purpose Funds at the start of the month."
-                )
-            return {
-                "question": question,
-                "answer": text,
-                "source": "Offline Financial Intelligence Engine",
+                "source": "Deterministic ML Forecasting (Offline)",
                 "ai_powered": False,
                 "online": False,
                 "intent": intent,
                 "suggested_actions": [{"type": "NAVIGATE_FUNDS", "label": "Review Funds"}]
             }
 
-        elif intent == "BUDGET_OVERRUN":
-            funds = facts['purpose_funds']
-            at_risk = [f for f in funds if f['potential_overrun'] > 0]
-            if at_risk:
-                lines = []
-                for f in at_risk:
-                    lines.append(f"• **{f['name']} Fund:** Spent ৳{f['current_spent']:,.2f} / ৳{f['allocated_budget']:,.2f} (Projected: ৳{f['burn_rate_predicted_spend']:,.2f}, Overrun: ৳{f['potential_overrun']:,.2f})")
-                text = "⚠️ **Purpose Funds at Risk of Overrun:**\n\n" + "\n".join(lines)
-                actions = [{"type": "NAVIGATE_FUNDS", "label": "Manage Funds"}]
-            elif funds:
-                text = "✅ **All Purpose Funds are on track!** No projected budget overruns detected based on current burn rates."
-                actions = [{"type": "NAVIGATE_FUNDS", "label": "View Funds"}]
+        elif intent == "RECOMMENDATIONS":
+            recs = RecommendationEngine.generate_recommendations(user)
+            if recs:
+                rec_lines = [f"• **{r['title']}:** {r['message']}" for r in recs[:3]]
+                text = "💡 **Grounded Financial Recommendations:**\n\n" + "\n\n".join(rec_lines)
             else:
-                text = "ℹ️ You do not have any active Purpose Funds configured yet. Create a Purpose Fund to track specific budgets."
-                actions = [{"type": "NAVIGATE_FUNDS", "label": "Create Fund"}]
-
+                text = "💡 **Recommendations:** Your spending and budget allocations are well-aligned. Continue your current savings discipline."
             return {
                 "question": question,
                 "answer": text,
-                "source": "Offline Financial Intelligence Engine",
+                "source": "Deterministic Recommendation Engine",
                 "ai_powered": False,
                 "online": False,
                 "intent": intent,
-                "suggested_actions": actions
+                "suggested_actions": [{"type": "NAVIGATE_FUNDS", "label": "Manage Funds"}]
             }
 
         elif intent == "FAMILYPASS":
             issued = facts['family_passes_issued']
             received = facts['family_passes_received']
-
             lines = []
-            if issued:
-                lines.append("👥 **Active FamilyPass Delegations (Issued by you):**")
-                for fp in issued:
-                    lines.append(f"• **{fp['member_name']}** ({fp['purpose']}): Limit ৳{fp['limit']:,.2f} | Spent ৳{fp['used']:,.2f} | Remaining **৳{fp['remaining']:,.2f}**")
-            if received:
-                lines.append("👥 **FamilyPass Allocations (Received from family):**")
-                for fp in received:
-                    lines.append(f"• From **{fp['owner_name']}** ({fp['purpose']}): Limit ৳{fp['limit']:,.2f} | Spent ৳{fp['used']:,.2f} | Remaining **৳{fp['remaining']:,.2f}**")
+            for fp in issued:
+                lines.append(f"• **Issued to {fp['member_name']} ({fp['purpose']}):** Limit ৳{fp['limit_amount']:,.2f}, Used ৳{fp['used_amount']:,.2f}, Remaining: **৳{fp['remaining_limit']:,.2f}**")
+            for fp in received:
+                lines.append(f"• **Received from {fp['owner_name']} ({fp['purpose']}):** Remaining quota: **৳{fp['remaining_limit']:,.2f}**")
 
-            if lines:
-                text = "\n".join(lines)
-            else:
-                text = "👥 **FamilyPass Status:** No active FamilyPass delegations found for your account."
-
+            summary = "\n".join(lines) if lines else "No active FamilyPass delegations found."
+            text = f"👥 **FamilyPass Status Overview:**\n\n{summary}"
             return {
                 "question": question,
                 "answer": text,
-                "source": "Offline Financial Intelligence Engine",
+                "source": "Deterministic FamilyPass Ledger",
                 "ai_powered": False,
                 "online": False,
                 "intent": intent,
                 "suggested_actions": [{"type": "NAVIGATE_FAMILYPASS", "label": "FamilyPass Dashboard"}]
             }
 
-        elif intent == "RECOMMENDATIONS":
-            funds = facts['purpose_funds']
-            if funds:
-                lines = []
-                for f in funds:
-                    rec_amt = f['burn_rate_predicted_spend'] if f['potential_overrun'] > 0 else f['allocated_budget']
-                    lines.append(f"• **{f['name']} Fund:** Current ৳{f['allocated_budget']:,.2f} → Recommended **৳{rec_amt:,.2f}** ({'adjust up to cover burn rate' if f['potential_overrun'] > 0 else 'maintain healthy baseline'})")
-                text = "🎯 **Recommended Fund Budget Allocations for Next Month:**\n\n" + "\n".join(lines) + "\n\n💡 *Note: Recommendations are advisory; you retain full control over fund transfers.*"
-            else:
-                text = "🎯 **Next Month Recommendations:** Start by creating Purpose Funds for your essential categories like Grocery, Medical, and Utilities to receive personalized budget optimizations."
+        elif intent == "SPENDING_SUMMARY" or intent == "CATEGORY_SPENDING":
+            total_spent = mo['total_spent']
+            txns_count = mo['total_transactions']
+            by_cat = mo['by_category']
+            cat_lines = "\n".join([f"  • **{cat}:** ৳{amt:,.2f}" for cat, amt in by_cat.items()]) if by_cat else "  • No category expenses recorded."
 
-            return {
-                "question": question,
-                "answer": text,
-                "source": "Offline Financial Intelligence Engine",
-                "ai_powered": False,
-                "online": False,
-                "intent": intent,
-                "suggested_actions": [{"type": "NAVIGATE_FUNDS", "label": "Adjust Funds"}]
-            }
-
-        elif intent == "ANOMALY":
-            anomalies = facts['anomalies']
-            if anomalies:
-                lines = []
-                for a in anomalies:
-                    lines.append(f"• **{a['txn_id']}** (৳{a['amount']:,.2f}, {a['category']}): {a['reason']} (Score: {a['score']:.2f})")
-                text = "🔍 **Flagged Unusual Transactions:**\n\n" + "\n".join(lines)
-            else:
-                text = "🔍 **Anomaly Audit:** No unusual or outlier transactions have been flagged on your account."
-
-            return {
-                "question": question,
-                "answer": text,
-                "source": "Offline Financial Intelligence Engine",
-                "ai_powered": False,
-                "online": False,
-                "intent": intent,
-                "suggested_actions": [{"type": "NAVIGATE_HISTORY", "label": "Inspect History"}]
-            }
-
-        else:  # FINANCIAL_GENERAL / default
-            funds_count = len(facts['purpose_funds'])
-            passes_count = len(facts['family_passes_issued']) + len(facts['family_passes_received'])
             text = (
-                f"📑 **Executive Financial Health Summary:**\n\n"
-                f"• Available Normal Wallet: **৳{facts['wallet_balance']:,.2f}**\n"
-                f"• This Month's Income: **৳{mr['total_income']:,.2f}** | Total Spent: **৳{mr['total_spent']:,.2f}**\n"
-                f"• Net Savings: **৳{mr['net_savings']:,.2f}** (Savings Rate: **{mr['savings_rate']}%**)\n"
-                f"• Active Purpose Funds: **{funds_count} categories**\n"
-                f"• Active FamilyPass Delegations: **{passes_count} active**\n\n"
-                f"**Advice:** Keep your spending disciplined and maintain emergency reserves in your Purpose Funds."
+                f"📊 **Monthly Spending Overview:**\n\n"
+                f"• **Total Spent This Month:** **৳{total_spent:,.2f}** across {txns_count} completed transactions.\n"
+                f"• **Current Normal Wallet Balance:** **৳{wallet_bal:,.2f}**\n\n"
+                f"**Category Breakdown:**\n{cat_lines}"
             )
             return {
                 "question": question,
                 "answer": text,
-                "source": "Offline Financial Intelligence Engine",
+                "source": "Deterministic Financial Engine",
+                "ai_powered": False,
+                "online": False,
+                "intent": intent,
+                "suggested_actions": [{"type": "NAVIGATE_HISTORY", "label": "View History"}]
+            }
+
+        else:
+            funds_cnt = len(facts['purpose_funds'])
+            text = (
+                f"📑 **Executive Financial Health Summary:**\n\n"
+                f"• Available Normal Wallet: **৳{wallet_bal:,.2f}**\n"
+                f"• This Month's Income: **৳{mo['total_income']:,.2f}** | Total Spent: **৳{mo['total_spent']:,.2f}**\n"
+                f"• Net Savings: **৳{mo['net_savings']:,.2f}** (Savings Rate: **{mo['savings_rate_pct']}%**)\n"
+                f"• Active Purpose Funds: **{funds_cnt} categories**\n\n"
+                f"Ask me specific questions about your **fund risks, forecasts, anomalies, or spending trends**!"
+            )
+            return {
+                "question": question,
+                "answer": text,
+                "source": "Deterministic Financial Engine",
                 "ai_powered": False,
                 "online": False,
                 "intent": intent,
@@ -496,42 +402,53 @@ class FinancialAIService:
 
     @classmethod
     def _suggest_actions_for_intent(cls, intent: str, facts: dict) -> list:
-        if intent == "BUDGET_OVERRUN" or intent == "RECOMMENDATIONS":
+        if intent in ["BUDGET_OVERRUN", "RECOMMENDATIONS"]:
             return [{"type": "NAVIGATE_FUNDS", "label": "Manage Funds"}]
         elif intent == "FAMILYPASS":
             return [{"type": "NAVIGATE_FAMILYPASS", "label": "FamilyPass"}]
-        elif intent == "ANOMALY" or intent == "SPENDING_SUMMARY":
+        elif intent in ["ANOMALY", "SPENDING_SUMMARY"]:
             return [{"type": "NAVIGATE_HISTORY", "label": "Transactions"}]
         return []
 
     @classmethod
-    def answer_query(cls, user, question: str, lang: str = "en") -> dict:
+    def answer_query(cls, user, question: str, lang: str = "en") -> Dict[str, Any]:
         """
         Main query entry point:
-        1. Matches exact predefined product questions without external calls
-        2. Detects intent and attempts bounded, authorized Gemini support
-        3. Preserves deterministic financial analytics on provider failure
+        1. Checks exact predefined product demo QA first
+        2. Gathers ground-truth user financial facts
+        3. Detects intent (Action Refusal vs Anomaly vs Budget vs General)
+        4. Attempts Online Gemini Generation (with timeout)
+        5. Falls back seamlessly to Deterministic Offline Analytics if offline or on error
         """
+        # Exact predefined demo QA bypasses online LLM and ledger
         entry = find_demo_answer(question)
         if entry:
             return demo_response(question, entry)
+
+        facts = cls.get_user_financial_context(user)
         intent = cls.detect_intent(question)
-        if intent == 'ANOMALY' and user.effective_role != 'ADMIN':
-            return {'answer': 'Transaction anomaly classifications and model evaluation reports are available to ADMIN users only. You can still review History, spending summaries and budget forecasts.',
-                    'source': 'offline', 'intent': intent}
+        if intent == 'ANOMALY' and getattr(user, 'effective_role', None) != 'ADMIN' and getattr(user, 'role', None) != 'ADMIN':
+            return {
+                'answer': 'Transaction anomaly classifications and model evaluation reports are available to ADMIN users only. You can still review History, spending summaries and budget forecasts.',
+                'source': 'offline',
+                'intent': intent
+            }
+
+        # Immediate refusal of any autonomous financial action
+        if intent == "ACTION_REQUEST":
+            return cls._handle_action_refusal(question, lang)
 
         # Attempt Online Gemini call first
-        online_response = cls.generate_online_response(user, question, intent, {}, lang)
+        online_response = cls.generate_online_response(user, question, intent, facts, lang)
         if online_response:
             return online_response
 
         # Fallback to Deterministic Offline Analytics
-        facts = cls.get_user_financial_context(user)
-        response = cls.deterministic_offline_analysis(user, question, intent, facts, lang)
-        response['fallback'] = True
-        response['notice'] = 'Gemini is unavailable. Demo answers and local financial insights are still available.'
-        return response
+        fallback_res = cls.deterministic_offline_analysis(user, question, intent, facts, lang)
+        fallback_res['fallback'] = True
+        fallback_res['notice'] = 'Gemini is unavailable. Demo answers and local financial insights are still available.'
+        return fallback_res
 
 
-# Backward-compatible alias for existing imports
+# Backward-compatible alias
 AICoach = FinancialAIService

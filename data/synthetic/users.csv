@@ -1,0 +1,26 @@
+user_id,username,full_name,phone,role,profile_type,monthly_income_bdt,budget_discipline,created_at
+1,tariq_rahman,Tariq Rahman,01710000001,CUSTOMER,Salaried Family Head,85000,STRICT,2026-04-11 08:00:00
+2,anisul_haque,Anisul Haque,01710000002,CUSTOMER,Salaried Family Head,95000,MODERATE,2026-04-11 08:00:00
+3,farhan_kabir,Farhan Kabir,01710000003,CUSTOMER,Salaried Family Head,78000,STRICT,2026-04-11 08:00:00
+4,mahbub_alam,Mahbub Alam,01710000004,CUSTOMER,Salaried Family Head,110000,MODERATE,2026-04-11 08:00:00
+5,kamrul_hasan,Kamrul Hasan,01710000005,CUSTOMER,Salaried Family Head,72000,STRICT,2026-04-11 08:00:00
+6,zahid_iqbal,Zahid Iqbal,01710000006,CUSTOMER,Salaried Family Head,88000,MODERATE,2026-04-11 08:00:00
+7,delwar_hossain,Delwar Hossain,01710000007,CUSTOMER,Salaried Family Head,68000,STRICT,2026-04-11 08:00:00
+8,saifur_rehman,Saifur Rehman,01710000008,CUSTOMER,Salaried Family Head,105000,MODERATE,2026-04-11 08:00:00
+9,shahidul_islam,Shahidul Islam,01710000009,CUSTOMER,Salaried Family Head,90000,STRICT,2026-04-11 08:00:00
+10,samiul_tariq,Samiul Tariq,01710000010,CUSTOMER,Student,12000,MODERATE,2026-04-11 08:00:00
+11,tanvir_haque,Tanvir Haque,01710000011,CUSTOMER,Student,10000,IMPULSIVE,2026-04-11 08:00:00
+12,rafid_kabir,Rafid Kabir,01710000012,CUSTOMER,Student,11000,MODERATE,2026-04-11 08:00:00
+13,nahian_hasan,Nahian Hasan,01710000013,CUSTOMER,Student,9000,STRICT,2026-04-11 08:00:00
+14,sakib_chowdhury,Sakib Chowdhury,01710000014,CUSTOMER,Student,14000,IMPULSIVE,2026-04-11 08:00:00
+15,zubair_ahmed,Zubair Ahmed,01710000015,CUSTOMER,Student,10500,MODERATE,2026-04-11 08:00:00
+16,nasrin_rahman,Nasrin Rahman,01710000016,CUSTOMER,Moderate Family Member,20000,STRICT,2026-04-11 08:00:00
+17,farzana_haque,Farzana Haque,01710000017,CUSTOMER,Moderate Family Member,22000,STRICT,2026-04-11 08:00:00
+18,rumana_alam,Rumana Alam,01710000018,CUSTOMER,Moderate Family Member,25000,MODERATE,2026-04-11 08:00:00
+19,sadia_chowdhury,Sadia Chowdhury,01710000019,CUSTOMER,Moderate Family Member,28000,MODERATE,2026-04-11 08:00:00
+20,asif_chowdhury,Asif Chowdhury,01710000020,CUSTOMER,High-Spending User,185000,MODERATE,2026-04-11 08:00:00
+21,tanzeem_morshed,Tanzeem Morshed,01710000021,CUSTOMER,High-Spending User,210000,MODERATE,2026-04-11 08:00:00
+22,nafis_fuad,Nafis Fuad,01710000022,CUSTOMER,High-Spending User,165000,MODERATE,2026-04-11 08:00:00
+23,shafiqul_huda,Shafiqul Huda,01710000023,CUSTOMER,Impulsive Spender,65000,IMPULSIVE,2026-04-11 08:00:00
+24,emon_khandaker,Emon Khandaker,01710000024,CUSTOMER,Impulsive Spender,55000,IMPULSIVE,2026-04-11 08:00:00
+25,arif_shariar,Arif Shariar,01710000025,CUSTOMER,Impulsive Spender,70000,IMPULSIVE,2026-04-11 08:00:00

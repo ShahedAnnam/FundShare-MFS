@@ -1,0 +1,33 @@
+merchant_id,business_name,category,account_number,contact_phone,address,final_balance,is_active
+1,Agora Super Shop,Grocery,AGR-1001,01720000001,"Gulshan 2, Dhaka",50000.00,True
+2,Shwapno Superstore,Grocery,SHW-1002,01720000002,"Dhanmondi 27, Dhaka",50000.00,True
+3,Unimart Hypermarket,Grocery,UNI-1003,01720000003,"Chef's Table, Gulshan, Dhaka",50000.00,True
+4,Meena Bazar,Grocery,MNB-1004,01720000004,"Uttara Sector 3, Dhaka",50000.00,True
+5,Chaldal Grocery Express,Grocery,CHL-1005,01720000005,"Banasree, Dhaka",50000.00,True
+6,Karwan Bazar Wholesale,Grocery,KBW-1006,01720000006,"Karwan Bazar, Dhaka",50000.00,True
+7,Labaid Pharmacy,Medicine,LAB-2001,01720000007,"Dhanmondi, Dhaka",50000.00,True
+8,Tamanna Pharmacy,Medicine,TAM-2002,01720000008,"Mirpur 10, Dhaka",50000.00,True
+9,Green Life Model Pharmacy,Medicine,GLP-2003,01720000009,"Green Road, Dhaka",50000.00,True
+10,Square Hospital Pharmacy,Medicine,SQP-2004,01720000010,"Panthapath, Dhaka",50000.00,True
+11,Square Hospital Diagnostic,Treatment,SQR-3001,01720000011,"Panthapath, Dhaka",50000.00,True
+12,Evercare Hospital Lab,Treatment,EVR-3002,01720000012,"Bashundhara R/A, Dhaka",50000.00,True
+13,Popular Diagnostic Centre,Treatment,POP-3003,01720000013,"Shantinagar, Dhaka",50000.00,True
+14,Scholastica School,Education,SCH-4001,01720000014,"Uttara Sector 1, Dhaka",50000.00,True
+15,Sunnydale Academy,Education,SUN-4002,01720000015,"Dhanmondi 6, Dhaka",50000.00,True
+16,Daffodil University Tuition,Education,DIU-4003,01720000016,"Ashulia, Dhaka",50000.00,True
+17,Mastermind School,Education,MST-4004,01720000017,"Dhanmondi 12, Dhaka",50000.00,True
+18,DESCO Prepaid Utility,Electricity,DSC-5001,01720000018,"Nikunja 2, Dhaka",50000.00,True
+19,DPDC Electricity Payment,Electricity,DPD-5002,01720000019,"Motijheel C/A, Dhaka",50000.00,True
+20,Link3 Internet Utilities,Electricity,LNK-5003,01720000020,"Mohakhali DOHS, Dhaka",50000.00,True
+21,Sultan's Dine Kacchi,Restaurant/Food,SLT-6001,01720000021,"Dhanmondi, Dhaka",50000.00,True
+22,Star Kabab & Restaurant,Restaurant/Food,STR-6002,01720000022,"Banani 11, Dhaka",50000.00,True
+23,Kacchi Bhai Biryani,Restaurant/Food,KCH-6003,01720000023,"Bashundhara Gate, Dhaka",50000.00,True
+24,Takeout Gourmet Burgers,Restaurant/Food,TKO-6004,01720000024,"Mirpur 2, Dhaka",50000.00,True
+25,Shohoz Interdistrict Ride,Transport,SHZ-7001,01720000025,"Kawran Bazar, Dhaka",50000.00,True
+26,Uber Bangladesh Mobility,Transport,UBR-7002,01720000026,"Gulshan 1, Dhaka",50000.00,True
+27,Pathao Transportation,Transport,PTH-7003,01720000027,"Niketon, Dhaka",50000.00,True
+28,Eastern Housing Rental,Rent,EST-8001,01720000028,"Kakrail, Dhaka",50000.00,True
+29,Rangs Living Rent,Rent,RNG-8002,01720000029,"Tejgaon I/A, Dhaka",50000.00,True
+30,Aarong Lifestyle Retail,Shopping,AAR-9001,01720000030,"Lalmatia, Dhaka",50000.00,True
+31,General Utility & Services,Other,OTH-9002,01720000031,"Motijheel C/A, Dhaka",50000.00,True
+32,Beximco Digital Services,Other,OTH-9003,01720000032,"Gulshan 1, Dhaka",50000.00,True

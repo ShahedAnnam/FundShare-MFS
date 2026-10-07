@@ -116,7 +116,29 @@ class AnomalyDetector:
 
     @property
     def evaluation_metrics(self):
-        return self.bundle['metadata'] if self.bundle else {'available': False, 'message': self.load_error or 'Train the anomaly model first.'}
+        if self.bundle:
+            meta = dict(self.bundle['metadata'])
+            meta['f1_score'] = meta.get('f1', 0.0)
+            return meta
+        # Check ml_artifacts/anomaly/metrics.json if bundle is not loaded
+        metrics_path = Path(settings.BASE_DIR) / 'ml_artifacts' / 'anomaly' / 'metrics.json'
+        if metrics_path.exists():
+            try:
+                data = json.loads(metrics_path.read_text(encoding='utf-8'))
+                perf = data.get('model_performance', {})
+                f1_val = perf.get('f1', 0.0)
+                return {
+                    'precision': perf.get('precision', 0.0),
+                    'recall': perf.get('recall', 0.0),
+                    'f1': f1_val,
+                    'f1_score': f1_val,
+                    'roc_auc': perf.get('roc_auc', 0.0),
+                    'pr_auc': perf.get('pr_auc', 0.0),
+                    'model_version': 'iso_forest_v2.0'
+                }
+            except Exception:
+                pass
+        return {'available': False, 'message': self.load_error or 'Train the anomaly model first.'}
 
     @classmethod
     def train(cls, dataset=DATASET, artifact=ARTIFACT):
@@ -156,6 +178,7 @@ class AnomalyDetector:
             'precision': float(precision_score(labels, prediction, zero_division=0)),
             'recall': float(recall_score(labels, prediction, zero_division=0)),
             'f1': float(f1_score(labels, prediction, zero_division=0)),
+            'f1_score': float(f1_score(labels, prediction, zero_division=0)),
             'roc_auc': float(roc_auc_score(labels, scores)) if len(set(labels)) == 2 else None,
             'confusion_matrix': confusion_matrix(labels, prediction, labels=[0, 1]).tolist(),
             'test_normal_count': int((labels == 0).sum()), 'test_anomaly_count': int((labels == 1).sum()),
@@ -186,6 +209,10 @@ class AnomalyDetector:
         return self.evaluation_metrics
 
     def analyze_transaction(self, txn):
+        if not self.bundle:
+            # Fall back to training if not present
+            self.train()
+            self.__init__(self.artifact_path)
         if not self.bundle:
             raise RuntimeError('Anomaly model unavailable; retry scoring after training.')
         inputs = transaction_features(txn)

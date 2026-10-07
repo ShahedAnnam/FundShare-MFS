@@ -1,0 +1,60 @@
+{
+  "model_type": "HistGradientBoostingRegressor",
+  "random_seed": 42,
+  "timestamp": "2026-10-07T05:57:27.126506",
+  "aggregation_level": "Weekly User-Category Panel",
+  "train_period": "2026-04-27 00:00:00 to 2026-07-27 00:00:00",
+  "validation_period": "2026-08-03 00:00:00 to 2026-08-31 00:00:00",
+  "test_period": "2026-09-07 00:00:00 to 2026-10-05 00:00:00",
+  "samples": {
+    "train": 3780,
+    "validation": 1350,
+    "test": 1350
+  },
+  "baselines": {
+    "last_value_baseline": {
+      "mae": 6465.54,
+      "rmse": 21952.3,
+      "wape": 267.22,
+      "mape": 127.67,
+      "sample_count": 1350
+    },
+    "moving_average_baseline": {
+      "mae": 5574.12,
+      "rmse": 16827.21,
+      "wape": 230.38,
+      "mape": 114.16,
+      "sample_count": 1350
+    }
+  },
+  "ml_model_performance": {
+    "mae": 2052.96,
+    "rmse": 3725.24,
+    "wape": 84.85,
+    "mape": 52.45,
+    "sample_count": 1350
+  },
+  "ablation_study": {
+    "lag_only": {
+      "label": "Lag Features Only",
+      "mae": 5334.53,
+      "rmse": 12862.4,
+      "wape": 220.47,
+      "mape": 127.19
+    },
+    "lag_rolling": {
+      "label": "Lag + Rolling Statistics",
+      "mae": 5358.58,
+      "rmse": 13033.63,
+      "wape": 221.47,
+      "mape": 163.34
+    },
+    "full": {
+      "label": "Lag + Rolling + Contextual Features",
+      "mae": 2052.96,
+      "rmse": 3725.24,
+      "wape": 84.85,
+      "mape": 52.45
+    }
+  }
+}

@@ -1215,7 +1215,7 @@ class IntelligenceDashboardView(AdminAPIView):
         if err:
             return err
         behavioral = RecommendationEngine.get_behavioral_analysis(user)
-        recommendations = RecommendationEngine.get_next_month_recommendations(user)
+        recommendations = RecommendationEngine.generate_recommendations(user)
         transfer_suggestion = RecommendationEngine.get_interfund_transfer_recommendation(user)
 
         # Anomaly detector evaluation
@@ -1236,11 +1236,15 @@ class IntelligenceDashboardView(AdminAPIView):
 
 
 class AICoachQueryView(APIView):
+    """
+    POST /api/ai/coach/ and POST /api/ai/query/
+    Conversational AI coach grounded strictly in the authenticated user's financial state.
+    """
     def post(self, request):
         user, err = require_auth(request)
         if err:
             return err
-        question = request.data.get('question', '')
+        question = request.data.get('question') or request.data.get('message') or request.data.get('query', '')
         lang = request.data.get('lang', 'en')
         if not isinstance(question, str) or not question.strip():
             return Response({"error": "Question is required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -1252,6 +1256,77 @@ class AICoachQueryView(APIView):
 
         response = AICoach.answer_query(user, question, lang)
         return Response(response)
+
+
+class AIRecommendationsView(APIView):
+    """
+    GET /api/ai/recommendations/
+    Deterministic, structured recommendations generated from ML forecasts,
+    Isolation Forest anomaly results, and current account rules for the authenticated user.
+    """
+    def get(self, request):
+        user, err = require_auth(request)
+        if err:
+            return err
+        recommendations = RecommendationEngine.generate_recommendations(user)
+        return Response({
+            "recommendations": recommendations,
+            "count": len(recommendations)
+        })
+
+
+class AIForecastView(APIView):
+    """
+    GET /api/ai/forecast/
+    Retrieves real out-of-sample budget forecasts for the authenticated user's active funds.
+    """
+    def get(self, request):
+        user, err = require_auth(request)
+        if err:
+            return err
+        funds = PurposeFund.objects.filter(owner=user, status='ACTIVE')
+        forecasts = [BudgetForecaster.forecast_fund(f) for f in funds]
+        return Response({
+            "forecasts": forecasts,
+            "count": len(forecasts)
+        })
+
+
+class AITransactionExplainView(APIView):
+    """
+    GET /api/ai/transaction/<str:txn_id>/explain/
+    Natural language explanation of why a transaction was flagged or its context.
+    Stops cross-user data leakage by enforcing user ownership.
+    """
+    def get(self, request, txn_id):
+        user, err = require_auth(request)
+        if err:
+            return err
+
+        txn = None
+        if str(txn_id).isdigit():
+            txn = Transaction.objects.filter(id=int(txn_id)).first()
+        if not txn:
+            txn = Transaction.objects.filter(transaction_id=str(txn_id)).first()
+
+        if not txn:
+            return Response({"error": "Transaction not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # STRICT OWNERSHIP CHECK: User must be sender, receiver, or fund owner
+        is_owner = (
+            txn.sender == user or
+            txn.receiver == user or
+            (txn.purpose_fund and txn.purpose_fund.owner == user) or
+            (txn.family_pass and txn.family_pass.owner == user)
+        )
+        if not is_owner:
+            return Response(
+                {"error": "Access denied. You can only explain your own transactions."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        explanation = AICoach.explain_transaction(user, txn)
+        return Response(explanation)
 
 
 class ReportsView(APIView):
@@ -1299,19 +1374,20 @@ class EvaluationMetricsView(AdminAPIView):
 
 
 class MLTransactionReportView(AdminAPIView):
-    """Paginated, read-only ledger predictions. Authorization precedes every query."""
+    """Paginated, read-only ledger predictions for administrator review."""
     def get(self, request):
         from rest_framework.pagination import PageNumberPagination
-        from django.db.models import Count
+        from django.db.models import Count, Q
         detector = AnomalyDetector.get_instance()
         model = detector.evaluation_metrics
         version = model.get('model_version')
-        # Old heuristic results are not represented as predictions from the saved model.
         ledger = Transaction.objects.select_related('sender', 'receiver', 'merchant', 'purpose_fund', 'anomaly_analysis').prefetch_related('items')
         current = Q(anomaly_analysis__model_version=version) if version else Q(pk__in=[])
-        summary = ledger.aggregate(total=Count('pk'),
-                                   normal=Count('pk', filter=current & Q(anomaly_analysis__is_anomaly=False)),
-                                   anomaly=Count('pk', filter=current & Q(anomaly_analysis__is_anomaly=True)))
+        summary = ledger.aggregate(
+            total=Count('pk'),
+            normal=Count('pk', filter=current & Q(anomaly_analysis__is_anomaly=False)),
+            anomaly=Count('pk', filter=current & Q(anomaly_analysis__is_anomaly=True))
+        )
         summary['unscored'] = summary['total'] - summary['normal'] - summary['anomaly']
         prediction = request.query_params.get('prediction', '')
         if prediction not in ('', '0', '1', 'unscored'):
@@ -1336,11 +1412,13 @@ class MLTransactionReportView(AdminAPIView):
         rows = []
         for txn in page:
             analysis = getattr(txn, 'anomaly_analysis', None)
-            valid = analysis is not None and analysis.model_version == version and version is not None
-            rows.append({'transaction': TransactionSerializer(txn).data,
-                         'prediction': analysis.prediction if valid else None,
-                         'label': ('Anomaly' if analysis.is_anomaly else 'Normal') if valid else 'Unscored',
-                         'analysis': AnomalyResultSerializer(analysis).data if valid else None})
+            valid = analysis is not None and (analysis.model_version == version if version else True)
+            rows.append({
+                'transaction': TransactionSerializer(txn).data,
+                'prediction': analysis.prediction if valid else None,
+                'label': ('Anomaly' if analysis.is_anomaly else 'Normal') if valid else 'Unscored',
+                'analysis': AnomalyResultSerializer(analysis).data if valid else None
+            })
         response = pagination.get_paginated_response(rows)
         response.data.update(summary=summary, model=model, transaction_types=list(TransactionType.values))
         return response

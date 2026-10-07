@@ -1,0 +1,15 @@
+{
+  "features": [
+    "lag_1",
+    "lag_2",
+    "lag_3",
+    "rolling_mean_3",
+    "rolling_std_3",
+    "txn_count_lag_1",
+    "month",
+    "week_of_year",
+    "user_hist_mean",
+    "category_code"
+  ],
+  "version": "hist_gb_forecaster_v2.0"
+}

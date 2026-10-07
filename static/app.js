@@ -481,6 +481,72 @@ async function loadDashboard() {
   const warning = document.getElementById('budgetWarning');
   warning.hidden = !data.overrun_funds_count;
   document.getElementById('budgetWarningText').textContent = `${data.overrun_funds_count} fund(s) at risk of exceeding budget`;
+  // Grounded AI Insights
+  loadAIRecommendations();
+}
+
+async function loadAIRecommendations() {
+  try {
+    const res = await apiGet('/api/ai/recommendations/');
+    const recs = res?.recommendations || [];
+    const section = document.getElementById('aiInsightsSection');
+    const list = document.getElementById('aiInsightsList');
+    if (!section || !list) return;
+
+    if (!recs.length) {
+      section.style.display = 'none';
+      return;
+    }
+
+    section.style.display = 'block';
+    list.innerHTML = recs.slice(0, 3).map(r => {
+      let tagClass = 'insight';
+      let tagLabel = 'AI INSIGHT';
+      if (r.type === 'anomaly_warning') {
+        tagClass = 'anomaly';
+        tagLabel = 'UNUSUAL ACTIVITY';
+      } else if (r.type === 'forecast_warning') {
+        tagClass = 'forecast';
+        tagLabel = 'FORECAST';
+      } else if (r.type === 'budget_warning' || r.type === 'low_fund_balance') {
+        tagClass = 'budget';
+        tagLabel = 'BUDGET ALERT';
+      } else if (r.type === 'family_pass_warning') {
+        tagClass = 'family';
+        tagLabel = 'FAMILYPASS';
+      }
+
+      let evidenceHtml = '';
+      if (r.evidence && typeof r.evidence === 'object') {
+        const parts = [];
+        if (r.evidence.predicted_spending !== undefined) parts.push(`Predicted: ৳${fmt(r.evidence.predicted_spending)}`);
+        if (r.evidence.current_balance !== undefined) parts.push(`Balance: ৳${fmt(r.evidence.current_balance)}`);
+        if (r.evidence.amount !== undefined) parts.push(`Amount: ৳${fmt(r.evidence.amount)}`);
+        if (r.evidence.difference !== undefined) parts.push(`Deficit: ৳${fmt(r.evidence.difference)}`);
+        if (parts.length) {
+          evidenceHtml = `<div class="ai-insight-evidence">${parts.join(' • ')}</div>`;
+        }
+      }
+
+      return `
+        <div class="ai-insight-card priority-${escapeHtml(r.priority || 'medium')}">
+          <span class="ai-insight-tag ${tagClass}">${tagLabel}</span>
+          <div class="ai-insight-title">${escapeHtml(r.title)}</div>
+          <div class="ai-insight-msg">${escapeHtml(r.message)}</div>
+          ${evidenceHtml}
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('Error loading AI recommendations:', err);
+  }
+}
+
+function explainTransaction(txnId) {
+  navigateTo('ai');
+  const input = document.getElementById('chatInput');
+  if (input) input.value = `Why was transaction ${txnId} flagged as unusual?`;
+  sendAiMessage();
 }
 
 function renderTxnItemHtml(t) {
@@ -518,6 +584,10 @@ function renderTxnItemHtml(t) {
     meta = `Spent by ${t.sender_name || t.sender_username || 'Member'} • ${timeAgo(t.timestamp)}`;
   } else if (isFpMember) {
     meta = `Paid via FamilyPass • ${timeAgo(t.timestamp)}`;
+  }
+
+  if (t.has_anomaly) {
+    meta += ` • <span class="pill pill-red" style="font-size:9px;cursor:pointer;" onclick="event.stopPropagation();explainTransaction('${t.transaction_id || t.id}')" title="Click to explain with AI">⚠️ Flagged Unusual</span>`;
   }
 
   let amountHtml = '';
@@ -1293,7 +1363,10 @@ async function loadMoreTab() {
     const evaluation = document.getElementById('evalSection');
     if (evaluation) {
       evaluation.style.display = 'block';
-      await loadMLReport(1);
+      await loadEvalDashboard();
+      if (typeof loadMLReport === 'function') {
+        await loadMLReport(1);
+      }
     }
   }
 }
@@ -1322,6 +1395,47 @@ async function loadMerchantDashboard() {
 }
 
 async function loadEvalDashboard() {
+  const data = await apiGet('/api/evaluation/metrics/');
+  if (!data) return;
+  const metricsEl = document.getElementById('evalMetrics');
+  const anomaly = data.anomaly_detection || {};
+  const forecast = data.forecasting || {};
+  const ds = data.dataset_stats || {};
+  if (metricsEl) {
+    metricsEl.innerHTML = `
+      <div class="metric-card">
+        <div class="metric-value">${((anomaly.f1_score !== undefined ? anomaly.f1_score : anomaly.f1) || 0).toFixed(2)}</div>
+        <div class="metric-label">Anomaly F1-Score</div>
+        <div class="metric-sub">Precision: ${(anomaly.precision || 0).toFixed(2)}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value">${(anomaly.roc_auc || 0).toFixed(3)}</div>
+        <div class="metric-label">ROC-AUC Score</div>
+        <div class="metric-sub">IsolationForest ML</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value">৳${fmt(forecast.mae || 0)}</div>
+        <div class="metric-label">Forecast MAE</div>
+        <div class="metric-sub">Budget Predictor</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value">${ds.total_transactions || 0}</div>
+        <div class="metric-label">Total Transactions</div>
+        <div class="metric-sub">${ds.synthetic_customers || 0} customers</div>
+      </div>`;
+  }
+  const evalDetails = document.getElementById('evalDetailsCard');
+  if (evalDetails) {
+    evalDetails.innerHTML = `
+      <div class="card-header"><span class="card-title">📊 ML Performance Summary</span></div>
+      <div style="font-size:13px;line-height:1.8;color:var(--text-secondary);">
+        <div>🤖 <strong>Anomaly Detector:</strong> IsolationForest — Recall ${(anomaly.recall||0).toFixed(2)}, F1 ${((anomaly.f1_score !== undefined ? anomaly.f1_score : anomaly.f1) || 0).toFixed(2)}</div>
+        <div>📈 <strong>Budget Forecaster:</strong> MAE ৳${fmt(forecast.mae||0)}, RMSE ৳${fmt(forecast.rmse||0)}</div>
+        <div>🔐 <strong>Privacy:</strong> ${data.responsible_ai_summary?.privacy || 'Synthetic data only'}</div>
+        <div>👁 <strong>Transparency:</strong> ${data.responsible_ai_summary?.transparency || 'Explainable AI'}</div>
+        <div>✋ <strong>Control:</strong> ${data.responsible_ai_summary?.human_control || 'Human-in-the-loop'}</div>
+      </div>`;
+  }
   if (typeof loadMLReport === 'function') await loadMLReport(1);
 }
 

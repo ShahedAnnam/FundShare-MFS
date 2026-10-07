@@ -25,6 +25,17 @@
         <div class="family-feature-copy"><span class="eyebrow">SHARED ACCESS. YOUR CONTROL.</span><h2 id="familyFeatureTitle">A little trust. A clear limit.</h2><p>FamilyPass</p></div>
         <button class="icon-button" title="Open FamilyPass" aria-label="Open FamilyPass" onclick="navigateTo('familypass')"><i data-lucide="arrow-up-right"></i></button>
       </section>
+      <section class="card" id="aiInsightsSection" style="margin-bottom:16px;">
+        <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div style="font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;">
+            <i data-lucide="sparkles" style="color:var(--primary);width:16px;height:16px;"></i> Grounded AI Insights
+          </div>
+          <button class="card-action" onclick="loadAIRecommendations()" style="font-size:11px;">Refresh</button>
+        </div>
+        <div id="aiInsightsList">
+          <div style="font-size:12px;color:var(--text-muted);padding:8px 0;">Loading smart recommendations...</div>
+        </div>
+      </section>
       <section class="activity-section" aria-labelledby="activityTitle">
         <div class="section-title"><span id="activityTitle">Recent Activity</span><button class="card-action" onclick="openTxnHistoryModal()">View History <i data-lucide="arrow-right"></i></button></div>
         <div id="recentTxns"><div class="loading-state" role="status"><span class="spinner"></span> Loading activity</div></div>

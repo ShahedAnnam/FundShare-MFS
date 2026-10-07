@@ -27,7 +27,6 @@ For general feature questions, do not dump unrequested financial summaries."""
 
 SUPPORT_INSTRUCTION += "\nAnomaly classifications and ML evaluation reports are ADMIN-only. Never infer, disclose or invent anomaly labels or model scores for customers or merchants."
 
-
 def get_support_context(user):
     report = ReportService.generate_report(user, 'monthly')
     overview = report.get('overview', {})
