@@ -1,0 +1,55 @@
+#evalSection { scroll-margin-top: 96px; }
+.ml-model-summary { padding: 16px 0; border-bottom: 1px solid var(--border); font-size: 13px; line-height: 1.6; }
+.ml-model-summary p { margin: 6px 0; }
+.ml-model-title { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.ml-model-title svg { width: 20px; height: 20px; color: var(--primary); }
+.ml-model-summary code, .ml-row-details code { overflow-wrap: anywhere; font-size: 11px; }
+.ml-caution { color: #946009; font-size: 12px; }
+.ml-details-grid { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 8px 16px; }
+.ml-details-grid dt { color: var(--text-secondary); }
+.ml-details-grid dd { margin: 0; overflow-wrap: anywhere; }
+.ml-summary { display: flex; flex-wrap: wrap; gap: 12px 24px; padding: 18px 0; font-size: 13px; }
+.ml-summary strong { margin-right: 5px; }
+.ml-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; padding-bottom: 16px; }
+.ml-toolbar label { display: grid; gap: 5px; color: var(--text-secondary); font-size: 12px; min-width: 0; }
+.ml-toolbar select, .ml-toolbar input { height: 38px; background: white; border: 1px solid var(--border); border-radius: 6px; padding: 0 10px; color: var(--text); font: inherit; max-width: 100%; }
+.ml-toolbar .ml-search { flex: 1; min-width: 150px; }
+.ml-toolbar .icon-button { height: 38px; width: 38px; }
+.ml-report { overflow-x: auto; border-top: 1px solid var(--border); }
+.ml-table { width: 100%; border-collapse: collapse; min-width: 790px; font-size: 12px; }
+.ml-table th { text-align: left; font-size: 11px; color: var(--text-secondary); background: #f3f6f8; padding: 12px; font-weight: 600; }
+.ml-table td { padding: 14px 12px; border-bottom: 1px solid var(--border); vertical-align: top; max-width: 240px; overflow-wrap: anywhere; }
+.ml-table small { display: block; color: var(--text-muted); margin-top: 4px; font-size: 10px; }
+.ml-table strong { display: block; font-size: 11px; font-weight: 600; }
+.ml-amount { white-space: nowrap; font-weight: 600; }
+.ml-badge { display: inline-block; border-radius: 4px; padding: 4px 7px; white-space: nowrap; font-size: 11px; font-weight: 600; }
+.ml-normal { color: #127b52; }
+.ml-anomaly { color: #c03b3b; }
+.ml-badge.ml-normal { background: #e6f5ed; }
+.ml-badge.ml-anomaly { background: #fceaea; }
+.ml-unscored { color: #676d74; background: #edf0f2; }
+.ml-row-details { width: 210px; line-height: 1.5; }
+.ml-row-details dl { display: grid; grid-template-columns: minmax(0, 1fr) 65px; gap: 5px; font-size: 10px; }
+.ml-row-details dd { margin: 0; overflow-wrap: anywhere; }
+.ml-report summary, .ml-model-summary summary { cursor: pointer; color: var(--primary); font-weight: 600; }
+.ml-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 16px 0; font-size: 12px; }
+.ml-pagination span { margin-right: auto; color: var(--text-secondary); }
+.ml-pagination button:disabled { opacity: .4; cursor: default; }
+.ml-empty { padding: 40px 12px; display: grid; justify-items: center; gap: 12px; color: var(--text-muted); }
+@media (max-width: 600px) {
+  .ml-toolbar label:not(.ml-search) { flex: 1 1 130px; }
+  .ml-toolbar select { width: 100%; }
+  .ml-model-title code { flex-basis: 100%; }
+  .ml-details-grid { grid-template-columns: 1fr; gap: 3px; }
+  .ml-details-grid dd { margin-bottom: 10px; }
+  .ml-table { min-width: 0; }
+  .ml-table thead { display: none; }
+  .ml-table tbody { display: block; }
+  .ml-table tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .ml-table td { border: 0; min-width: 0; max-width: none; padding: 6px 8px; }
+  .ml-table td:first-child, .ml-table td:nth-child(2), .ml-table td:last-child { grid-column: 1 / -1; }
+  .ml-table td[data-label]::before { content: attr(data-label); display: block; color: var(--text-muted); font-size: 10px; font-weight: 400; margin-bottom: 4px; }
+  .ml-table small { font-size: 11px; }
+  .ml-row-details { width: 100%; }
+  .ml-row-details dl { grid-template-columns: minmax(0, 1fr) 100px; font-size: 11px; }
+}

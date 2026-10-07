@@ -14,6 +14,7 @@
   <button class="settings-item" disabled><span class="settings-item-left"><span class="settings-item-icon muted"><i data-lucide="fingerprint"></i></span><span class="settings-item-label">Fingerprint / Face ID</span></span><small>Coming Soon</small></button>
   <button class="settings-item" disabled><span class="settings-item-left"><span class="settings-item-icon muted"><i data-lucide="credit-card"></i></span><span class="settings-item-label">Linked Cards</span></span><small>Coming Soon</small></button>
   <div class="settings-group-title">SESSION</div>
+  {% if user_role == 'ADMIN' %}<button class="settings-item" onclick="openMLReport()"><span class="settings-item-left"><span class="settings-item-icon sky"><i data-lucide="scan-line"></i></span><span class="settings-item-label">AI / ML Transaction Report</span></span><i data-lucide="chevron-right"></i></button>{% endif %}
   <button class="settings-item" onclick="doLogout()"><span class="settings-item-left"><span class="settings-item-icon coral"><i data-lucide="log-out"></i></span><span class="settings-item-label" style="color:var(--danger)">Log Out</span></span><i data-lucide="chevron-right"></i></button>
   <button class="settings-item" id="adminResetSetting" hidden onclick="openModal('seedDataModal')"><span class="settings-item-left"><span class="settings-item-icon yellow"><i data-lucide="rotate-ccw"></i></span><span class="settings-item-label">Reset Demo Data</span></span><i data-lucide="chevron-right"></i></button>
     <!-- Merchant Dashboard (shown for MERCHANT role) -->
@@ -31,12 +32,22 @@
       </div>
     </div>
 
-    <!-- Admin/Evaluator Section -->
+    {% if user_role == 'ADMIN' %}
     <div id="evalSection" style="display:none">
-      <div class="section-title">📊 Evaluation Dashboard</div>
+      <div class="section-title">AI / ML Transaction Report</div>
       <div class="metrics-grid" id="evalMetrics"></div>
-      <div class="card" id="evalDetailsCard"></div>
+      <div id="evalDetailsCard" class="ml-model-summary"></div>
+      <div class="ml-summary" id="mlSummary" aria-live="polite"></div>
+      <form class="ml-toolbar" onsubmit="event.preventDefault();loadMLReport(1)">
+        <label>Prediction<select id="mlPrediction" onchange="loadMLReport(1)"><option value="">All predictions</option><option value="0">Normal (0)</option><option value="1">Anomaly (1)</option><option value="unscored">Unscored</option></select></label>
+        <label>Transaction type<select id="mlType" onchange="loadMLReport(1)"><option value="">All types</option></select></label>
+        <label class="ml-search">Transaction ID<input id="mlSearch" type="search" maxlength="64" placeholder="Search transaction ID"></label>
+        <button type="submit" class="icon-button" title="Search transactions" aria-label="Search transactions"><i data-lucide="search"></i></button>
+        <button type="button" class="icon-button" title="Refresh report" aria-label="Refresh report" onclick="loadMLReport(mlPage)"><i data-lucide="refresh-cw"></i></button>
+      </form>
+      <div id="mlReport" class="ml-report" aria-live="polite"></div>
+      <div class="ml-pagination"><span id="mlPageLabel"></span><button id="mlPrev" class="icon-button" title="Previous page" aria-label="Previous page" onclick="loadMLReport(mlPage-1)" disabled><i data-lucide="chevron-left"></i></button><button id="mlNext" class="icon-button" title="Next page" aria-label="Next page" onclick="loadMLReport(mlPage+1)" disabled><i data-lucide="chevron-right"></i></button></div>
     </div>
-
+    {% endif %}
 
 </div>

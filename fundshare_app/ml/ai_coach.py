@@ -57,9 +57,12 @@ class FinancialAIService:
         ]
         anomaly_keywords = [
             "unusual", "anomaly", "anomalies", "flagged",
-            "suspicious", "fraud", "irregular"
+            "suspicious", "fraud", "irregular", "roc-auc", "roc auc", "f1-score",
+            "model evaluation", "ml report", "classify", "classification", "normal transaction"
         ]
 
+        if any(k in q for k in anomaly_keywords):
+            return "ANOMALY"
         if any(k in q for k in spending_keywords):
             return "SPENDING_SUMMARY"
         if any(k in q for k in category_keywords):
@@ -72,9 +75,6 @@ class FinancialAIService:
             return "FAMILYPASS"
         if any(k in q for k in recommend_keywords):
             return "RECOMMENDATIONS"
-        if any(k in q for k in anomaly_keywords):
-            return "ANOMALY"
-
         # Broad financial terms
         financial_terms = [
             "spend", "spent", "balance", "wallet", "save", "saving", "savings", "budget",
@@ -187,7 +187,8 @@ class FinancialAIService:
 
         # Real Anomalies
         anomalies = []
-        for a in AnomalyResult.objects.filter(user=user, is_anomaly=True).order_by('-created_at')[:4]:
+        allowed_anomalies = AnomalyResult.objects.filter(user=user, is_anomaly=True) if user.effective_role == 'ADMIN' else AnomalyResult.objects.none()
+        for a in allowed_anomalies.order_by('-created_at')[:4]:
             anomalies.append({
                 "txn_id": a.transaction.transaction_id if a.transaction else "TXN",
                 "amount": float(a.transaction.amount) if a.transaction else 0.0,
@@ -214,7 +215,7 @@ class FinancialAIService:
             "family_passes_issued": fp_issued_data,
             "family_passes_received": fp_received_data,
             "recent_transactions": recent_txns,
-            "anomalies": anomalies,
+            **({'anomalies': anomalies} if user.effective_role == 'ADMIN' else {}),
             "ml_forecasts_available": len(funds_data) > 0,
             "market_signals": "Market signals unavailable (live external market feeds not connected)"
         }
@@ -515,6 +516,9 @@ class FinancialAIService:
         if entry:
             return demo_response(question, entry)
         intent = cls.detect_intent(question)
+        if intent == 'ANOMALY' and user.effective_role != 'ADMIN':
+            return {'answer': 'Transaction anomaly classifications and model evaluation reports are available to ADMIN users only. You can still review History, spending summaries and budget forecasts.',
+                    'source': 'offline', 'intent': intent}
 
         # Attempt Online Gemini call first
         online_response = cls.generate_online_response(user, question, intent, {}, lang)

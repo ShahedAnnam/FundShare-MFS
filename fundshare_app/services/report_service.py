@@ -158,6 +158,8 @@ class ReportService:
             is_anomaly=True,
             **anomaly_period_filter
         ).order_by('-created_at')[:3]
+        if user.effective_role != 'ADMIN':
+            anomalies_qs = AnomalyResult.objects.none()
         anomaly_list = []
         for a in anomalies_qs:
             anomaly_list.append({
@@ -209,7 +211,7 @@ class ReportService:
             "family_pass_members": fp_members_detail,
             "category_breakdown": cat_breakdown,
             "fund_breakdown": fund_breakdown,
-            "anomalies": anomaly_list,
+            **({'anomalies': anomaly_list} if user.effective_role == 'ADMIN' else {}),
             "ai_summary": ai_summary,
             "generated_at": timezone.now().strftime("%d %B %Y, %I:%M %p")
         }

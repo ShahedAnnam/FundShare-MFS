@@ -1,0 +1,71 @@
+{
+  "available": true,
+  "algorithm": "Isolation Forest",
+  "model_version": "iforest_v2_0c0c2eb846f6",
+  "sklearn_version": "1.9.1",
+  "trained_at": "2026-10-07T06:15:54.425255+00:00",
+  "dataset": "fundshare_anomaly_dataset_480.csv",
+  "dataset_sha256": "0c0c2eb846f63aa4c1343ad99926b162c7ec4192a2d5734b867c87b9d1e7ec3c",
+  "input_fields": [
+    "amount_bdt",
+    "category",
+    "payment_source",
+    "transaction_type",
+    "hour",
+    "day_of_week",
+    "is_weekend",
+    "is_new_merchant",
+    "minutes_since_prev_txn",
+    "user_avg_amount_prior",
+    "category_avg_amount_prior",
+    "rolling_7d_spend_prior",
+    "rolling_30d_spend_prior",
+    "prior_txn_count"
+  ],
+  "sample_size": 480,
+  "train_size": 336,
+  "test_size": 144,
+  "split": "Chronological 70% training / 30% held-out evaluation",
+  "training_end": "2026-09-02T18:57:00",
+  "test_start": "2026-09-02T19:56:00",
+  "test_end": "2026-09-30T11:05:00",
+  "precision": 0.5,
+  "recall": 0.65,
+  "f1": 0.5652173913043478,
+  "roc_auc": 0.8524193548387097,
+  "confusion_matrix": [
+    [
+      111,
+      13
+    ],
+    [
+      7,
+      13
+    ]
+  ],
+  "test_normal_count": 124,
+  "test_anomaly_count": 20,
+  "contamination": 0.15,
+  "random_state": 42,
+  "label_usage": "Labels are used only for held-out metrics, never as model inputs or training targets.",
+  "score_definition": "Percentile of anomaly severity against training scores; not a probability or confidence.",
+  "training_transaction_types": [
+    "MERCHANT_PAYMENT"
+  ],
+  "training_categories": [
+    "Education",
+    "Electricity",
+    "Grocery",
+    "Medicine",
+    "Rent",
+    "Restaurant/Food",
+    "Shopping",
+    "Transport"
+  ],
+  "training_sources": [
+    "FAMILY_PASS",
+    "NORMAL_WALLET",
+    "PURPOSE_FUND"
+  ],
+  "limitations": "Small repository demo dataset; not evidence of production fraud-detection accuracy. Other transaction types and unseen categories/sources are outside the evaluated domain. Historical fields are assumed to be prior-only as supplied by the dataset."
+}

@@ -162,7 +162,10 @@ class MeView(APIView):
         if err:
             return err
         wallet, _ = Wallet.objects.get_or_create(owner=user)
-        unread_notifications = Notification.objects.filter(user=user, is_read=False).count()
+        unread = Notification.objects.filter(user=user, is_read=False)
+        if user.effective_role != UserRole.ADMIN:
+            unread = unread.exclude(notification_type=NotificationType.ANOMALY_ALERT)
+        unread_notifications = unread.count()
 
         # Check if user has active received FamilyPasses
         today = timezone.localdate() if timezone.is_aware(timezone.now()) else timezone.now().date()
@@ -1183,7 +1186,10 @@ class NotificationsListView(APIView):
         user, err = require_auth(request)
         if err:
             return err
-        notifs = Notification.objects.filter(user=user).order_by('-created_at')[:25]
+        notifs = Notification.objects.filter(user=user)
+        if user.effective_role != UserRole.ADMIN:
+            notifs = notifs.exclude(notification_type=NotificationType.ANOMALY_ALERT)
+        notifs = notifs.order_by('-created_at')[:25]
         return Response(NotificationSerializer(notifs, many=True).data)
 
 
@@ -1192,7 +1198,10 @@ class MarkNotificationReadView(APIView):
         user, err = require_auth(request)
         if err:
             return err
-        notif = get_object_or_404(Notification, id=pk, user=user)
+        allowed = Notification.objects.filter(user=user)
+        if user.effective_role != UserRole.ADMIN:
+            allowed = allowed.exclude(notification_type=NotificationType.ANOMALY_ALERT)
+        notif = get_object_or_404(allowed, id=pk)
         notif.is_read = True
         notif.save(update_fields=['is_read'])
         return Response({"message": "Marked read"})
@@ -1200,7 +1209,7 @@ class MarkNotificationReadView(APIView):
 
 # ==================== AI & INTELLIGENCE ====================
 
-class IntelligenceDashboardView(APIView):
+class IntelligenceDashboardView(AdminAPIView):
     def get(self, request):
         user, err = require_auth(request)
         if err:
@@ -1282,11 +1291,59 @@ class EvaluationMetricsView(AdminAPIView):
             "anomaly_detection": anomaly_metrics,
             "forecasting": forecast_metrics,
             "responsible_ai_summary": {
-                "privacy": "100% Synthetic Data generated for local Bangladesh demographics.",
-                "transparency": "Every prediction outputs explicit evidence and confidence rating.",
+                "privacy": "Repository demo data is used for training. Live ledger predictions are administrator-only.",
+                "transparency": "Anomaly severity percentiles are not fraud probabilities or confidence ratings.",
                 "human_control": "Zero automated transfers or budget changes. All financial actions require explicit user confirmation."
             }
         })
+
+
+class MLTransactionReportView(AdminAPIView):
+    """Paginated, read-only ledger predictions. Authorization precedes every query."""
+    def get(self, request):
+        from rest_framework.pagination import PageNumberPagination
+        from django.db.models import Count
+        detector = AnomalyDetector.get_instance()
+        model = detector.evaluation_metrics
+        version = model.get('model_version')
+        # Old heuristic results are not represented as predictions from the saved model.
+        ledger = Transaction.objects.select_related('sender', 'receiver', 'merchant', 'purpose_fund', 'anomaly_analysis').prefetch_related('items')
+        current = Q(anomaly_analysis__model_version=version) if version else Q(pk__in=[])
+        summary = ledger.aggregate(total=Count('pk'),
+                                   normal=Count('pk', filter=current & Q(anomaly_analysis__is_anomaly=False)),
+                                   anomaly=Count('pk', filter=current & Q(anomaly_analysis__is_anomaly=True)))
+        summary['unscored'] = summary['total'] - summary['normal'] - summary['anomaly']
+        prediction = request.query_params.get('prediction', '')
+        if prediction not in ('', '0', '1', 'unscored'):
+            return Response({'error': 'Prediction must be 0, 1, or unscored.'}, status=400)
+        if prediction == 'unscored':
+            ledger = ledger.exclude(current)
+        elif prediction:
+            ledger = ledger.filter(current, anomaly_analysis__is_anomaly=prediction == '1')
+        transaction_type = request.query_params.get('type', '')
+        if transaction_type:
+            if transaction_type not in TransactionType.values:
+                return Response({'error': 'Invalid transaction type.'}, status=400)
+            ledger = ledger.filter(transaction_type=transaction_type)
+        search = request.query_params.get('search', '').strip()
+        if len(search) > 64:
+            return Response({'error': 'Transaction search must be 64 characters or fewer.'}, status=400)
+        if search:
+            ledger = ledger.filter(transaction_id__icontains=search)
+        pagination = PageNumberPagination()
+        pagination.page_size = 20
+        page = pagination.paginate_queryset(ledger.order_by('-timestamp', '-pk'), request)
+        rows = []
+        for txn in page:
+            analysis = getattr(txn, 'anomaly_analysis', None)
+            valid = analysis is not None and analysis.model_version == version and version is not None
+            rows.append({'transaction': TransactionSerializer(txn).data,
+                         'prediction': analysis.prediction if valid else None,
+                         'label': ('Anomaly' if analysis.is_anomaly else 'Normal') if valid else 'Unscored',
+                         'analysis': AnomalyResultSerializer(analysis).data if valid else None})
+        response = pagination.get_paginated_response(rows)
+        response.data.update(summary=summary, model=model, transaction_types=list(TransactionType.values))
+        return response
 
 
 class ExperimentRecordsView(AdminAPIView):

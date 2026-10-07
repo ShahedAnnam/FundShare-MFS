@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 
 from fundshare_app.models import FinancialRequest, Transaction, UserRole
 from fundshare_app.services.security_service import SecurityError, verify_pin
+from fundshare_app.ml.privacy import strip_ml_details
 
 
 class AuthenticatedAPIView(APIView):
@@ -81,7 +82,7 @@ class FinancialAPIView(AuthenticatedAPIView):
                 if not created:
                     if record.fingerprint != fingerprint:
                         return Response({'error': 'This request key was already used for a different transaction.', 'code': 'IDEMPOTENCY_CONFLICT'}, status=409)
-                    response = Response(record.response, status=record.response_status)
+                    response = Response(strip_ml_details(record.response), status=record.response_status)
                     response['Idempotency-Replayed'] = 'true'
                     return response
                 with transaction.atomic():
@@ -90,6 +91,7 @@ class FinancialAPIView(AuthenticatedAPIView):
                         transaction.set_rollback(True)
                 if getattr(request, 'rejected_transaction', None):
                     Transaction.objects.create(**request.rejected_transaction)
+                response.data = strip_ml_details(response.data)
                 record.response = json.loads(JSONRenderer().render(response.data))
                 record.response_status = response.status_code
                 record.save(update_fields=['response', 'response_status'])

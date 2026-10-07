@@ -486,13 +486,21 @@ class FinancialGoal(models.Model):
 
 class AnomalyResult(models.Model):
     transaction = models.OneToOneField(Transaction, on_delete=models.CASCADE, related_name='anomaly_analysis')
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='anomalies')
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='anomalies')
     is_anomaly = models.BooleanField(default=False)
     anomaly_score = models.FloatField(default=0.0)
     reason = models.TextField(blank=True)
     features_summary = models.JSONField(default=dict, blank=True)
     model_version = models.CharField(max_length=50, default='iso_forest_v1.0')
     created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def prediction(self):
+        return int(self.is_anomaly)
+
+    class Meta:
+        indexes = [models.Index(fields=['is_anomaly', '-created_at'], name='anomaly_flag_time_idx')]
+        constraints = [models.CheckConstraint(condition=models.Q(anomaly_score__gte=0, anomaly_score__lte=1), name='anomaly_score_range')]
 
     def __str__(self):
         flag = "UNUSUAL" if self.is_anomaly else "NORMAL"

@@ -1290,8 +1290,11 @@ async function loadMoreTab() {
     document.getElementById('reportsSection').style.display = 'none';
     await loadMerchantDashboard();
   } else if (role === 'ADMIN') {
-    document.getElementById('evalSection').style.display = 'block';
-    await loadEvalDashboard();
+    const evaluation = document.getElementById('evalSection');
+    if (evaluation) {
+      evaluation.style.display = 'block';
+      await loadMLReport(1);
+    }
   }
 }
 
@@ -1319,42 +1322,7 @@ async function loadMerchantDashboard() {
 }
 
 async function loadEvalDashboard() {
-  const data = await apiGet('/api/evaluation/metrics/');
-  if (!data) return;
-  const metricsEl = document.getElementById('evalMetrics');
-  const anomaly = data.anomaly_detection || {};
-  const forecast = data.forecasting || {};
-  const ds = data.dataset_stats || {};
-  metricsEl.innerHTML = `
-    <div class="metric-card">
-      <div class="metric-value">${(anomaly.f1_score || 0).toFixed(2)}</div>
-      <div class="metric-label">Anomaly F1-Score</div>
-      <div class="metric-sub">Precision: ${(anomaly.precision || 0).toFixed(2)}</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-value">${(anomaly.roc_auc || 0).toFixed(3)}</div>
-      <div class="metric-label">ROC-AUC Score</div>
-      <div class="metric-sub">IsolationForest ML</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-value">৳${fmt(forecast.mae || 0)}</div>
-      <div class="metric-label">Forecast MAE</div>
-      <div class="metric-sub">Budget Predictor</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-value">${ds.total_transactions || 0}</div>
-      <div class="metric-label">Total Transactions</div>
-      <div class="metric-sub">${ds.synthetic_customers || 0} customers</div>
-    </div>`;
-  document.getElementById('evalDetailsCard').innerHTML = `
-    <div class="card-header"><span class="card-title">📊 ML Performance Summary</span></div>
-    <div style="font-size:13px;line-height:1.8;color:var(--text-secondary);">
-      <div>🤖 <strong>Anomaly Detector:</strong> IsolationForest — Recall ${(anomaly.recall||0).toFixed(2)}, F1 ${(anomaly.f1_score||0).toFixed(2)}</div>
-      <div>📈 <strong>Budget Forecaster:</strong> MAE ৳${fmt(forecast.mae||0)}, RMSE ৳${fmt(forecast.rmse||0)}</div>
-      <div>🔐 <strong>Privacy:</strong> ${data.responsible_ai_summary?.privacy || 'Synthetic data only'}</div>
-      <div>👁 <strong>Transparency:</strong> ${data.responsible_ai_summary?.transparency || 'Explainable AI'}</div>
-      <div>✋ <strong>Control:</strong> ${data.responsible_ai_summary?.human_control || 'Human-in-the-loop'}</div>
-    </div>`;
+  if (typeof loadMLReport === 'function') await loadMLReport(1);
 }
 
 let reportRequestVersion = 0;
