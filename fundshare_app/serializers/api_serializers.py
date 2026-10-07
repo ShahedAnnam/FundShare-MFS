@@ -9,13 +9,23 @@ from fundshare_app.models import (
 
 
 class UserSerializer(serializers.ModelSerializer):
+    has_transaction_pin = serializers.SerializerMethodField()
+    can_reset_demo = serializers.SerializerMethodField()
     role = serializers.CharField(source='effective_role', read_only=True)
     effective_role = serializers.CharField(read_only=True)
     effective_role_display = serializers.CharField(source='get_effective_role_display', read_only=True)
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'full_name', 'email', 'phone', 'role', 'effective_role', 'effective_role_display', 'avatar_url']
+        fields = ['id', 'username', 'full_name', 'email', 'phone', 'role', 'effective_role', 'effective_role_display', 'avatar_url', 'has_transaction_pin', 'can_reset_demo']
+
+    def get_has_transaction_pin(self, obj):
+        return bool(obj.transaction_pin)
+
+    def get_can_reset_demo(self, obj):
+        from django.conf import settings
+        from fundshare_app.models import UserRole
+        return settings.ENABLE_DEMO_RESET and obj.effective_role == UserRole.ADMIN
 
 
 class WalletSerializer(serializers.ModelSerializer):
@@ -36,6 +46,7 @@ class PurposeFundSerializer(serializers.ModelSerializer):
     spent_amount = serializers.SerializerMethodField()
     utilization_pct = serializers.SerializerMethodField()
     recipient_username = serializers.CharField(source='recipient.username', read_only=True)
+    recipient_phone = serializers.CharField(source='recipient.phone', read_only=True)
     recipient_name = serializers.CharField(source='recipient.full_name', read_only=True)
 
     class Meta:
@@ -43,7 +54,7 @@ class PurposeFundSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'category', 'allocated_amount', 'current_balance',
             'monthly_budget', 'icon', 'color', 'status', 'recipient',
-            'recipient_username', 'recipient_name', 'created_at',
+            'recipient_username', 'recipient_phone', 'recipient_name', 'created_at',
             'spent_amount', 'utilization_pct'
         ]
 
@@ -93,14 +104,8 @@ class ContactSerializer(serializers.ModelSerializer):
         return getattr(u, 'avatar_url', '') if u else ''
 
     def get_allowed_features(self, obj):
-        is_reg = obj.is_registered
-        return {
-            'send_money': is_reg,
-            'fund_share': is_reg,
-            'family_pass': is_reg,
-            'mobile_recharge': True,
-            'bill_payment': True,
-        }
+        from fundshare_app.services.contact_service import ContactService
+        return ContactService.get_contact_account_info(obj)['allowed_features']
 
 
 class FundTransferSerializer(serializers.ModelSerializer):
@@ -113,10 +118,13 @@ class FundTransferSerializer(serializers.ModelSerializer):
 
 
 class FamilyPassSerializer(serializers.ModelSerializer):
+    status = serializers.SerializerMethodField()
     owner_name = serializers.CharField(source='owner.full_name', read_only=True)
     owner_username = serializers.CharField(source='owner.username', read_only=True)
+    owner_phone = serializers.CharField(source='owner.phone', read_only=True)
     member_name = serializers.CharField(source='member.full_name', read_only=True)
     member_username = serializers.CharField(source='member.username', read_only=True)
+    member_phone = serializers.CharField(source='member.phone', read_only=True)
     remaining_limit = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     is_valid = serializers.BooleanField(source='is_valid_and_active', read_only=True)
     usage_pct = serializers.SerializerMethodField()
@@ -124,10 +132,14 @@ class FamilyPassSerializer(serializers.ModelSerializer):
     is_unrestricted = serializers.SerializerMethodField()
     effective_allowed_categories = serializers.SerializerMethodField()
 
+    def get_status(self, obj):
+        from fundshare_app.models import FamilyPassStatus
+        return FamilyPassStatus.EXPIRED if obj.status == FamilyPassStatus.ACTIVE and obj.is_expired else obj.status
+
     class Meta:
         model = FamilyPass
         fields = [
-            'id', 'owner', 'owner_name', 'owner_username', 'member', 'member_name', 'member_username',
+            'id', 'owner', 'owner_name', 'owner_username', 'owner_phone', 'member', 'member_name', 'member_username', 'member_phone',
             'limit_amount', 'used_amount', 'remaining_limit', 'start_date', 'expiry_date',
             'allowed_action', 'status', 'purpose', 'custom_purpose', 'purpose_label', 'purpose_display',
             'allowed_categories', 'effective_allowed_categories', 'is_unrestricted',

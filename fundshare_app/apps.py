@@ -1,4 +1,9 @@
 from django.apps import AppConfig
+from django.contrib.admin import apps as admin_apps
+
+
+class FundShareAdminConfig(admin_apps.AdminConfig):
+    default_site = 'fundshare_app.admin_site.FundShareAdminSite'
 
 
 class FundshareAppConfig(AppConfig):
@@ -12,4 +17,3 @@ class FundshareAppConfig(AppConfig):
             setup_console_encoding()
         except Exception:
             pass
-

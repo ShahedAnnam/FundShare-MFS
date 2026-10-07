@@ -4,7 +4,13 @@ from django.utils import timezone
 from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
-from rest_framework.views import APIView
+from django.db import transaction as db_transaction
+from django.conf import settings
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_protect
+from fundshare_app.views.security import AuthenticatedAPIView as APIView, AdminAPIView, FinancialAPIView, WalletUserPermission, CustomerPermission
+from fundshare_app.services.security_service import SecurityError, verify_pin, validate_new_pin, check_login_rate, record_login_failure, clear_login_failures, check_registration_rate
+from fundshare_app.forms import RegistrationForm
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -29,6 +35,7 @@ from fundshare_app.serializers.api_serializers import (
 from fundshare_app.services.transaction_service import TransactionService, TransactionValidationError
 from fundshare_app.services.report_service import ReportService
 from fundshare_app.services.contact_service import ContactService
+from fundshare_app.services.recipient_service import RecipientService
 from fundshare_app.services.phone_utils import normalize_phone, is_valid_bd_phone, find_user_by_phone_or_username
 from fundshare_app.ml.anomaly_detector import AnomalyDetector
 from fundshare_app.ml.budget_forecaster import BudgetForecaster
@@ -55,27 +62,15 @@ PURPOSE_TO_CATEGORIES = {
 
 
 
-def get_authenticated_or_demo_user(request):
-    """
-    Returns the authenticated user. If not authenticated via session, returns None
-    and views should return HTTP 401.
-    For backwards compatibility during hackathon, falls back to 'shahed' ONLY if
-    request has a special demo header (X-Demo-User).
-    """
-    if request.user and request.user.is_authenticated:
+def get_authenticated_user(request):
+    if request.user and request.user.is_authenticated and request.user.is_active:
         return request.user
-    # Check demo override header (for evaluation/judge use only)
-    demo_user = request.headers.get('X-Demo-User')
-    if demo_user:
-        user = User.objects.filter(username=demo_user).first()
-        if user:
-            return user
     return None
 
 
 def require_auth(request):
     """Returns (user, error_response) tuple. If user is None, error_response is a 401 Response."""
-    user = get_authenticated_or_demo_user(request)
+    user = get_authenticated_user(request)
     if user is None:
         return None, Response(
             {"error": "Authentication required. Please log in.", "redirect": "/login/"},
@@ -84,23 +79,33 @@ def require_auth(request):
     return user, None
 
 
-# ==================== AUTHENTICATION & DEMO SWITCHER ====================
+# ==================== AUTHENTICATION ====================
 
+@method_decorator(csrf_protect, name='dispatch')
 class LoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        username = request.data.get('username', '').strip()
-        password = request.data.get('password', '').strip()
+        if not isinstance(request.data, dict):
+            return Response({'error': 'Login details must be an object.'}, status=400)
+        username = request.data.get('username', '')
+        password = request.data.get('password', '')
+        if not isinstance(username, str) or not isinstance(password, str) or not username.strip() or not password:
+            return Response({'error': 'Enter your username or phone number and password.'}, status=400)
+        username = username.strip()
         # Support normalized phone number or username login
         user_obj = find_user_by_phone_or_username(username)
+        try:
+            check_login_rate(request, user_obj.username if user_obj else username)
+        except SecurityError as exc:
+            return Response({'error': exc.message, 'code': exc.code}, status=exc.status)
         if user_obj:
             user = authenticate(request, username=user_obj.username, password=password)
         else:
             user = authenticate(request, username=username, password=password)
         if user:
+            clear_login_failures(request, user.username)
             login(request, user)
-            user.sync_role()
             wallet, _ = Wallet.objects.get_or_create(owner=user)
             return Response({
                 "message": "Login successful",
@@ -110,7 +115,39 @@ class LoginView(APIView):
                 "effective_role": user.effective_role,
                 "effective_role_display": user.get_effective_role_display()
             })
+        record_login_failure(request, user_obj.username if user_obj else username)
         return Response({"error": "Invalid phone number or password"}, status=status.HTTP_401_UNAUTHORIZED)
+
+
+@method_decorator(csrf_protect, name='dispatch')
+class RegistrationView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        if request.user.is_authenticated:
+            return Response({'error': 'Sign out before creating another account.', 'code': 'ALREADY_AUTHENTICATED'}, status=409)
+        try:
+            check_registration_rate(request)
+            if not isinstance(request.data, dict):
+                return Response({'error': 'Registration details must be an object.', 'code': 'INVALID_REGISTRATION'}, status=400)
+            if any(not isinstance(request.data.get(name, ''), str) for name in RegistrationForm.base_fields):
+                return Response({'error': 'Registration fields must be text.', 'code': 'INVALID_REGISTRATION'}, status=400)
+            form = RegistrationForm(request.data)
+            if not form.is_valid():
+                return Response({
+                    'error': 'Check your registration details.', 'code': 'INVALID_REGISTRATION',
+                    'errors': {field: list(errors) for field, errors in form.errors.items()},
+                }, status=400)
+            user = form.save()
+            login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+            return Response({
+                'message': 'Account created successfully.', 'user': UserSerializer(user).data,
+                'wallet_balance': 0.0, 'role': user.effective_role,
+                'effective_role': user.effective_role,
+                'effective_role_display': user.get_effective_role_display(),
+            }, status=201)
+        except SecurityError as exc:
+            return Response({'error': exc.message, 'code': exc.code}, status=exc.status)
 
 
 class LogoutView(APIView):
@@ -124,13 +161,12 @@ class MeView(APIView):
         user, err = require_auth(request)
         if err:
             return err
-        user.sync_role()
         wallet, _ = Wallet.objects.get_or_create(owner=user)
         unread_notifications = Notification.objects.filter(user=user, is_read=False).count()
 
         # Check if user has active received FamilyPasses
         today = timezone.localdate() if timezone.is_aware(timezone.now()) else timezone.now().date()
-        received_passes = FamilyPass.objects.filter(member=user, status=FamilyPassStatus.ACTIVE, expiry_date__gte=today)
+        received_passes = FamilyPass.objects.filter(member=user, status=FamilyPassStatus.ACTIVE, start_date__lte=today, expiry_date__gte=today)
 
         return Response({
             "user": UserSerializer(user).data,
@@ -143,37 +179,38 @@ class MeView(APIView):
         })
 
 
-class SwitchRoleView(APIView):
-    """
-    Instant 1-Click Role Switcher for hackathon judges:
-    - shahed (Customer Owner)
-    - rahim (FamilyPass Member 1)
-    - karim (FamilyPass Member 2)
-    - agora (Merchant)
-    - admin (Judge / Evaluator)
-    """
-    permission_classes = [AllowAny]
-
+class TransactionPINView(APIView):
     def post(self, request):
-        target_username = request.data.get('username', 'shahed')
-        user = User.objects.filter(username=target_username).first()
-        if not user:
-            SyntheticDataGenerator.populate_database()
-            user = User.objects.filter(username=target_username).first()
-
-        if user:
-            login(request, user)
-            user.sync_role()
-            wallet, _ = Wallet.objects.get_or_create(owner=user)
-            return Response({
-                "message": f"Switched to {user.full_name or user.username} ({user.get_effective_role_display()})",
-                "user": UserSerializer(user).data,
-                "role": user.effective_role,
-                "effective_role": user.effective_role,
-                "effective_role_display": user.get_effective_role_display(),
-                "wallet_balance": float(wallet.balance)
-            })
-        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            if not isinstance(request.data, dict):
+                return Response({'error': 'PIN details must be an object.'}, status=400)
+            validate_new_pin(request.data.get('new_pin'))
+            check_login_rate(request, 'pin-setup:' + request.user.username)
+            password = request.data.get('password', '')
+            if not isinstance(password, str) or not request.user.check_password(password):
+                record_login_failure(request, 'pin-setup:' + request.user.username)
+                return Response({'error': 'Incorrect account password.', 'code': 'PASSWORD_INVALID'}, status=403)
+            clear_login_failures(request, 'pin-setup:' + request.user.username)
+            with db_transaction.atomic():
+                account = User.objects.select_for_update().get(pk=request.user.pk)
+                if account.transaction_pin:
+                    # Failed attempts must commit even when the change is rejected.
+                    changing = True
+                else:
+                    changing = False
+            if changing:
+                verify_pin(request.user, request.data.get('current_pin'))
+            with db_transaction.atomic():
+                account = User.objects.select_for_update().get(pk=request.user.pk)
+                if account.transaction_pin != request.user.transaction_pin:
+                    return Response({'error': 'Your PIN changed. Sign in again before continuing.', 'code': 'PIN_CHANGED'}, status=409)
+                account.set_transaction_pin(request.data['new_pin'])
+                account.pin_failed_attempts = 0
+                account.pin_locked_until = None
+                account.save(update_fields=['transaction_pin', 'pin_failed_attempts', 'pin_locked_until'])
+            return Response({'message': 'Transaction PIN saved.', 'has_transaction_pin': True})
+        except SecurityError as exc:
+            return Response({'error': exc.message, 'code': exc.code}, status=exc.status)
 
 
 # ==================== WALLET & TRANSACTIONS ====================
@@ -220,8 +257,10 @@ class WalletSummaryView(APIView):
         })
 
 
-class CashInView(APIView):
+class CashInView(FinancialAPIView):
     def post(self, request):
+        if not settings.ENABLE_SIMULATED_CASH_IN:
+            return Response({'error': 'Add Money requires a verified payment provider. Simulated cash-in is disabled.', 'code': 'CASH_IN_DISABLED'}, status=403)
         user, err = require_auth(request)
         if err:
             return err
@@ -243,19 +282,19 @@ class CashInView(APIView):
             return Response({"error": e.message, "code": e.code}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class SendMoneyView(APIView):
+class SendMoneyView(FinancialAPIView):
     def post(self, request):
         user, err = require_auth(request)
         if err:
             return err
         try:
             amount = Decimal(str(request.data.get('amount', '0')))
-            receiver_identifier = request.data.get('receiver')
-            is_eligible, err_msg, receiver = ContactService.check_recipient_eligibility(receiver_identifier, feature='SEND_MONEY')
+            receiver_identifier = request.data.get('receiver_phone', request.data.get('receiver'))
+            is_eligible, err_msg, receiver = RecipientService.check_recipient_eligibility(receiver_identifier, feature='SEND_MONEY')
 
             if not is_eligible or not receiver:
                 return Response(
-                    {"error": err_msg or "Recipient does not have a registered account. Send Money requires an active FundShare account."},
+                    {"error": err_msg, "code": RecipientService.rejection_code(receiver_identifier, receiver)},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
@@ -268,7 +307,7 @@ class SendMoneyView(APIView):
                 reference=request.data.get('reference', '')
             )
             return Response({
-                "message": f"Successfully sent ৳{amount:,.2f} to {receiver.full_name or receiver.username}",
+                "message": f"Successfully sent ৳{amount:,.2f} to {receiver.full_name or receiver.phone or 'Customer'}",
                 "transaction": TransactionSerializer(txn).data,
                 "remaining_balance": float(user.wallet.balance)
             })
@@ -276,7 +315,7 @@ class SendMoneyView(APIView):
             return Response({"error": e.message, "code": e.code}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class UtilityServicesView(APIView):
+class UtilityServicesView(FinancialAPIView):
     """
     Handles Mobile Recharge, Bill Payment, and Cash Out
     """
@@ -292,7 +331,9 @@ class UtilityServicesView(APIView):
                 'BILL': TransactionType.BILL_PAYMENT,
                 'CASHOUT': TransactionType.CASH_OUT,
             }
-            txn_type = type_map.get(action_type, TransactionType.BILL_PAYMENT)
+            if action_type not in type_map:
+                return Response({'error': 'Select Recharge, Bill Payment, or Cash Out.', 'code': 'INVALID_ACTION'}, status=400)
+            txn_type = type_map[action_type]
 
             payment_source = request.data.get('payment_source', PaymentSource.NORMAL_WALLET)
             family_pass_id = request.data.get('family_pass_id')
@@ -316,6 +357,10 @@ class UtilityServicesView(APIView):
 
             category = request.data.get('category')
             provider = request.data.get('provider')
+            if txn_type == TransactionType.BILL_PAYMENT:
+                if not isinstance(provider, str) or provider not in TransactionService.BILL_PROVIDER_CATEGORIES:
+                    return Response({'error': 'Select an approved bill provider.', 'code': 'PROVIDER_UNAUTHORIZED'}, status=400)
+                category = TransactionService.BILL_PROVIDER_CATEGORIES[provider]
             bill_type = request.data.get('bill_type')
             metadata = {
                 'provider': provider,
@@ -339,6 +384,7 @@ class UtilityServicesView(APIView):
                 "remaining_balance": float(user.wallet.balance)
             })
         except TransactionValidationError as e:
+            request.rejected_transaction = getattr(e, 'audit_data', None)
             return Response({
                 "error": e.message,
                 "code": e.code,
@@ -348,7 +394,7 @@ class UtilityServicesView(APIView):
 
 # ==================== PURPOSE FUNDS ====================
 
-class PurposeFundsListView(APIView):
+class PurposeFundsListView(FinancialAPIView):
     def get(self, request):
         user, err = require_auth(request)
         if err:
@@ -379,27 +425,24 @@ class PurposeFundsListView(APIView):
             if not name or not category:
                 return Response({"error": "Fund name and business category are required."}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Check wallet balance if allocating
-            wallet, _ = Wallet.objects.get_or_create(owner=user)
-            if initial_allocation > Decimal('0.00'):
-                if wallet.balance < initial_allocation:
-                    return Response({"error": f"Insufficient wallet balance. You have ৳{wallet.balance:,.2f} available."}, status=status.HTTP_400_BAD_REQUEST)
-                wallet.balance -= initial_allocation
-                wallet.save(update_fields=['balance', 'updated_at'])
+            TransactionService.validate_amount(initial_allocation, allow_zero=True)
+            TransactionService.validate_amount(budget, allow_zero=True)
+            if category not in BusinessCategory.values:
+                return Response({'error': 'Select a valid business category.'}, status=400)
 
             recipient_identifier = request.data.get('recipient')
             recipient_user = None
-            if recipient_identifier:
-                is_eligible, err_msg, recipient_user = ContactService.check_recipient_eligibility(recipient_identifier, feature='FUND_SHARE')
+            if recipient_identifier not in (None, ''):
+                is_eligible, err_msg, recipient_user = RecipientService.check_recipient_eligibility(recipient_identifier, feature='FUND_SHARE')
                 if not is_eligible or not recipient_user:
-                    return Response({"error": err_msg or "Recipient does not have a registered account. FundShare requires a registered user."}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({"error": err_msg, "code": RecipientService.rejection_code(recipient_identifier, recipient_user)}, status=status.HTTP_400_BAD_REQUEST)
 
             fund = PurposeFund.objects.create(
                 owner=user,
                 name=name,
                 category=category,
-                allocated_amount=initial_allocation,
-                current_balance=initial_allocation,
+                allocated_amount=Decimal('0.00'),
+                current_balance=Decimal('0.00'),
                 monthly_budget=budget,
                 icon=icon,
                 color=color,
@@ -408,23 +451,14 @@ class PurposeFundsListView(APIView):
 
 
             if initial_allocation > Decimal('0.00'):
-                Transaction.objects.create(
-                    sender=user,
-                    amount=initial_allocation,
-                    transaction_type=TransactionType.FUND_ALLOCATION,
-                    payment_source=PaymentSource.NORMAL_WALLET,
-                    purpose_fund=fund,
-                    category=category,
-                    status='COMPLETED',
-                    reference=f"Initial allocation for {fund.name} Fund"
-                )
+                TransactionService.allocate_to_fund(user, fund, initial_allocation)
 
             return Response(PurposeFundSerializer(fund).data, status=status.HTTP_201_CREATED)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except TransactionValidationError as e:
+            return Response({'error': e.message, 'code': e.code}, status=400)
 
 
-class PurposeFundAllocateView(APIView):
+class PurposeFundAllocateView(FinancialAPIView):
     def post(self, request, pk):
         user, err = require_auth(request)
         if err:
@@ -442,7 +476,7 @@ class PurposeFundAllocateView(APIView):
             return Response({"error": e.message}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class PurposeFundTransferView(APIView):
+class PurposeFundTransferView(FinancialAPIView):
     """
     Explicit user-initiated inter-fund transfer.
     AI may recommend it, but user performs the transfer.
@@ -495,7 +529,7 @@ class PurposeFundDetailView(APIView):
         })
 
 
-class PurposeFundManageView(APIView):
+class PurposeFundManageView(FinancialAPIView):
     """
     CRUD management for an existing PurposeFund / FundShare:
     - GET: retrieve fund details
@@ -514,7 +548,13 @@ class PurposeFundManageView(APIView):
         user, err = require_auth(request)
         if err:
             return err
-        fund = get_object_or_404(PurposeFund, id=pk, owner=user)
+        with db_transaction.atomic():
+            TransactionService.lock_wallets([user.id])
+            fund = get_object_or_404(PurposeFund.objects.select_for_update(), id=pk, owner=user)
+            return self._update_fund(request, fund)
+
+    def _update_fund(self, request, fund):
+        user = request.user
         try:
             if 'name' in request.data:
                 name = request.data.get('name', '').strip()
@@ -525,12 +565,14 @@ class PurposeFundManageView(APIView):
             if 'category' in request.data:
                 cat = request.data.get('category')
                 if cat:
+                    if cat not in BusinessCategory.values:
+                        return Response({'error': 'Select a valid business category.'}, status=400)
                     fund.category = cat
 
             if 'monthly_budget' in request.data:
                 budget = Decimal(str(request.data.get('monthly_budget', '0')))
-                if budget > Decimal('0.00'):
-                    fund.monthly_budget = budget
+                TransactionService.validate_amount(budget, allow_zero=True)
+                fund.monthly_budget = budget
 
             if 'icon' in request.data:
                 fund.icon = request.data.get('icon', fund.icon)
@@ -540,11 +582,11 @@ class PurposeFundManageView(APIView):
 
             if 'recipient' in request.data:
                 recip_ident = request.data.get('recipient')
-                if recip_ident:
-                    is_eligible, err_msg, recip_user = ContactService.check_recipient_eligibility(recip_ident, feature='FUND_SHARE')
+                if recip_ident not in (None, ''):
+                    is_eligible, err_msg, recip_user = RecipientService.check_recipient_eligibility(recip_ident, feature='FUND_SHARE')
                     if not is_eligible or not recip_user:
                         return Response(
-                            {"error": err_msg or "Recipient does not have a registered account. FundShare requires a registered user."},
+                            {"error": err_msg, "code": RecipientService.rejection_code(recip_ident, recip_user)},
                             status=status.HTTP_400_BAD_REQUEST
                         )
                     fund.recipient = recip_user
@@ -566,7 +608,8 @@ class PurposeFundManageView(APIView):
         user, err = require_auth(request)
         if err:
             return err
-        fund = get_object_or_404(PurposeFund, id=pk, owner=user)
+        TransactionService.lock_wallets([user.id])
+        fund = get_object_or_404(PurposeFund.objects.select_for_update(), id=pk, owner=user, status=FundStatus.ACTIVE)
 
         # Check for prior financial history (transactions or inter-fund transfers)
         has_txns = Transaction.objects.filter(purpose_fund=fund).exists()
@@ -615,10 +658,13 @@ class PurposeFundManageView(APIView):
 class MerchantsListView(APIView):
     def get(self, request):
         merchants = Merchant.objects.filter(is_active=True).order_by('category', 'business_name')
-        return Response(MerchantSerializer(merchants, many=True).data)
+        data = MerchantSerializer(merchants, many=True).data
+        for merchant in data:
+            merchant.pop('balance', None)
+        return Response(data)
 
 
-class PayMerchantView(APIView):
+class PayMerchantView(FinancialAPIView):
     """
     CORE INNOVATION TEST ENDPOINT:
     - Normal Wallet Payment
@@ -684,6 +730,7 @@ class PayMerchantView(APIView):
 
         except TransactionValidationError as e:
             # Deterministic rule rejection with explainable message
+            request.rejected_transaction = getattr(e, 'audit_data', None)
             return Response({
                 "success": False,
                 "error": e.message,
@@ -699,8 +746,9 @@ class MerchantDashboardView(APIView):
             return err
         merchant = Merchant.objects.filter(user=user).first()
         if not merchant:
-            # If logged in as another user, find Agora as demo merchant
-            merchant = Merchant.objects.filter(business_name__icontains="Agora").first()
+            return Response({'error': 'This account has no merchant dashboard.'}, status=403)
+        if user.role != UserRole.MERCHANT:
+            return Response({'error': 'Merchant access is required.'}, status=403)
 
         txns = Transaction.objects.filter(merchant=merchant).order_by('-timestamp')[:20]
         total_vol = sum([float(t.amount) for t in txns if t.status == 'COMPLETED'])
@@ -716,26 +764,18 @@ class MerchantDashboardView(APIView):
 # ==================== FAMILYPASS ====================
 
 class FamilyPassListView(APIView):
+    permission_classes = [IsAuthenticated, CustomerPermission]
     def get(self, request):
         user, err = require_auth(request)
         if err:
             return err
 
-        user.sync_role()
         today = timezone.localdate() if timezone.is_aware(timezone.now()) else timezone.now().date()
-
-        # Expire any overdue active passes
-        overdue = FamilyPass.objects.filter(status=FamilyPassStatus.ACTIVE, expiry_date__lt=today)
-        if overdue.exists():
-            for odp in overdue:
-                odp.status = FamilyPassStatus.EXPIRED
-                odp.save(update_fields=['status', 'updated_at'])
-                odp.member.sync_role()
 
         # 1. Passes issued by user (Owner view)
         issued_passes = FamilyPass.objects.filter(owner=user).order_by('-created_at')
 
-        # 2. Passes received by user (Member view)
+        # 2. Passes received by this same customer
         received_passes = FamilyPass.objects.filter(member=user, status=FamilyPassStatus.ACTIVE, expiry_date__gte=today)
 
         # Build purpose options metadata for frontend UI dropdowns
@@ -762,15 +802,14 @@ class FamilyPassListView(APIView):
         if err:
             return err
         try:
-            member_identifier = request.data.get('member') or request.data.get('member_identifier')
+            member_identifier = request.data.get('recipient_phone', request.data.get('member') or request.data.get('member_identifier'))
             raw_limit = request.data.get('limit_amount', '0')
             try:
                 limit_amount = Decimal(str(raw_limit))
             except Exception:
                 return Response({"error": "Invalid allowance limit format."}, status=status.HTTP_400_BAD_REQUEST)
 
-            if limit_amount <= Decimal('0.00'):
-                return Response({"error": "Allowance limit must be greater than zero."}, status=status.HTTP_400_BAD_REQUEST)
+            TransactionService.validate_amount(limit_amount)
 
             try:
                 duration_days = int(request.data.get('duration_days') or request.data.get('validity_days') or 30)
@@ -809,12 +848,12 @@ class FamilyPassListView(APIView):
             else:
                 purpose_label = purpose
 
-            is_eligible, err_msg, member = ContactService.check_recipient_eligibility(member_identifier, feature='FAMILY_PASS')
+            is_eligible, err_msg, member = RecipientService.check_recipient_eligibility(member_identifier, feature='FAMILY_PASS')
 
             if not is_eligible or not member:
                 return Response(
-                    {"error": err_msg or "Member not found. Check username or phone."},
-                    status=status.HTTP_404_NOT_FOUND if "not found" in (err_msg or "").lower() else status.HTTP_400_BAD_REQUEST
+                    {"error": err_msg, "code": RecipientService.rejection_code(member_identifier, member)},
+                    status=status.HTTP_400_BAD_REQUEST
                 )
 
             if member == user:
@@ -850,14 +889,11 @@ class FamilyPassListView(APIView):
                 allowed_categories=allowed_categories
             )
 
-            # Sync recipient role immediately to FamilyPass Member
-            member.sync_role()
-
             # Send Notification to Member
             Notification.objects.create(
                 user=member,
                 title="🎁 New FamilyPass Granted",
-                message=f"{user.full_name or user.username} granted you a FamilyPass for '{fp.purpose_label}' with ৳{limit_amount:,.2f} spending limit valid until {expiry_date}.",
+                message=f"{user.full_name or user.phone or 'Customer'} granted you a FamilyPass for '{fp.purpose_label}' with ৳{limit_amount:,.2f} spending limit valid until {expiry_date}.",
                 notification_type=NotificationType.FAMILY_PASS,
                 metadata={
                     "family_pass_id": fp.id,
@@ -877,8 +913,9 @@ class FamilyPassDetailView(APIView):
     """
     Handles retrieving and editing a granted FamilyPass permission.
     Strictly verifies ownership, prevents editing revoked/expired passes,
-    rejects limits below already-used amounts, and updates the recipient's role/state.
+    rejects limits below already-used amounts, and notifies the recipient.
     """
+    permission_classes = [IsAuthenticated, CustomerPermission]
     def get(self, request, pk):
         user, err = require_auth(request)
         if err:
@@ -898,10 +935,15 @@ class FamilyPassDetailView(APIView):
         return self._update(request, pk)
 
     def _update(self, request, pk):
+        with db_transaction.atomic():
+            TransactionService.lock_wallets([request.user.id])
+            return self._update_locked(request, pk)
+
+    def _update_locked(self, request, pk):
         user, err = require_auth(request)
         if err:
             return err
-        fp = get_object_or_404(FamilyPass, id=pk)
+        fp = get_object_or_404(FamilyPass.objects.select_for_update(), id=pk)
 
         # 1. Authorization: Only the granting owner may edit
         if fp.owner != user:
@@ -920,7 +962,6 @@ class FamilyPassDetailView(APIView):
         if fp.expiry_date < today:
             fp.status = FamilyPassStatus.EXPIRED
             fp.save(update_fields=['status', 'updated_at'])
-            fp.member.sync_role()
             return Response(
                 {"error": f"Cannot edit an expired FamilyPass (expired on {fp.expiry_date})."},
                 status=status.HTTP_400_BAD_REQUEST
@@ -933,8 +974,10 @@ class FamilyPassDetailView(APIView):
             except Exception:
                 return Response({"error": "Invalid allowance limit format."}, status=status.HTTP_400_BAD_REQUEST)
 
-            if new_limit <= Decimal('0.00'):
-                return Response({"error": "Allowance limit must be greater than zero."}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                TransactionService.validate_amount(new_limit)
+            except TransactionValidationError as exc:
+                return Response({'error': exc.message, 'code': exc.code}, status=400)
 
             # Reject new allowance limit that is lower than amount already spent
             if new_limit < fp.used_amount:
@@ -1015,7 +1058,7 @@ class FamilyPassDetailView(APIView):
         Notification.objects.create(
             user=fp.member,
             title="✏️ FamilyPass Updated",
-            message=f"{user.full_name or user.username} updated your FamilyPass ({fp.purpose_label}). New limit: ৳{fp.limit_amount:,.2f}, valid until {fp.expiry_date}.",
+            message=f"{user.full_name or user.phone or 'Customer'} updated your FamilyPass ({fp.purpose_label}). New limit: ৳{fp.limit_amount:,.2f}, valid until {fp.expiry_date}.",
             notification_type=NotificationType.FAMILY_PASS,
             metadata={
                 "family_pass_id": fp.id,
@@ -1034,11 +1077,14 @@ class FamilyPassDetailView(APIView):
 
 
 class FamilyPassRevokeView(APIView):
+    permission_classes = [IsAuthenticated, CustomerPermission]
+    @db_transaction.atomic
     def post(self, request, pk):
         user, err = require_auth(request)
         if err:
             return err
-        fp = FamilyPass.objects.filter(id=pk).first()
+        TransactionService.lock_wallets([user.id])
+        fp = FamilyPass.objects.select_for_update().filter(id=pk).first()
         if not fp:
             return Response({"error": "FamilyPass not found."}, status=status.HTTP_404_NOT_FOUND)
         if fp.owner != user:
@@ -1046,34 +1092,30 @@ class FamilyPassRevokeView(APIView):
         fp.status = FamilyPassStatus.REVOKED
         fp.save(update_fields=['status', 'updated_at'])
 
-        # Recalculate recipient's effective role immediately
         member = fp.member
-        member.sync_role()
 
         # Notify Member
         Notification.objects.create(
             user=member,
             title="🚫 FamilyPass Revoked",
-            message=f"{user.full_name or user.username} revoked your FamilyPass ({fp.purpose_label}). This permission is no longer active.",
+            message=f"{user.full_name or user.phone or 'Customer'} revoked your FamilyPass ({fp.purpose_label}). This permission is no longer active.",
             notification_type=NotificationType.FAMILY_PASS,
             metadata={
                 "family_pass_id": fp.id,
                 "revoked_by": user.username,
-                "member_new_role": member.effective_role
             }
         )
 
         return Response({
             "success": True,
-            "message": f"FamilyPass for {member.full_name or member.username} has been immediately revoked.",
+            "message": f"FamilyPass for {member.full_name or member.phone or 'Customer'} has been immediately revoked.",
             "family_pass": FamilyPassSerializer(fp).data,
             "member_id": member.id,
-            "member_effective_role": member.effective_role,
-            "member_role_display": member.get_effective_role_display()
         })
 
 
 class FamilyPassActivityView(APIView):
+    permission_classes = [IsAuthenticated, CustomerPermission]
     def get(self, request, pk):
         user, err = require_auth(request)
         if err:
@@ -1094,10 +1136,11 @@ class FamilyPassActivityView(APIView):
         })
 
 
-class AvailableMembersView(APIView):
+class AvailableFamilyPassRecipientsView(APIView):
+    permission_classes = [IsAuthenticated, CustomerPermission]
     def get(self, request):
-        members = User.objects.filter(role__in=[UserRole.MEMBER, UserRole.CUSTOMER]).exclude(username='admin')
-        return Response(UserSerializer(members, many=True).data)
+        customers = User.objects.filter(role=UserRole.CUSTOMER, is_active=True, is_superuser=False).exclude(pk=request.user.pk)
+        return Response([{'id': customer.id, 'username': customer.username, 'phone': customer.phone, 'full_name': customer.full_name} for customer in customers])
 
 
 # ==================== TRANSACTION HISTORY & NOTIFICATIONS ====================
@@ -1209,7 +1252,7 @@ class ReportsView(APIView):
 
 # ==================== HACKATHON EVALUATION & EXPERIMENTS ====================
 
-class EvaluationMetricsView(APIView):
+class EvaluationMetricsView(AdminAPIView):
     """
     Admin / Evaluator dashboard showing genuine ML metrics and dataset statistics.
     Sections 28, 29, 31 of Hackathon Spec.
@@ -1241,7 +1284,7 @@ class EvaluationMetricsView(APIView):
         })
 
 
-class ExperimentRecordsView(APIView):
+class ExperimentRecordsView(AdminAPIView):
     """
     Serves Baseline (Manual Spreadsheet) vs FundShare Prototype experiment comparisons.
     Section 30: User/Business Experiment
@@ -1292,11 +1335,13 @@ class ExperimentRecordsView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class SeedDemoDataView(APIView):
+class SeedDemoDataView(AdminAPIView):
     """
     1-Click reset/re-seed endpoint for demo resetting.
     """
     def post(self, request):
+        if not settings.ENABLE_DEMO_RESET:
+            return Response({'error': 'Demo reset is disabled in this environment.', 'code': 'RESET_DISABLED'}, status=403)
         wipe = request.data.get('wipe', False)
         result = SyntheticDataGenerator.populate_database(wipe_existing=wipe)
         AnomalyDetector.get_instance().train_and_evaluate()
@@ -1441,15 +1486,18 @@ class ContactSearchView(APIView):
         return Response([ContactService.get_contact_account_info(c) for c in contacts])
 
 
-class ContactResolveView(APIView):
+class RecipientResolveView(APIView):
     """
     Resolves recipient eligibility on the fly:
-    GET/POST /api/contacts/resolve/?recipient=...&feature=...
+    Global phone resolution; saved contacts are not involved.
     """
     def get(self, request):
-        recipient = request.query_params.get('recipient') or request.query_params.get('q') or request.query_params.get('phone')
+        recipient = request.query_params.get('phone') or request.query_params.get('recipient') or request.query_params.get('q')
         feature = request.query_params.get('feature', 'SEND_MONEY')
-        is_eligible, err_msg, matched_user = ContactService.check_recipient_eligibility(recipient, feature=feature)
+        return self.resolve(request, recipient, feature)
+
+    def resolve(self, request, recipient, feature):
+        is_eligible, err_msg, matched_user = RecipientService.check_recipient_eligibility(recipient, feature=feature)
 
         norm_phone = normalize_phone(recipient)
         return Response({
@@ -1458,6 +1506,7 @@ class ContactResolveView(APIView):
             "feature": feature,
             "is_eligible": is_eligible,
             "error_message": err_msg,
+            "code": None if is_eligible else RecipientService.rejection_code(recipient, matched_user),
             "is_registered": matched_user is not None,
             "account_status": "REGISTERED" if matched_user else "NOT_REGISTERED",
             "user": {
@@ -1473,8 +1522,8 @@ class ContactResolveView(APIView):
         })
 
     def post(self, request):
-        recipient = request.data.get('recipient') or request.data.get('phone')
+        if not isinstance(request.data, dict):
+            return Response({'error': 'Recipient details must be an object.'}, status=400)
+        recipient = request.data.get('phone', request.data.get('recipient'))
         feature = request.data.get('feature', 'SEND_MONEY')
-        request.query_params = {'recipient': recipient, 'feature': feature}
-        return self.get(request)
-
+        return self.resolve(request, recipient, feature)

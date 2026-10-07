@@ -1,4 +1,5 @@
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
+from django.conf import settings
 from fundshare_app.ml.data_generator import SyntheticDataGenerator
 from fundshare_app.ml.anomaly_detector import AnomalyDetector
 
@@ -10,6 +11,8 @@ class Command(BaseCommand):
         parser.add_argument('--wipe', action='store_true', help='Wipe existing transactions before seeding')
 
     def handle(self, *args, **options):
+        if not settings.DEBUG:
+            raise CommandError('Synthetic data seeding is available only with DEBUG=True.')
         wipe = options.get('wipe', False)
         self.stdout.write(self.style.NOTICE('Generating realistic synthetic data for FUNDShare (upay prototype)...'))
         stats = SyntheticDataGenerator.populate_database(wipe_existing=wipe)

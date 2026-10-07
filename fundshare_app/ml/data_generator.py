@@ -2,6 +2,7 @@ import random
 import datetime
 from decimal import Decimal
 from django.utils import timezone
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from fundshare_app.models import (
     UserRole, BusinessCategory, Wallet, Merchant, PurposeFund,
@@ -25,22 +26,22 @@ class SyntheticDataGenerator:
     """
 
     MERCHANT_PROFILES = [
-        {"name": "Agora Super Shop", "category": BusinessCategory.GROCERY, "phone": "0171110001", "acc": "AGR-1001"},
-        {"name": "Shwapno Superstore", "category": BusinessCategory.GROCERY, "phone": "0171110002", "acc": "SHW-1002"},
-        {"name": "Unimart Gulshan", "category": BusinessCategory.GROCERY, "phone": "0171110003", "acc": "UNI-1003"},
-        {"name": "Labaid Pharmacy", "category": BusinessCategory.MEDICINE, "phone": "0171110004", "acc": "LAB-2001"},
-        {"name": "Tamanna Pharmacy", "category": BusinessCategory.MEDICINE, "phone": "0171110005", "acc": "TAM-2002"},
-        {"name": "Square Hospital Diagnostic", "category": BusinessCategory.TREATMENT, "phone": "0171110006", "acc": "SQR-3001"},
-        {"name": "Scholastica School", "category": BusinessCategory.EDUCATION, "phone": "0171110007", "acc": "SCH-4001"},
-        {"name": "Sunnydale Academy", "category": BusinessCategory.EDUCATION, "phone": "0171110008", "acc": "SUN-4002"},
-        {"name": "DESCO Prepaid Meter", "category": BusinessCategory.ELECTRICITY, "phone": "0171110009", "acc": "DSC-5001"},
-        {"name": "DPDC Electricity", "category": BusinessCategory.ELECTRICITY, "phone": "0171110010", "acc": "DPD-5002"},
-        {"name": "Sultan's Dine Dhanmondi", "category": BusinessCategory.RESTAURANT, "phone": "0171110011", "acc": "SLT-6001"},
-        {"name": "Star Kabab & Restaurant", "category": BusinessCategory.RESTAURANT, "phone": "0171110012", "acc": "STR-6002"},
-        {"name": "Shohoz Ride Service", "category": BusinessCategory.TRANSPORT, "phone": "0171110013", "acc": "SHZ-7001"},
-        {"name": "Uber Bangladesh", "category": BusinessCategory.TRANSPORT, "phone": "0171110014", "acc": "UBR-7002"},
-        {"name": "Eastern Housing Rental", "category": BusinessCategory.RENT, "phone": "0171110015", "acc": "EST-8001"},
-        {"name": "Aarong Bashundhara", "category": BusinessCategory.SHOPPING, "phone": "0171110016", "acc": "AAR-9001"},
+        {"name": "Agora Super Shop", "category": BusinessCategory.GROCERY, "phone": "01711100010", "acc": "AGR-1001"},
+        {"name": "Shwapno Superstore", "category": BusinessCategory.GROCERY, "phone": "01711100020", "acc": "SHW-1002"},
+        {"name": "Unimart Gulshan", "category": BusinessCategory.GROCERY, "phone": "01711100030", "acc": "UNI-1003"},
+        {"name": "Labaid Pharmacy", "category": BusinessCategory.MEDICINE, "phone": "01711100040", "acc": "LAB-2001"},
+        {"name": "Tamanna Pharmacy", "category": BusinessCategory.MEDICINE, "phone": "01711100050", "acc": "TAM-2002"},
+        {"name": "Square Hospital Diagnostic", "category": BusinessCategory.TREATMENT, "phone": "01711100060", "acc": "SQR-3001"},
+        {"name": "Scholastica School", "category": BusinessCategory.EDUCATION, "phone": "01711100070", "acc": "SCH-4001"},
+        {"name": "Sunnydale Academy", "category": BusinessCategory.EDUCATION, "phone": "01711100080", "acc": "SUN-4002"},
+        {"name": "DESCO Prepaid Meter", "category": BusinessCategory.ELECTRICITY, "phone": "01711100090", "acc": "DSC-5001"},
+        {"name": "DPDC Electricity", "category": BusinessCategory.ELECTRICITY, "phone": "01711100100", "acc": "DPD-5002"},
+        {"name": "Sultan's Dine Dhanmondi", "category": BusinessCategory.RESTAURANT, "phone": "01711100110", "acc": "SLT-6001"},
+        {"name": "Star Kabab & Restaurant", "category": BusinessCategory.RESTAURANT, "phone": "01711100120", "acc": "STR-6002"},
+        {"name": "Shohoz Ride Service", "category": BusinessCategory.TRANSPORT, "phone": "01711100130", "acc": "SHZ-7001"},
+        {"name": "Uber Bangladesh", "category": BusinessCategory.TRANSPORT, "phone": "01711100140", "acc": "UBR-7002"},
+        {"name": "Eastern Housing Rental", "category": BusinessCategory.RENT, "phone": "01711100150", "acc": "EST-8001"},
+        {"name": "Aarong Bashundhara", "category": BusinessCategory.SHOPPING, "phone": "01711100160", "acc": "AAR-9001"},
     ]
 
     CATEGORY_DISTRIBUTIONS = {
@@ -61,6 +62,8 @@ class SyntheticDataGenerator:
         """
         Creates all required users, merchants, purpose funds, FamilyPass, historical data, and evaluations.
         """
+        if not settings.DEBUG:
+            raise ValueError('Synthetic data seeding is disabled in production.')
         if wipe_existing:
             Transaction.objects.all().delete()
             PurposeFund.objects.all().delete()
@@ -95,13 +98,13 @@ class SyntheticDataGenerator:
         shahed.set_password("password123")
         shahed.save()
 
-        # FamilyPass Members
+        # Customers who also receive FamilyPass access
         rahim, _ = User.objects.get_or_create(
             username="rahim",
             defaults={
                 "full_name": "Rahim Ahmed",
                 "phone": "01811000002",
-                "role": UserRole.MEMBER,
+                "role": UserRole.CUSTOMER,
             }
         )
         rahim.set_password("password123")
@@ -112,7 +115,7 @@ class SyntheticDataGenerator:
             defaults={
                 "full_name": "Karim Hossain",
                 "phone": "01911000003",
-                "role": UserRole.MEMBER,
+                "role": UserRole.CUSTOMER,
             }
         )
         karim.set_password("password123")

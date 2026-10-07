@@ -143,7 +143,7 @@ class FinancialAIService:
                 "recent_activity": recent_logs
             })
 
-        # FamilyPass data (Received by user if member)
+        # Received permissions coexist with this customer's own wallet and funds.
         family_passes_received = FamilyPass.objects.filter(member=user, status='ACTIVE')
         fp_received_data = []
         for fp in family_passes_received:

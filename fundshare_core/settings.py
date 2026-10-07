@@ -66,6 +66,7 @@ RENDER_EXTERNAL_HOSTNAME = os.environ.get(
 )
 
 ALLOWED_HOSTS = []
+ALLOWED_HOSTS.extend(filter(None, os.environ.get('ALLOWED_HOSTS', '').split(',')))
 
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
@@ -82,7 +83,7 @@ if DEBUG:
 # ============================================================
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
+    'fundshare_app.apps.FundShareAdminConfig',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
@@ -94,7 +95,7 @@ INSTALLED_APPS = [
     'corsheaders',
 
     # FundShare application
-    'fundshare_app',
+    'fundshare_app.apps.FundshareAppConfig',
 ]
 
 
@@ -129,10 +130,9 @@ AUTH_USER_MODEL = 'fundshare_app.User'
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.BasicAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
+        'rest_framework.permissions.IsAuthenticated',
     ],
 }
 
@@ -215,15 +215,38 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+        'OPTIONS': {'timeout': 20, 'transaction_mode': 'IMMEDIATE'},
     }
 }
+
+if os.environ.get('DATABASE_URL'):
+    import dj_database_url
+    DATABASES['default'] = dj_database_url.parse(os.environ['DATABASE_URL'], conn_max_age=60)
+elif not DEBUG:
+    raise RuntimeError('DATABASE_URL must specify PostgreSQL when DEBUG=False.')
+if not DEBUG and DATABASES['default']['ENGINE'] != 'django.db.backends.postgresql':
+    raise RuntimeError('Production requires PostgreSQL for transaction row locking.')
+
+ENABLE_DEMO_RESET = DEBUG and os.environ.get('ENABLE_DEMO_RESET', 'false').lower() == 'true'
+ENABLE_SIMULATED_CASH_IN = DEBUG and os.environ.get('ENABLE_SIMULATED_CASH_IN', 'true').lower() == 'true'
+
+CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}
+if os.environ.get('REDIS_URL'):
+    CACHES['default'] = {'BACKEND': 'django.core.cache.backends.redis.RedisCache', 'LOCATION': os.environ['REDIS_URL']}
+elif not DEBUG:
+    raise RuntimeError('REDIS_URL is required for shared login rate limiting in production.')
 
 
 # ============================================================
 # PASSWORD VALIDATION
 # ============================================================
 
-AUTH_PASSWORD_VALIDATORS = []
+AUTH_PASSWORD_VALIDATORS = [
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+]
 
 
 # ============================================================
@@ -251,10 +274,10 @@ STATICFILES_DIRS = [
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 if not DEBUG:
-    STATICFILES_STORAGE = (
-        'whitenoise.storage.'
-        'CompressedManifestStaticFilesStorage'
-    )
+    STORAGES = {
+        'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+        'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
+    }
 
 
 # ============================================================
@@ -272,12 +295,30 @@ LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 
+AUTH_LOCKOUT_SECONDS = 60
+LOGIN_MAX_FAILED_ATTEMPTS = 10
+LOGIN_FAILURE_WINDOW_SECONDS = 300
+TRANSACTION_PIN_MAX_FAILED_ATTEMPTS = 5
+
 SESSION_COOKIE_AGE = 86400
 SESSION_SAVE_EVERY_REQUEST = True
 
 if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+# Enable only behind a trusted proxy which strips client-supplied forwarding headers.
+if os.environ.get('TRUST_PROXY_HTTPS', 'false').lower() == 'true':
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 
 # ============================================================

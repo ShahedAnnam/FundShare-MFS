@@ -18,6 +18,14 @@ const state = {
   pickerConfig: null,
 };
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+}
+
+function inlineArgument(value) {
+  return escapeHtml(JSON.stringify(String(value ?? '')));
+}
+
 // ============================================================
 // CSRF TOKEN
 // ============================================================
@@ -29,6 +37,56 @@ function getCsrfToken() {
 // ============================================================
 // HTTP HELPERS
 // ============================================================
+function normalizeRecipientPhone(value) {
+  let phone = String(value || '').trim().replace(/[\s().-]/g, '');
+  if (phone.startsWith('+880')) phone = phone.slice(3);
+  else if (phone.startsWith('00880')) phone = phone.slice(4);
+  else if (phone.startsWith('880') && phone.length >= 13) phone = phone.slice(2);
+  if (/^1[0-9]{9}$/.test(phone)) phone = '0' + phone;
+  return /^01[3-9][0-9]{8}$/.test(phone) ? phone : '';
+}
+
+function clearRecipientLookup(input) {
+  input.dataset.lookupVersion = String(Number(input.dataset.lookupVersion || 0) + 1);
+  const feedback = document.getElementById(input.id + 'Status');
+  if (feedback) { feedback.textContent = ''; feedback.className = 'recipient-status'; }
+}
+
+async function resolveRecipientInput(inputId) {
+  const input = document.getElementById(inputId);
+  const feedback = document.getElementById(inputId + 'Status');
+  if (!input || !feedback) return null;
+  clearRecipientLookup(input);
+  const version = input.dataset.lookupVersion;
+  if (!input.value.trim() && input.dataset.recipientFeature === 'FUND_SHARE') return null;
+  const phone = normalizeRecipientPhone(input.value);
+  if (!phone) {
+    feedback.textContent = 'Enter a valid Bangladesh mobile phone number.';
+    feedback.className = 'recipient-status error';
+    return null;
+  }
+  input.value = phone;
+  feedback.textContent = 'Checking account...';
+  try {
+    const result = await apiGet(`/api/recipients/resolve/?phone=${encodeURIComponent(phone)}&feature=${encodeURIComponent(input.dataset.recipientFeature)}`);
+    if (input.dataset.lookupVersion !== version || input.value !== phone) return null;
+    if (!result?.is_eligible) {
+      feedback.textContent = result?.error_message || 'Unable to check this account. Try again.';
+      feedback.className = 'recipient-status error';
+      return null;
+    }
+    feedback.textContent = `${result.user?.full_name || 'Registered account'} (${phone})`;
+    feedback.className = 'recipient-status verified';
+    return phone;
+  } catch (error) {
+    if (input.dataset.lookupVersion === version) {
+      feedback.textContent = 'Unable to check this account. Try again.';
+      feedback.className = 'recipient-status error';
+    }
+    return null;
+  }
+}
+
 async function apiGet(url) {
   const r = await fetch(url, { credentials: 'same-origin' });
   if (r.status === 401) { window.location.href = '/login/'; return null; }
@@ -36,14 +94,7 @@ async function apiGet(url) {
 }
 
 async function apiPost(url, data) {
-  const r = await fetch(url, {
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
-    body: JSON.stringify(data)
-  });
-  if (r.status === 401) { window.location.href = '/login/'; return null; }
-  return { ok: r.ok, status: r.status, data: await r.json() };
+  return apiMutation(url, 'POST', data);
 }
 
 async function apiPatch(url, data) {
@@ -58,14 +109,131 @@ async function apiPatch(url, data) {
 }
 
 async function apiDelete(url) {
-  const r = await fetch(url, {
-    method: 'DELETE',
-    credentials: 'same-origin',
-    headers: { 'X-CSRFToken': getCsrfToken() }
+  return apiMutation(url, 'DELETE', {});
+}
+
+const pendingFinancialActions = new Set();
+const uncertainRequestKeys = new Map();
+
+function isFinancialAction(url, method) {
+  if (method === 'DELETE') return /^\/api\/funds\/\d+\/$/.test(url);
+  return /^\/api\/(pay\/|payments\/merchant\/|wallet\/(cash-in|send|send-money|utility)\/|funds\/$|funds\/transfer\/|funds\/\d+\/allocate\/)/.test(url);
+}
+
+function confirmTransactionPIN(url, data, method) {
+  if (!state.user?.has_transaction_pin) {
+    showToast('info', 'Set your transaction PIN before continuing.');
+    document.querySelectorAll('.modal-overlay.show').forEach(el => closeModal(el.id));
+    openPINSettings();
+    return Promise.resolve(null);
+  }
+  const dialog = document.getElementById('transactionPinDialog');
+  const input = document.getElementById('transactionPinInput');
+  const summary = document.getElementById('transactionPinSummary');
+  const amount = data.amount || data.allocated_amount;
+  let label = 'Confirm transaction';
+  if (url.includes('/send')) label = `Send Money to ${data.receiver_phone || data.receiver || ''}`;
+  else if (url.includes('/transfer/')) label = 'Transfer between funds';
+  else if (url.includes('/allocate/') || url === '/api/funds/') label = 'Allocate to Purpose Fund';
+  else if (method === 'DELETE') label = 'Close fund and return its balance';
+  else if (url.includes('/utility/')) label = { RECHARGE: 'Mobile recharge', BILL: 'Bill payment', CASHOUT: 'Cash out' }[data.action_type] || label;
+  else if (url.includes('/cash-in/')) label = 'Add Money';
+  else {
+    const merchant = state.merchants.find(m => String(m.id) === String(data.merchant_id));
+    label = `Pay ${merchant?.business_name || 'merchant'}`;
+  }
+  summary.textContent = amount ? `${label}: BDT ${fmt(amount)}` : label;
+  input.value = '';
+  dialog.returnValue = '';
+  dialog.showModal();
+  input.focus();
+  return new Promise(resolve => {
+    dialog.addEventListener('close', () => {
+      const pin = dialog.returnValue === 'confirm' ? input.value : null;
+      input.value = '';
+      resolve(pin);
+    }, { once: true });
   });
-  if (r.status === 401) { window.location.href = '/login/'; return null; }
-  const data = r.status !== 204 ? await r.json().catch(() => ({})) : {};
-  return { ok: r.ok, status: r.status, data };
+}
+
+async function apiMutation(url, method, data) {
+  const financial = isFinancialAction(url, method);
+  const signature = JSON.stringify([state.user?.id, url, method, data]);
+  if (financial && pendingFinancialActions.size) return null;
+  const buttons = financial ? [...document.querySelectorAll('.modal-overlay.show button')] : [];
+  const originalDisabled = buttons.map(button => button.disabled);
+  let key;
+  try {
+    let payload = data;
+    if (financial) {
+      pendingFinancialActions.add(signature);
+      buttons.forEach(button => { button.disabled = true; });
+      const pin = await confirmTransactionPIN(url, data, method);
+      if (pin === null) return null;
+      if (!uncertainRequestKeys.has(signature)) {
+        let savedKey;
+        try { savedKey = sessionStorage.getItem('fundshare-request:' + signature); } catch (_) {}
+        uncertainRequestKeys.set(signature, savedKey || crypto.randomUUID());
+      }
+      key = uncertainRequestKeys.get(signature);
+      try { sessionStorage.setItem('fundshare-request:' + signature, key); } catch (_) {}
+      payload = { ...data, pin };
+    }
+    const headers = { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() };
+    if (key) headers['Idempotency-Key'] = key;
+    const r = await fetch(url, { method, credentials: 'same-origin', headers, body: JSON.stringify(payload) });
+    if (r.status === 401) { window.location.href = '/login/'; return null; }
+    const result = r.status === 204 ? {} : await r.json();
+    if (financial && r.ok) {
+      uncertainRequestKeys.delete(signature);
+      try { sessionStorage.removeItem('fundshare-request:' + signature); } catch (_) {}
+    }
+    return { ok: r.ok, status: r.status, data: result };
+  } catch (_) {
+    return { ok: false, status: 503, data: { error: financial ? 'Transaction status could not be confirmed. Retry the same details to check it safely.' : 'Connection failed. Please try again.' } };
+  } finally {
+    if (financial) {
+      pendingFinancialActions.delete(signature);
+      buttons.forEach((button, i) => { button.disabled = originalDisabled[i]; });
+    }
+  }
+}
+
+function openPINSettings() {
+  const hasPIN = !!state.user?.has_transaction_pin;
+  document.getElementById('pinSettingsTitle').textContent = hasPIN ? 'Change Transaction PIN' : 'Set Transaction PIN';
+  document.getElementById('currentPinGroup').hidden = !hasPIN;
+  for (const id of ['pinAccountPassword', 'currentPin', 'newPin', 'confirmNewPin']) document.getElementById(id).value = '';
+  openModal('changePasswordModal');
+  document.getElementById('pinAccountPassword').focus();
+}
+
+async function doSaveTransactionPIN(event) {
+  event.preventDefault();
+  const button = document.getElementById('savePinButton');
+  if (button.disabled) return;
+  const newPIN = document.getElementById('newPin').value;
+  if (newPIN !== document.getElementById('confirmNewPin').value) {
+    showToast('error', 'The new PINs do not match.');
+    return;
+  }
+  button.disabled = true;
+  try {
+    const result = await apiPost('/api/auth/pin/', {
+      password: document.getElementById('pinAccountPassword').value,
+      current_pin: document.getElementById('currentPin').value,
+      new_pin: newPIN,
+    });
+    if (!result) return;
+    if (result.ok) {
+      state.user.has_transaction_pin = true;
+      closeModal('changePasswordModal');
+      showToast('success', result.data.message);
+    } else showToast('error', result.data.error || 'Unable to save PIN.');
+  } finally {
+    button.disabled = false;
+    for (const id of ['pinAccountPassword', 'currentPin', 'newPin', 'confirmNewPin']) document.getElementById(id).value = '';
+  }
 }
 
 // ============================================================
@@ -75,7 +243,13 @@ function showToast(type, message, duration = 4000) {
   const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
   const el = document.createElement('div');
   el.className = `toast ${type}`;
-  el.innerHTML = `<span class="toast-icon">${icons[type] || 'ℹ️'}</span><span class="toast-msg">${message}</span>`;
+  const icon = document.createElement('span');
+  icon.className = 'toast-icon';
+  icon.textContent = icons[type] || 'Info';
+  const msg = document.createElement('span');
+  msg.className = 'toast-msg';
+  msg.textContent = message;
+  el.append(icon, msg);
   const container = document.getElementById('toastContainer');
   container.appendChild(el);
   setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateY(-10px)'; el.style.transition = '0.3s'; setTimeout(() => el.remove(), 300); }, duration);
@@ -92,7 +266,7 @@ function openModal(id) {
     document.getElementById('fundWalletHint').textContent = `Available wallet balance: ৳${fmt(state.wallet)}`;
   }
   if (id === 'transferFundModal') populateFundSelects();
-  if (id === 'fpMemberPayModal') populateFPMerchantSelect();
+  if (id === 'fpRecipientPayModal') populateFPMerchantSelect();
   if (id === 'billModal') initBillModal();
 }
 
@@ -185,6 +359,7 @@ async function initApp() {
   loadNotifications();
   loadContacts();
   initAiChat();
+  if (state.user.effective_role === 'MERCHANT') navigateTo('more');
 }
 
 // ============================================================
@@ -212,24 +387,21 @@ function checkRoleBasedUI() {
   const fundsNav = document.getElementById('nav-funds');
   const fpNav = document.getElementById('nav-familypass');
   const ov = document.getElementById('fpOwnerView');
-  const mv = document.getElementById('fpMemberView');
+  const mv = document.getElementById('fpRecipientView');
+  const resetControl = document.getElementById('adminResetSetting');
+  if (resetControl) resetControl.hidden = role !== 'ADMIN' || !state.user.can_reset_demo;
 
   if (role === 'MERCHANT') {
     // Merchant: hide funds and familypass nav
     if (fundsNav) fundsNav.style.display = 'none';
     if (fpNav) fpNav.style.display = 'none';
-  } else if (role === 'MEMBER') {
-    // Member: show familypass but no fund creation
-    if (fundsNav) fundsNav.style.display = 'none';
-    if (fpNav) fpNav.style.display = 'flex';
-    if (ov) ov.style.display = 'none';
-    if (mv) mv.style.display = 'block';
+    for (const id of ['nav-home', 'nav-payments', 'nav-ai']) document.getElementById(id).style.display = 'none';
   } else {
     // Customer / Wallet Owner: full normal access
     if (fundsNav) fundsNav.style.display = 'flex';
-    if (fpNav) fpNav.style.display = 'flex';
-    if (ov) ov.style.display = 'block';
-    if (mv) mv.style.display = 'none';
+    if (fpNav) fpNav.style.display = role === 'CUSTOMER' ? 'flex' : 'none';
+    if (ov) ov.style.display = role === 'CUSTOMER' ? 'block' : 'none';
+    if (mv) mv.style.display = role === 'CUSTOMER' ? 'block' : 'none';
   }
 
   // Role badge on profile
@@ -237,7 +409,6 @@ function checkRoleBasedUI() {
   if (roleBadge) {
     const labels = {
       CUSTOMER: '👤 Customer / Wallet Owner',
-      MEMBER: '👥 FamilyPass Member',
       MERCHANT: '🏪 Merchant',
       ADMIN: '🔑 Admin / Evaluator'
     };
@@ -292,15 +463,15 @@ function renderTxnItemHtml(t) {
   else if (isFp) icon = '👨‍👩‍👧';
   else if (isCredit) icon = '⬆️';
 
-  let title = t.merchant_name || t.receiver_name || TXN_TYPE_LABELS[t.transaction_type] || t.transaction_type;
+  let title = escapeHtml(t.merchant_name || t.receiver_name || TXN_TYPE_LABELS[t.transaction_type] || t.transaction_type);
   if (isCashIn) {
     title = 'Add Money (Bank Deposit)';
   } else if (isIncomingP2P) {
-    title = `Received from ${t.sender_name || t.sender_username || 'User'}`;
+    title = `Received from ${escapeHtml(t.sender_name || t.sender_username || 'User')}`;
   } else if (isFpOwner) {
-    title = `${t.merchant_name || 'Merchant'} <span class="pill pill-purple" style="font-size:9px;">FamilyPass</span>`;
+    title = `${escapeHtml(t.merchant_name || 'Merchant')} <span class="pill pill-purple" style="font-size:9px;">FamilyPass</span>`;
   } else if (isFpMember) {
-    title = `${t.merchant_name || 'Merchant'} <span class="pill pill-purple" style="font-size:9px;">FamilyPass</span>`;
+    title = `${escapeHtml(t.merchant_name || 'Merchant')} <span class="pill pill-purple" style="font-size:9px;">FamilyPass</span>`;
   }
 
   let meta = `${TXN_TYPE_LABELS[t.transaction_type] || t.transaction_type} • ${timeAgo(t.timestamp)}`;
@@ -333,7 +504,7 @@ function renderTxnItemHtml(t) {
     <div class="txn-icon ${isRejected ? 'debit' : (isCredit ? 'credit' : (isFp ? 'purple' : 'debit'))}">${icon}</div>
     <div class="txn-info">
       <div class="txn-name">${title}</div>
-      <div class="txn-meta">${meta}</div>
+      <div class="txn-meta">${escapeHtml(meta)}</div>
     </div>
     ${amountHtml}
   </div>`;
@@ -427,8 +598,8 @@ function renderFunds() {
         forecastBadge = `<span class="fund-forecast-badge forecast-ok">✅ On track</span>`;
       }
     }
-    const recipientInfo = (f.recipient_name || f.recipient_username)
-      ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">👤 Recipient: <strong style="color:var(--text);">${f.recipient_name || f.recipient_username}</strong></div>`
+    const recipientInfo = (f.recipient_name || f.recipient_phone)
+      ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">👤 Recipient: <strong style="color:var(--text);">${escapeHtml(f.recipient_name || f.recipient_phone)}</strong></div>`
       : '';
 
     return `<div class="fund-card" style="border-left-color:${color};">
@@ -436,7 +607,7 @@ function renderFunds() {
         <div class="fund-name-row">
           <div class="fund-icon" style="background:${color}22;">${icon}</div>
           <div>
-            <div class="fund-name">${f.name}</div>
+            <div class="fund-name">${escapeHtml(f.name)}</div>
             <div class="fund-category">${f.category} • ${pct.toFixed(0)}% used</div>
             ${recipientInfo}
           </div>
@@ -456,7 +627,7 @@ function renderFunds() {
       ${forecastBadge}
       <div class="fund-card-actions">
         <button class="fund-action-btn" onclick="openEditFundModal(${f.id})">✏️ Edit</button>
-        <button class="fund-action-btn fund-action-delete" onclick="doDeleteFund(${f.id}, '${f.name.replace(/'/g, "\\'")}')">🗑️ Delete</button>
+        <button class="fund-action-btn fund-action-delete" onclick="doDeleteFund(${f.id}, ${inlineArgument(f.name)})">🗑️ Delete</button>
       </div>
     </div>`;
   }).join('');
@@ -512,7 +683,7 @@ function renderMerchantGrid(merchants) {
       <div style="display:flex;align-items:center;gap:12px;">
         <div style="width:46px;height:46px;border-radius:12px;background:${color}22;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">${icon}</div>
         <div style="flex:1;min-width:0;">
-          <div style="font-size:14px;font-weight:700;color:var(--text);">${m.business_name}</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);">${escapeHtml(m.business_name)}</div>
           <div style="font-size:12px;color:var(--text-muted);">${m.category}</div>
         </div>
         <div style="font-size:20px;">›</div>
@@ -527,10 +698,8 @@ async function selectMerchant(id) {
   const m = state.selectedMerchant;
   document.getElementById('payMerchantSub').textContent = `Paying: ${m.business_name} (${m.category})`;
 
-  // Ensure familyPasses is loaded if user is a member
-  if (!state.familyPasses || (!state.familyPasses.received?.length && !state.familyPasses.issued?.length)) {
-    await loadFamilyPass();
-  }
+  // Customers may receive new permissions while their own issued passes are cached.
+  await loadFamilyPass();
 
   buildPaymentSourceSelector(m);
 
@@ -654,7 +823,7 @@ function buildPaymentSourceSelector(merchant) {
     html += `<div class="source-option ${isSel ? 'selected' : ''}" onclick="selectSource(this,'PURPOSE_FUND',${f.id})">
       <span class="source-radio"></span>
       <div class="source-info">
-        <div class="source-name">${CATEGORY_ICONS[f.category] || '🎯'} ${f.name} Fund</div>
+        <div class="source-name">${CATEGORY_ICONS[f.category] || '🎯'} ${escapeHtml(f.name)} Fund</div>
         <div class="source-balance">Remaining: ৳${fmt(f.current_balance)}</div>
       </div>
       <span class="source-badge source-badge-blue">Restricted</span>
@@ -666,7 +835,7 @@ function buildPaymentSourceSelector(merchant) {
     html += `<div class="source-option" style="opacity:0.5;cursor:not-allowed;" title="Cannot pay ${merchant.category} merchant with ${f.category} fund">
       <span class="source-radio"></span>
       <div class="source-info">
-        <div class="source-name">${CATEGORY_ICONS[f.category] || '🎯'} ${f.name} Fund <span class="pill pill-red" style="font-size:9px;">RESTRICTED</span></div>
+        <div class="source-name">${CATEGORY_ICONS[f.category] || '🎯'} ${escapeHtml(f.name)} Fund <span class="pill pill-red" style="font-size:9px;">RESTRICTED</span></div>
         <div class="source-balance">Category mismatch: ${f.category} ≠ ${merchant.category}</div>
       </div>
     </div>`;
@@ -681,16 +850,15 @@ function buildPaymentSourceSelector(merchant) {
     html += `<div class="source-option ${isSel ? 'selected' : ''}" onclick="selectSource(this,'FAMILY_PASS',${fp.id})">
       <span class="source-radio"></span>
       <div class="source-info">
-        <div class="source-name">👨‍👩‍👧 ${pIcon} ${fp.purpose_label || fp.purpose} (from ${fp.owner_name || fp.owner_username || 'Owner'})</div>
+        <div class="source-name">👨‍👩‍👧 ${pIcon} ${escapeHtml(fp.purpose_label || fp.purpose)} (from ${escapeHtml(fp.owner_name || fp.owner_phone || 'Owner')})</div>
         <div class="source-balance">Available: ৳${fmt(rem)} / Limit: ৳${fmt(limit)} • Expires: ${fp.expiry_date}</div>
       </div>
       <span class="source-badge source-badge-purple">FamilyPass</span>
     </div>`;
   });
 
-  // If no matching FamilyPass allocation exists, show subtle message for members/pass holders
-  const isMemberOrHasPasses = (state.user?.role === 'MEMBER' || state.user?.effective_role === 'MEMBER' || allReceivedPasses.length > 0);
-  if (isMemberOrHasPasses && eligiblePasses.length === 0) {
+  // Eligibility depends on received permissions, never on an account subtype.
+  if (allReceivedPasses.length > 0 && eligiblePasses.length === 0) {
     html += `<div class="source-hint" style="font-size:12px;color:var(--text-muted);padding:8px 4px;font-style:italic;">
       ℹ️ No matching FamilyPass allocation is available for this merchant.
     </div>`;
@@ -872,16 +1040,14 @@ function buildBillPaymentSourceSelector(billCategory) {
     html += `<div class="source-option ${isSel ? 'selected' : ''}" onclick="selectBillSource(this,'FAMILY_PASS',${fp.id})">
       <span class="source-radio"></span>
       <div class="source-info">
-        <div class="source-name">👨‍👩‍👧 ${pIcon} ${fp.purpose_label || fp.purpose} (from ${fp.owner_name || fp.owner_username || 'Owner'})</div>
+        <div class="source-name">👨‍👩‍👧 ${pIcon} ${escapeHtml(fp.purpose_label || fp.purpose)} (from ${escapeHtml(fp.owner_name || fp.owner_phone || 'Owner')})</div>
         <div class="source-balance">Available: ৳${fmt(rem)} / Limit: ৳${fmt(limit)} • Expires: ${fp.expiry_date}</div>
       </div>
       <span class="source-badge source-badge-purple">FamilyPass</span>
     </div>`;
   });
 
-  // If no matching FamilyPass allocation exists, show subtle hint for members
-  const isMemberOrHasPasses = (state.user?.role === 'MEMBER' || state.user?.effective_role === 'MEMBER' || allReceivedPasses.length > 0);
-  if (isMemberOrHasPasses && eligiblePasses.length === 0) {
+  if (allReceivedPasses.length > 0 && eligiblePasses.length === 0) {
     html += `<div class="source-hint" style="font-size:12px;color:var(--text-muted);padding:8px 4px;font-style:italic;">
       ℹ️ No matching FamilyPass allocation is available for ${billCategory} bills.
     </div>`;
@@ -918,25 +1084,19 @@ async function initBillModal() {
 // FAMILYPASS
 // ============================================================
 async function loadFamilyPass() {
+  if ((state.user?.effective_role || state.user?.role) !== 'CUSTOMER') {
+    state.familyPasses = { issued: [], received: [] };
+    return;
+  }
   const data = await apiGet('/api/family-pass/');
   if (!data) return;
   state.familyPasses = { issued: data.issued_passes || [], received: data.received_passes || [] };
-  if (data.effective_role && state.user) {
-    state.user.role = data.effective_role;
-    state.user.effective_role = data.effective_role;
-    state.user.effective_role_display = data.effective_role_display;
-    checkRoleBasedUI();
-  }
   renderFamilyPass();
 }
 
 function renderFamilyPass() {
-  const role = state.user?.effective_role || state.user?.role;
-  if (role === 'MEMBER') {
-    renderFPMemberView();
-  } else {
-    renderFPOwnerView();
-  }
+  renderFPOwnerView();
+  renderFPRecipientView();
 }
 
 function renderFPOwnerView() {
@@ -957,17 +1117,17 @@ function renderFPOwnerView() {
     const rem = parseFloat(fp.remaining_limit) || (limit - used);
     const pct = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
     const statusClass = { ACTIVE: 'fp-status-active', REVOKED: 'fp-status-revoked', EXPIRED: 'fp-status-expired' }[fp.status] || 'fp-status-expired';
-    const initials = (fp.member_name || fp.member_username || 'M').substring(0, 2).toUpperCase();
+    const initials = (fp.member_name || fp.member_phone || 'M').substring(0, 2).toUpperCase();
     const pIcon = PURPOSE_ICONS[fp.purpose] || '🎯';
 
     return `<div class="fp-card">
       <div class="fp-header">
-        <div class="fp-member">
-          <div class="fp-avatar">${initials}</div>
+        <div class="fp-recipient">
+          <div class="fp-avatar">${escapeHtml(initials)}</div>
           <div>
-            <div class="fp-member-name">${fp.member_name || fp.member_username} (@${fp.member_username})</div>
+            <div class="fp-recipient-name">${escapeHtml(fp.member_name || fp.member_phone)} (${escapeHtml(fp.member_phone || '')})</div>
             <div style="margin-top:2px;">
-              <span class="pill pill-green" style="font-size:10px;font-weight:700;">${pIcon} ${fp.purpose_label || 'Family Spending'}</span>
+              <span class="pill pill-green" style="font-size:10px;font-weight:700;">${pIcon} ${escapeHtml(fp.purpose_label || 'Family Spending')}</span>
             </div>
           </div>
         </div>
@@ -1007,7 +1167,7 @@ function renderFPOwnerView() {
   }).join('');
 }
 
-function renderFPMemberView() {
+function renderFPRecipientView() {
   const received = state.familyPasses.received || [];
   const el = document.getElementById('fpReceivedList');
   if (received.length === 0) {
@@ -1026,8 +1186,8 @@ function renderFPMemberView() {
 
     return `<div class="received-fp-card">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
-        <div class="rfp-owner">From: <strong>${fp.owner_name || fp.owner_username}</strong></div>
-        <span class="pill pill-purple" style="font-size:11px;background:rgba(255,255,255,0.25);color:#fff;font-weight:700;">${pIcon} ${fp.purpose_label}</span>
+        <div class="rfp-owner">From: <strong>${escapeHtml(fp.owner_name || fp.owner_phone)}</strong></div>
+        <span class="pill pill-purple" style="font-size:11px;background:rgba(255,255,255,0.25);color:#fff;font-weight:700;">${pIcon} ${escapeHtml(fp.purpose_label)}</span>
       </div>
       <div class="rfp-limit">৳${fmt(limit)}</div>
       <div class="rfp-limit-label">Total Spending Limit</div>
@@ -1037,7 +1197,7 @@ function renderFPMemberView() {
       </div>
       <div style="height:16px"></div>
       <button class="btn-primary" style="background:rgba(255,255,255,0.25);border:1.5px solid rgba(255,255,255,0.4);" 
-        onclick="openFPMemberPay(${fp.id},'${fp.owner_name || fp.owner_username}',${rem})">
+        onclick="openFPRecipientPay(${fp.id},${inlineArgument(fp.owner_name || fp.owner_phone)},${rem})">
         💳 Use FamilyPass to Pay
       </button>
     </div>`;
@@ -1084,7 +1244,7 @@ async function loadMerchantDashboard() {
     <div class="txn-item">
       <div class="txn-icon credit">💳</div>
       <div class="txn-info">
-        <div class="txn-name">${t.sender_name || 'Customer'}</div>
+        <div class="txn-name">${escapeHtml(t.sender_name || 'Customer')}</div>
         <div class="txn-meta">${t.payment_source} • ${timeAgo(t.timestamp)}</div>
       </div>
       <div class="txn-amount credit">+৳${fmt(t.amount)}</div>
@@ -1163,7 +1323,7 @@ async function loadReport(period) {
       <div class="card-title" style="margin-bottom:14px;">Spending by Category</div>
       ${categories.map(([cat, amt]) => `
         <div class="bar-row">
-          <div class="bar-label">${CATEGORY_ICONS[cat] || '📦'} ${cat}</div>
+          <div class="bar-label">${CATEGORY_ICONS[cat] || '📦'} ${escapeHtml(cat)}</div>
           <div class="bar-bg"><div class="bar-fill" style="width:${(amt/maxVal)*100}%;background:${CATEGORY_COLORS[cat]||'var(--primary)'};"></div></div>
           <div class="bar-value">৳${fmt(amt)}</div>
         </div>`).join('')}
@@ -1171,7 +1331,7 @@ async function loadReport(period) {
     ${data.ai_summary ? `
     <div class="card" style="margin-top:14px;background:var(--primary-light);border:1px solid rgba(0,135,90,0.2);">
       <div style="font-size:12px;font-weight:700;color:var(--primary-dark);margin-bottom:4px;">🤖 AI Financial Insights (${data.report_title || 'Report'})</div>
-      <div style="font-size:12px;color:var(--text);line-height:1.5;">${data.ai_summary}</div>
+      <div style="font-size:12px;color:var(--text);line-height:1.5;">${escapeHtml(data.ai_summary)}</div>
     </div>` : ''}`;
 }
 
@@ -1193,8 +1353,8 @@ function renderNotifications() {
   }
   el.innerHTML = state.notifications.map(n => `
     <div class="notif-item ${!n.is_read ? 'unread' : ''}" onclick="markNotifRead(${n.id})">
-      <div class="notif-item-title">${n.title}</div>
-      <div class="notif-item-msg">${n.message}</div>
+      <div class="notif-item-title">${escapeHtml(n.title)}</div>
+      <div class="notif-item-msg">${escapeHtml(n.message)}</div>
       <div class="notif-item-time">${timeAgo(n.created_at)}</div>
     </div>`).join('');
 }
@@ -1248,7 +1408,7 @@ async function sendAiMessage() {
   const container = document.getElementById('chatContainer');
   // Add user message
   container.innerHTML += `<div class="chat-msg user">
-    <div class="chat-bubble">${question}</div>
+    <div class="chat-bubble">${escapeHtml(question)}</div>
     <div class="chat-time">${new Date().toLocaleTimeString('en-BD', {hour:'2-digit',minute:'2-digit',hour12:true})}</div>
   </div>`;
 
@@ -1283,7 +1443,7 @@ async function sendAiMessage() {
     initBadge.className = `ai-source-badge ${isGemini ? 'ai-powered-badge' : ''}`;
   }
 
-  const formattedAnswer = answer.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>').replace(/•/g, '<br>•');
+  const formattedAnswer = escapeHtml(answer).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>').replace(/•/g, '<br>•');
 
   container.innerHTML += `<div class="chat-msg ai">
     <div class="chat-bubble">${formattedAnswer}</div>
@@ -1317,18 +1477,19 @@ async function doCashIn() {
 }
 
 async function doSendMoney() {
-  const receiver = document.getElementById('sendReceiver').value;
   const amount = document.getElementById('sendAmount').value;
   const ref = document.getElementById('sendRef').value;
-  if (!receiver) { showToast('error', 'Enter recipient phone or username'); return; }
   if (!amount || amount <= 0) { showToast('error', 'Enter a valid amount'); return; }
-  const r = await apiPost('/api/wallet/send/', { receiver, amount, reference: ref });
+  const receiver = await resolveRecipientInput('sendReceiver');
+  if (!receiver) return;
+  const r = await apiPost('/api/wallet/send/', { receiver_phone: receiver, amount, reference: ref });
   if (!r) return;
   if (r.ok) {
     showToast('success', r.data.message || 'Money sent!');
     closeModal('sendMoneyModal');
     document.getElementById('sendAmount').value = '';
     document.getElementById('sendReceiver').value = '';
+    clearRecipientLookup(document.getElementById('sendReceiver'));
     refreshFinancialState();
   } else {
     showToast('error', r.data.error || 'Transfer failed');
@@ -1425,7 +1586,8 @@ async function doCreateFund() {
     monthly_budget: budget || allocation || '0'
   };
   if (recipient) {
-    payload.recipient = recipient;
+    payload.recipient = await resolveRecipientInput('fundRecipient');
+    if (!payload.recipient) return;
   }
 
   const r = await apiPost('/api/funds/', payload);
@@ -1437,7 +1599,10 @@ async function doCreateFund() {
     document.getElementById('fundCategory').value = '';
     document.getElementById('fundAllocation').value = '';
     document.getElementById('fundBudget').value = '';
-    if (recipientEl) recipientEl.value = '';
+    if (recipientEl) {
+      recipientEl.value = '';
+      clearRecipientLookup(recipientEl);
+    }
     refreshFinancialState();
   } else {
     showToast('error', r.data.error || 'Failed to create fund');
@@ -1450,7 +1615,8 @@ function openEditFundModal(fundId) {
   document.getElementById('editFundId').value = fund.id;
   document.getElementById('editFundName').value = fund.name || '';
   document.getElementById('editFundCategory').value = fund.category || '';
-  document.getElementById('editFundRecipient').value = fund.recipient_username || fund.recipient_phone || '';
+  document.getElementById('editFundRecipient').value = fund.recipient_phone || '';
+  clearRecipientLookup(document.getElementById('editFundRecipient'));
   document.getElementById('editFundBudget').value = fund.monthly_budget || '';
   openModal('editFundModal');
 }
@@ -1459,11 +1625,16 @@ async function doUpdateFund() {
   const id = document.getElementById('editFundId').value;
   const name = document.getElementById('editFundName').value.trim();
   const category = document.getElementById('editFundCategory').value;
-  const recipient = document.getElementById('editFundRecipient').value.trim();
+  let recipient = document.getElementById('editFundRecipient').value.trim();
   const budget = document.getElementById('editFundBudget').value;
 
   if (!name) { showToast('error', 'Enter a fund name'); return; }
   if (!category) { showToast('error', 'Select a category'); return; }
+
+  if (recipient) {
+    recipient = await resolveRecipientInput('editFundRecipient');
+    if (!recipient) return;
+  }
 
   const payload = {
     name,
@@ -1500,7 +1671,7 @@ async function doDeleteFund(fundId, fundName) {
 function populateFundSelects() {
   const src = document.getElementById('transferSource');
   const dst = document.getElementById('transferDest');
-  const opts = state.funds.map(f => `<option value="${f.id}">${CATEGORY_ICONS[f.category]||'💰'} ${f.name} (৳${fmt(f.current_balance)})</option>`).join('');
+  const opts = state.funds.map(f => `<option value="${f.id}">${CATEGORY_ICONS[f.category]||'💰'} ${escapeHtml(f.name)} (৳${fmt(f.current_balance)})</option>`).join('');
   if (src) src.innerHTML = opts;
   if (dst) dst.innerHTML = opts;
 }
@@ -1530,7 +1701,7 @@ async function doFundTransfer() {
 // ============================================================
 const checkoutItems = {
   payMerchant: [],
-  fpMember: []
+  fpRecipient: []
 };
 
 const MERCHANT_PRESETS = {
@@ -1619,7 +1790,7 @@ function renderCheckoutItemsList(prefix) {
   }
   container.innerHTML = items.map((item, idx) => `
     <div class="checkout-item-row">
-      <input type="text" class="checkout-item-input" placeholder="Item name" value="${item.item_name}" oninput="updateCheckoutItem('${prefix}', ${idx}, 'item_name', this.value)">
+      <input type="text" class="checkout-item-input" placeholder="Item name" value="${escapeHtml(item.item_name)}" oninput="updateCheckoutItem('${prefix}', ${idx}, 'item_name', this.value)">
       <input type="number" class="checkout-item-input" placeholder="Qty" min="0.1" step="any" value="${item.quantity}" oninput="updateCheckoutItem('${prefix}', ${idx}, 'quantity', this.value)">
       <input type="number" class="checkout-item-input" placeholder="Price ৳" min="0" step="any" value="${item.unit_price}" oninput="updateCheckoutItem('${prefix}', ${idx}, 'unit_price', this.value)">
       <button type="button" class="checkout-item-del-btn" onclick="removeCheckoutItemRow('${prefix}', ${idx})" title="Remove item">✕</button>
@@ -1707,17 +1878,17 @@ async function doPayMerchant() {
 }
 
 async function doCreateFamilyPass() {
-  const member = document.getElementById('fpMember').value.trim();
   const limit = document.getElementById('fpLimit').value;
   const duration = document.getElementById('fpDuration').value;
   const purpose = document.getElementById('fpPurposeSelect') ? document.getElementById('fpPurposeSelect').value : 'Grocery';
   const customPurpose = document.getElementById('fpCustomPurpose') ? document.getElementById('fpCustomPurpose').value.trim() : '';
 
-  if (!member) { showToast('error', 'Enter member phone or username'); return; }
   if (!limit || parseFloat(limit) <= 0) { showToast('error', 'Enter a valid spending limit greater than zero'); return; }
+  const member = await resolveRecipientInput('fpRecipient');
+  if (!member) return;
 
   const payload = {
-    member,
+    recipient_phone: member,
     limit_amount: limit,
     duration_days: duration,
     purpose,
@@ -1729,7 +1900,8 @@ async function doCreateFamilyPass() {
   if (r.ok) {
     showToast('success', `✅ FamilyPass granted to ${member}!`);
     closeModal('createFPModal');
-    document.getElementById('fpMember').value = '';
+    document.getElementById('fpRecipient').value = '';
+    clearRecipientLookup(document.getElementById('fpRecipient'));
     document.getElementById('fpLimit').value = '';
     if (document.getElementById('fpCustomPurpose')) document.getElementById('fpCustomPurpose').value = '';
     loadFamilyPass();
@@ -1754,7 +1926,7 @@ async function openEditFPModal(id) {
   currentEditingPass = fp;
 
   document.getElementById('editFPId').value = fp.id;
-  document.getElementById('editFPMemberName').textContent = `${fp.member_name || fp.member_username} (@${fp.member_username})`;
+  document.getElementById('editFPRecipientName').textContent = `${fp.member_name || fp.member_phone} (${fp.member_phone || ''})`;
   document.getElementById('editFPUsedAmount').textContent = `৳${fmt(fp.used_amount)}`;
   document.getElementById('editFPCurrentLimit').textContent = `৳${fmt(fp.limit_amount)}`;
   document.getElementById('editFPLimit').value = fp.limit_amount;
@@ -1803,7 +1975,7 @@ async function doSaveEditFamilyPass() {
   }
 
   // Confirmation before saving important permission changes
-  if (!confirm(`Are you sure you want to save changes to this FamilyPass for ${currentEditingPass.member_name || currentEditingPass.member_username}?`)) {
+  if (!confirm(`Are you sure you want to save changes to this FamilyPass for ${currentEditingPass.member_name || currentEditingPass.member_phone}?`)) {
     return;
   }
 
@@ -1833,10 +2005,6 @@ async function revokeFP(id) {
   if (r.ok) {
     showToast('success', r.data.message || 'FamilyPass revoked successfully');
     loadFamilyPass();
-    // If the logged in user was the member, recalculate their state
-    if (state.user && state.user.id === r.data.member_id) {
-      loadMe();
-    }
   } else {
     showToast('error', r.data.error || 'Failed to revoke FamilyPass');
   }
@@ -1866,7 +2034,7 @@ async function viewFPActivity(id) {
   if (badgeEl) badgeEl.textContent = `${activities.length} transaction${activities.length === 1 ? '' : 's'}`;
 
   // Render Summary
-  const initials = (fp.member_name || fp.member_username || 'M').substring(0, 2).toUpperCase();
+  const initials = (fp.member_name || fp.member_phone || 'M').substring(0, 2).toUpperCase();
   const limit = parseFloat(fp.limit_amount) || 0;
   const used = parseFloat(fp.used_amount) || 0;
   const rem = parseFloat(fp.remaining_limit) || 0;
@@ -1875,11 +2043,11 @@ async function viewFPActivity(id) {
   if (summaryEl) {
     summaryEl.innerHTML = `
       <div class="fp-act-header">
-        <div class="fp-act-member">
-          <div class="fp-act-avatar">${initials}</div>
+        <div class="fp-act-recipient">
+          <div class="fp-act-avatar">${escapeHtml(initials)}</div>
           <div>
-            <div class="fp-act-name">${fp.member_name || fp.member_username}</div>
-            <div class="fp-act-purpose">${fp.purpose_label || 'Family Spending'}</div>
+            <div class="fp-act-name">${escapeHtml(fp.member_name || fp.member_phone)}</div>
+            <div class="fp-act-purpose">${escapeHtml(fp.purpose_label || 'Family Spending')}</div>
           </div>
         </div>
         <span class="fp-status-badge ${statusClass}">${fp.status}</span>
@@ -1912,7 +2080,7 @@ async function viewFPActivity(id) {
         <div class="empty-state">
           <div class="empty-icon">🧾</div>
           <div class="empty-title">No transactions recorded</div>
-          <div class="empty-sub">${fp.member_name || 'Member'} has not made any purchases with this FamilyPass yet.</div>
+          <div class="empty-sub">${escapeHtml(fp.member_name || 'Recipient')} has not made any purchases with this FamilyPass yet.</div>
         </div>`;
       return;
     }
@@ -1934,7 +2102,7 @@ async function viewFPActivity(id) {
       if (hasItems) {
         const itemRows = act.items.map(it => `
           <tr>
-            <td style="font-weight:600;">${it.item_name || it.name}</td>
+            <td style="font-weight:600;">${escapeHtml(it.item_name || it.name)}</td>
             <td style="text-align:center;">${it.quantity}</td>
             <td style="text-align:right;">৳${fmt(it.unit_price)}</td>
             <td style="text-align:right;font-weight:700;">৳${fmt(it.line_total || it.total)}</td>
@@ -1982,14 +2150,14 @@ async function viewFPActivity(id) {
                 ${icon}
               </div>
               <div>
-                <div class="fp-txn-merchant-title">${merchantName}</div>
+                <div class="fp-txn-merchant-title">${escapeHtml(merchantName)}</div>
                 <div class="fp-txn-merchant-sub">
                   <span>${category}</span>
-                  ${merchantLoc ? `<span>• 📍 ${merchantLoc}</span>` : ''}
+                  ${merchantLoc ? `<span>• 📍 ${escapeHtml(merchantLoc)}</span>` : ''}
                   <span>• 🕒 ${dt}</span>
                 </div>
                 <div style="font-size:11px;color:var(--text-muted);margin-top:2px;font-family:monospace;">
-                  ID: ${act.transaction_id || act.reference || ('TXN-' + act.id)}
+                  ID: ${escapeHtml(act.transaction_id || act.reference || ('TXN-' + act.id))}
                 </div>
               </div>
             </div>
@@ -2032,26 +2200,40 @@ function toggleTxnItems(actId) {
 }
 
 // ============================================================
-// FAMILYPASS MEMBER PAYMENT
+// RECEIVED FAMILYPASS PAYMENT
 // ============================================================
-function openFPMemberPay(fpId, ownerName, remaining) {
-  state.selectedFamilyPass = { id: fpId, ownerName, remaining };
-  document.getElementById('fpMemberPaySub').textContent = `Using FamilyPass from: ${ownerName}`;
+async function openFPRecipientPay(fpId, ownerName, remaining) {
+  const pass = state.familyPasses.received.find(fp => fp.id === fpId);
+  if (!pass || !pass.is_valid) {
+    showToast('error', 'This FamilyPass is no longer available. Refresh your passes.');
+    return;
+  }
+  if (allMerchants.length === 0) {
+    const merchants = await apiGet('/api/merchants/');
+    if (!Array.isArray(merchants)) {
+      showToast('error', 'Unable to load available merchants. Please try again.');
+      return;
+    }
+    allMerchants = merchants;
+    state.merchants = merchants;
+  }
+  state.selectedFamilyPass = { ...pass, ownerName, remaining };
+  document.getElementById('fpRecipientPaySub').textContent = `Using FamilyPass from: ${ownerName}`;
   document.getElementById('fpPayLimitInfo').innerHTML = `<div style="font-size:12px;color:var(--primary-dark);">Remaining limit: <strong>৳${fmt(remaining)}</strong></div>`;
   populateFPMerchantSelect();
 
   // Initialize checkout item builder for FamilyPass
-  checkoutItems.fpMember = [];
+  checkoutItems.fpRecipient = [];
   const sel = document.getElementById('fpMerchantSelect');
   const merchantId = sel ? sel.value : null;
   const merchants = allMerchants.length > 0 ? allMerchants : state.merchants;
   const merchant = merchants.find(m => m.id == merchantId);
-  renderCheckoutPresets('fpMember', merchant ? merchant.category : 'default');
-  renderCheckoutItemsList('fpMember');
-  syncCheckoutTotal('fpMember');
+  renderCheckoutPresets('fpRecipient', merchant ? merchant.category : 'default');
+  renderCheckoutItemsList('fpRecipient');
+  syncCheckoutTotal('fpRecipient');
   document.getElementById('fpPayAmount').value = '';
 
-  openModal('fpMemberPayModal');
+  openModal('fpRecipientPayModal');
 }
 
 function onFPMerchantSelectChange() {
@@ -2059,7 +2241,7 @@ function onFPMerchantSelectChange() {
   const merchantId = sel ? sel.value : null;
   const merchants = allMerchants.length > 0 ? allMerchants : state.merchants;
   const merchant = merchants.find(m => m.id == merchantId);
-  renderCheckoutPresets('fpMember', merchant ? merchant.category : 'default');
+  renderCheckoutPresets('fpRecipient', merchant ? merchant.category : 'default');
 }
 
 function populateFPMerchantSelect() {
@@ -2074,16 +2256,16 @@ function populateFPMerchantSelect() {
   if (filteredMerchants.length === 0) {
     el.innerHTML = '<option value="">No matching merchants available for this FamilyPass</option>';
   } else {
-    el.innerHTML = filteredMerchants.map(m => `<option value="${m.id}">${CATEGORY_ICONS[m.category]||'🏪'} ${m.business_name} (${m.category})</option>`).join('');
+    el.innerHTML = filteredMerchants.map(m => `<option value="${m.id}">${CATEGORY_ICONS[m.category]||'🏪'} ${escapeHtml(m.business_name)} (${m.category})</option>`).join('');
   }
 }
 
-async function doFPMemberPay() {
+async function doFPRecipientPay() {
   const merchantId = document.getElementById('fpMerchantSelect').value;
   if (!merchantId) { showToast('error', 'Select a merchant'); return; }
   if (!state.selectedFamilyPass) { showToast('error', 'No FamilyPass selected'); return; }
 
-  const items = checkoutItems.fpMember;
+  const items = checkoutItems.fpRecipient;
   let amount = document.getElementById('fpPayAmount').value;
   const remLimit = parseFloat(state.selectedFamilyPass.remaining_limit || state.selectedFamilyPass.remaining) || 0;
 
@@ -2130,8 +2312,8 @@ async function doFPMemberPay() {
   if (!r) return;
   if (r.ok) {
     showToast('success', r.data.message || 'FamilyPass payment successful!');
-    closeModal('fpMemberPayModal');
-    checkoutItems.fpMember = [];
+    closeModal('fpRecipientPayModal');
+    checkoutItems.fpRecipient = [];
     document.getElementById('fpPayAmount').value = '';
     refreshFinancialState();
   } else {
@@ -2175,7 +2357,7 @@ async function doLogout() {
   try {
     const csrfToken = getCsrfToken();
     const r = await fetch('/logout/', {
-      method: 'GET',
+      method: 'POST',
       credentials: 'same-origin',
       headers: { 'X-CSRFToken': csrfToken }
     });
@@ -2240,22 +2422,22 @@ function renderContacts(list = state.contacts) {
     const badge = isReg
       ? `<span class="contact-badge badge-registered">✓ FundShare account</span>`
       : `<span class="contact-badge badge-unregistered">Not registered</span>`;
-    const userTag = c.username ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px;">(@${c.username})</span>` : '';
+    const userTag = c.username ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px;">(@${escapeHtml(c.username)})</span>` : '';
 
     return `
       <div class="contact-card">
         <div class="contact-main">
-          <div class="contact-avatar">${initial}</div>
+          <div class="contact-avatar">${escapeHtml(initial)}</div>
           <div class="contact-info">
-            <div class="contact-name">${c.name} ${userTag}</div>
-            <div class="contact-phone">${c.phone}</div>
+            <div class="contact-name">${escapeHtml(c.name)} ${userTag}</div>
+            <div class="contact-phone">${escapeHtml(c.phone)}</div>
             <div style="margin-top:2px;">${badge}</div>
           </div>
         </div>
         <div class="contact-actions-row">
           <div style="display:flex;gap:4px;flex-wrap:wrap;">
             <button class="contact-btn contact-btn-edit" onclick="openEditContactModal(${c.id})">✏️ Edit</button>
-            <button class="contact-btn contact-btn-delete" onclick="doDeleteContact(${c.id}, '${c.name.replace(/'/g, "\\'")}')">🗑️ Delete</button>
+            <button class="contact-btn contact-btn-delete" onclick="doDeleteContact(${c.id}, ${inlineArgument(c.name)})">🗑️ Delete</button>
           </div>
           <div style="display:flex;gap:4px;flex-wrap:wrap;">
             <button class="contact-btn" style="color:var(--primary);border-color:var(--primary);" title="Recharge Mobile" onclick="quickRechargeContact('${c.phone}')">📱 Recharge</button>
@@ -2372,7 +2554,7 @@ async function openContactPicker(config) {
   } else if (config.feature === 'fund_share') {
     subText = '🎯 Select fund recipient — requires a registered FundShare account';
   } else if (config.feature === 'family_pass') {
-    subText = '👨‍👩‍👧 Select family member — requires a registered FundShare account';
+    subText = 'Select a recipient customer';
   }
   if (subEl) subEl.textContent = subText;
   if (searchInput) searchInput.value = '';
@@ -2428,7 +2610,8 @@ function renderPickerList(list = state.contacts) {
   el.innerHTML = list.map(c => {
     const initial = (c.name || 'C').charAt(0).toUpperCase();
     const isReg = !!c.is_registered;
-    const isSelectable = allowsUnregistered || isReg;
+    const featureAllowed = c.allowed_features?.[feature] !== false;
+    const isSelectable = allowsUnregistered || (isReg && featureAllowed && (feature !== 'family_pass' || (!!c.allowed_features?.family_pass && c.account_id !== state.user?.id)));
 
     const badge = isReg
       ? `<span class="contact-badge badge-registered">✓ FundShare account</span>`
@@ -2436,9 +2619,9 @@ function renderPickerList(list = state.contacts) {
 
     let buttonHtml = '';
     if (isSelectable) {
-      buttonHtml = `<button class="contact-btn contact-btn-primary" onclick="selectPickerContact('${c.phone}', '${(c.username || '').replace(/'/g, "\\'")}', '${c.name.replace(/'/g, "\\'")}')">Select</button>`;
+      buttonHtml = `<button class="contact-btn contact-btn-primary" onclick="selectPickerContact(${inlineArgument(c.phone)}, ${inlineArgument(c.username)}, ${inlineArgument(c.name)})">Select</button>`;
     } else {
-      buttonHtml = `<button class="contact-btn contact-btn-disabled" disabled title="Account not registered for this feature">Unavailable</button>`;
+      buttonHtml = `<button class="contact-btn contact-btn-disabled" disabled title="This account is not eligible for this feature">Unavailable</button>`;
     }
 
     const featureNote = (!allowsUnregistered && !isReg)
@@ -2448,10 +2631,10 @@ function renderPickerList(list = state.contacts) {
     return `
       <div class="contact-card" style="opacity:${isSelectable ? '1' : '0.65'}">
         <div class="contact-main">
-          <div class="contact-avatar" style="background:${isReg ? 'var(--primary-light)' : '#F3F4F6'};color:${isReg ? 'var(--primary-dark)' : '#6B7280'}">${initial}</div>
+          <div class="contact-avatar" style="background:${isReg ? 'var(--primary-light)' : '#F3F4F6'};color:${isReg ? 'var(--primary-dark)' : '#6B7280'}">${escapeHtml(initial)}</div>
           <div class="contact-info">
-            <div class="contact-name">${c.name} ${c.username ? `<span style="font-size:11px;color:var(--text-muted);">(@${c.username})</span>` : ''}</div>
-            <div class="contact-phone">${c.phone}</div>
+            <div class="contact-name">${escapeHtml(c.name)} ${c.username ? `<span style="font-size:11px;color:var(--text-muted);">(@${escapeHtml(c.username)})</span>` : ''}</div>
+            <div class="contact-phone">${escapeHtml(c.phone)}</div>
             <div style="margin-top:2px;">${badge}</div>
             ${featureNote}
           </div>
@@ -2467,6 +2650,7 @@ function selectPickerContact(phone, username, name) {
   const input = document.getElementById(state.pickerConfig.inputId);
   if (input) {
     input.value = phone;
+    if (input.dataset.recipientFeature) resolveRecipientInput(input.id);
   }
   showToast('info', `Selected ${name} (${phone})`, 2500);
   closeContactPicker();

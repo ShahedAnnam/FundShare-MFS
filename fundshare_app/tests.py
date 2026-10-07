@@ -1,6 +1,7 @@
 from decimal import Decimal
 import datetime
-from django.test import TestCase, Client
+from django.test import TestCase, Client as DjangoClient
+import uuid
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from fundshare_app.models import (
@@ -17,6 +18,26 @@ from fundshare_app.ml.anomaly_detector import AnomalyDetector
 from fundshare_app.ml.budget_forecaster import BudgetForecaster
 
 User = get_user_model()
+
+
+class Client(DjangoClient):
+    """Existing workflow tests use a configured PIN and a fresh request key."""
+    def force_login(self, user, backend=None):
+        user.set_transaction_pin('482951')
+        user.save(update_fields=['transaction_pin'])
+        super().force_login(user, backend=backend)
+
+    def post(self, path, data=None, content_type='application/json', **extra):
+        payload = dict(data or {})
+        payload.setdefault('pin', '482951')
+        extra.setdefault('HTTP_IDEMPOTENCY_KEY', str(uuid.uuid4()))
+        return super().post(path, payload, content_type=content_type, **extra)
+
+    def delete(self, path, data=None, content_type='application/json', **extra):
+        payload = dict(data or {})
+        payload.setdefault('pin', '482951')
+        extra.setdefault('HTTP_IDEMPOTENCY_KEY', str(uuid.uuid4()))
+        return super().delete(path, payload, content_type=content_type, **extra)
 
 
 
@@ -38,7 +59,7 @@ class FundShareCoreBusinessRulesTest(TestCase):
             full_name='Rahim Ahmed',
             email='rahim@test.com',
             phone='01800000002',
-            role=UserRole.MEMBER,
+            role=UserRole.CUSTOMER,
             password='password123'
         )
         self.member_wallet = Wallet.objects.create(owner=self.member, balance=Decimal('500.00'))
@@ -47,7 +68,7 @@ class FundShareCoreBusinessRulesTest(TestCase):
         self.imposter = User.objects.create_user(
             username='imposter_test',
             phone='01900000003',
-            role=UserRole.MEMBER,
+            role=UserRole.CUSTOMER,
             password='password123'
         )
 
@@ -444,7 +465,7 @@ class ContactBookAndRecipientEligibilityTest(TestCase):
             'reference': 'To Unregistered'
         }, content_type='application/json')
         self.assertEqual(resp.status_code, 400)
-        self.assertIn("registered account", resp.data['error'].lower())
+        self.assertEqual("This account is not registered yet.", resp.data['error'])
 
     # 12. Backend rejects Send Money to unregistered recipient
     def test_12_backend_rejects_send_money_to_unregistered_recipient(self):
@@ -453,7 +474,7 @@ class ContactBookAndRecipientEligibilityTest(TestCase):
             feature='SEND_MONEY'
         )
         self.assertFalse(is_eligible)
-        self.assertIn("registered account", err_msg.lower())
+        self.assertEqual("This account is not registered yet.", err_msg)
         self.assertIsNone(matched_user)
 
     # 13. Registered contact can be selected for FundShare
@@ -479,7 +500,7 @@ class ContactBookAndRecipientEligibilityTest(TestCase):
             'recipient': self.unregistered_phone
         }, content_type='application/json')
         self.assertEqual(resp.status_code, 400)
-        self.assertIn("registered account", resp.data['error'].lower())
+        self.assertEqual("This account is not registered yet.", resp.data['error'])
 
     # 15. Backend rejects FundShare to unregistered recipient
     def test_15_backend_rejects_fundshare_to_unregistered_recipient(self):
@@ -488,7 +509,7 @@ class ContactBookAndRecipientEligibilityTest(TestCase):
             feature='FUND_SHARE'
         )
         self.assertFalse(is_eligible)
-        self.assertIn("registered account", err_msg.lower())
+        self.assertEqual("This account is not registered yet.", err_msg)
 
     # 16. Registered contact can be recharged
     def test_16_registered_contact_can_be_recharged(self):
@@ -637,7 +658,7 @@ class FamilyPassActivityAndItemTrackingTest(TestCase):
             username='member_karim',
             full_name='Karim Hossain',
             phone='01810000002',
-            role=UserRole.MEMBER,
+            role=UserRole.CUSTOMER,
             password='password123'
         )
         self.member_wallet = Wallet.objects.create(owner=self.member, balance=Decimal('500.00'))
@@ -1132,10 +1153,10 @@ class UnicodeAndConsoleEncodingSafetyTest(TestCase):
 
 class FamilyPassEnhancementsIntegrationTest(TestCase):
     """
-    Comprehensive tests for the FamilyPass role, permissions, payment integration, and editing:
-    1. Dynamic user role transitions: No pass -> Customer; Grant pass -> Member; Revoke -> Customer.
-    2. Multiple passes: Revoking one retains Member role until all active passes are revoked.
-    3. Expired pass does not grant Member role.
+    Comprehensive tests for FamilyPass permissions, payment integration, and editing:
+    1. Customer roles remain stable when passes are granted or revoked.
+    2. Multiple passes can coexist without changing an account's role.
+    3. Expired permissions do not change account roles.
     4. Merchant and Admin accounts are unaffected by FamilyPass.
     5. Purpose dropdown validation on backend and custom purpose support.
     6. Purpose-based merchant payment restrictions (Grocery, Medical, Dining, Transport, etc.).
@@ -1249,9 +1270,8 @@ class FamilyPassEnhancementsIntegrationTest(TestCase):
         session['user_id'] = self.other_user.id
         session.save()
 
-    def test_01_dynamic_role_customer_to_member_and_back_on_revoke(self):
+    def test_01_customer_role_unchanged_on_grant_and_revoke(self):
         # 1. Initially without any FamilyPass, user is Customer
-        self.member.sync_role()
         self.assertEqual(self.member.effective_role, UserRole.CUSTOMER)
         self.assertEqual(self.member.get_effective_role_display(), 'Customer / Wallet Owner')
 
@@ -1275,23 +1295,23 @@ class FamilyPassEnhancementsIntegrationTest(TestCase):
             status=FamilyPassStatus.ACTIVE
         )
         self.member.refresh_from_db()
-        self.assertEqual(self.member.effective_role, UserRole.MEMBER)
-        self.assertEqual(self.member.get_effective_role_display(), 'FamilyPass Member')
+        self.assertEqual(self.member.effective_role, UserRole.CUSTOMER)
+        self.assertEqual(self.member.get_effective_role_display(), 'Customer / Wallet Owner')
 
         resp = self.client_member.get('/api/auth/me/')
-        self.assertEqual(resp.data['effective_role'], UserRole.MEMBER)
-        self.assertEqual(resp.data['effective_role_display'], 'FamilyPass Member')
+        self.assertEqual(resp.data['effective_role'], UserRole.CUSTOMER)
+        self.assertEqual(resp.data['effective_role_display'], 'Customer / Wallet Owner')
 
         # 3. Owner revokes FamilyPass via API
         revoke_resp = self.client_owner.post(f'/api/family-pass/{fp.id}/revoke/')
         self.assertEqual(revoke_resp.status_code, 200)
-        self.assertEqual(revoke_resp.data['member_effective_role'], UserRole.CUSTOMER)
+        self.assertNotIn('member_effective_role', revoke_resp.data)
 
         self.member.refresh_from_db()
         self.assertEqual(self.member.effective_role, UserRole.CUSTOMER)
         self.assertEqual(self.member.get_effective_role_display(), 'Customer / Wallet Owner')
 
-    def test_02_multiple_passes_revoking_one_preserves_member_role(self):
+    def test_02_multiple_passes_and_revocations_preserve_customer_role(self):
         # Create Pass 1
         fp1 = FamilyPass.objects.create(
             owner=self.owner,
@@ -1313,23 +1333,23 @@ class FamilyPassEnhancementsIntegrationTest(TestCase):
             status=FamilyPassStatus.ACTIVE
         )
         self.member.refresh_from_db()
-        self.assertEqual(self.member.effective_role, UserRole.MEMBER)
+        self.assertEqual(self.member.effective_role, UserRole.CUSTOMER)
 
         # Revoke Pass 1
         self.client_owner.post(f'/api/family-pass/{fp1.id}/revoke/')
         self.member.refresh_from_db()
-        # Still has Pass 2 active -> Must remain Member!
-        self.assertEqual(self.member.effective_role, UserRole.MEMBER)
-        self.assertEqual(self.member.get_effective_role_display(), 'FamilyPass Member')
+        # Both receiving and losing access leave the customer role unchanged.
+        self.assertEqual(self.member.effective_role, UserRole.CUSTOMER)
+        self.assertEqual(self.member.get_effective_role_display(), 'Customer / Wallet Owner')
 
         # Revoke Pass 2
         self.client_owner.post(f'/api/family-pass/{fp2.id}/revoke/')
         self.member.refresh_from_db()
-        # No more active passes -> Returns to Customer
+        # No more active passes; wallet access is unchanged.
         self.assertEqual(self.member.effective_role, UserRole.CUSTOMER)
         self.assertEqual(self.member.get_effective_role_display(), 'Customer / Wallet Owner')
 
-    def test_03_expired_pass_does_not_grant_member_role(self):
+    def test_03_expired_pass_preserves_customer_role(self):
         yesterday = self.today - datetime.timedelta(days=1)
         FamilyPass.objects.create(
             owner=self.owner,
@@ -1658,7 +1678,7 @@ class FamilyPassCategoryRestrictionTest(TestCase):
         # Member
         self.member = User.objects.create_user(
             username='cat_member', full_name='Cat Member',
-            phone='01700100002', role=UserRole.MEMBER, password='pass123'
+            phone='01700100002', role=UserRole.CUSTOMER, password='pass123'
         )
         self.member_wallet = Wallet.objects.create(owner=self.member, balance=Decimal('100.00'))
 
@@ -2416,14 +2436,14 @@ class FamilyPassBillPaymentCategoryTests(TestCase):
         # Authorized Member
         self.member = User.objects.create_user(
             username='bill_member', full_name='Bill Member',
-            phone='01711100002', role=UserRole.MEMBER, password='pass123'
+            phone='01711100002', role=UserRole.CUSTOMER, password='pass123'
         )
         self.member_wallet = Wallet.objects.create(owner=self.member, balance=Decimal('1500.00'))
 
         # Unauthorized Third Party User
         self.stranger = User.objects.create_user(
             username='bill_stranger', phone='01711100003',
-            role=UserRole.MEMBER, password='pass123'
+            role=UserRole.CUSTOMER, password='pass123'
         )
         self.stranger_wallet = Wallet.objects.create(owner=self.stranger, balance=Decimal('500.00'))
 
@@ -2907,7 +2927,7 @@ class AICoachServiceTests(TestCase):
         self.user_b = User.objects.create_user(
             username='user_b',
             phone='01711000002',
-            role=UserRole.MEMBER,
+            role=UserRole.CUSTOMER,
             full_name='User Beta'
         )
         self.wallet_a = Wallet.objects.create(owner=self.user_a, balance=Decimal('10000.00'))

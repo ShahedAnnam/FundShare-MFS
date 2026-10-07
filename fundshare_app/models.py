@@ -3,11 +3,12 @@ from decimal import Decimal
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
+from django.contrib.auth.hashers import make_password, check_password
+from django.core.exceptions import ValidationError
 
 
 class UserRole(models.TextChoices):
     CUSTOMER = 'CUSTOMER', 'Customer / Wallet Owner'
-    MEMBER = 'MEMBER', 'FamilyPass Member'
     MERCHANT = 'MERCHANT', 'Merchant'
     ADMIN = 'ADMIN', 'Admin / Hackathon Evaluator'
 
@@ -30,23 +31,43 @@ class User(AbstractUser):
     phone = models.CharField(max_length=20, unique=True, null=True, blank=True)
     full_name = models.CharField(max_length=150, blank=True)
     avatar_url = models.CharField(max_length=255, blank=True, default='')
+    transaction_pin = models.CharField(max_length=128, blank=True, default='')
+    pin_failed_attempts = models.PositiveSmallIntegerField(default=0)
+    pin_locked_until = models.DateTimeField(null=True, blank=True)
+
+    class Meta(AbstractUser.Meta):
+        abstract = False
+        constraints = [
+            models.CheckConstraint(condition=models.Q(role__in=UserRole.values), name='user_supported_role'),
+            models.CheckConstraint(condition=models.Q(phone__isnull=True) | models.Q(phone__regex=r'\A01[3-9][0-9]{8}\Z'), name='user_canonical_phone'),
+        ]
+
+    def normalize_account_phone(self):
+        from fundshare_app.services.phone_utils import normalize_phone, is_valid_bd_phone
+        self.phone = normalize_phone(self.phone) or None
+        if self.phone and not is_valid_bd_phone(self.phone):
+            raise ValidationError({'phone': 'Enter a valid Bangladesh mobile phone number.'})
+
+    def clean(self):
+        super().clean()
+        self.normalize_account_phone()
+
+    def save(self, *args, **kwargs):
+        self.normalize_account_phone()
+        super().save(*args, **kwargs)
+
+    def set_transaction_pin(self, pin):
+        self.transaction_pin = make_password(pin)
+
+    def check_transaction_pin(self, pin):
+        return bool(self.transaction_pin) and check_password(pin, self.transaction_pin)
 
     @property
     def effective_role(self):
-        """
-        Derives the effective user role dynamically:
-        - Merchants and Admins retain their role.
-        - Customers become MEMBER if they hold at least one active, non-expired FamilyPass.
-        - When all assigned passes are revoked or expired, reverts to CUSTOMER.
-        """
-        if self.is_superuser or self.is_staff or self.role in [UserRole.ADMIN, UserRole.MERCHANT]:
-            return self.role
-        today = timezone.localdate() if timezone.is_aware(timezone.now()) else timezone.now().date()
-        has_active_pass = self.received_family_passes.filter(
-            status=FamilyPassStatus.ACTIVE,
-            expiry_date__gte=today
-        ).exists()
-        return UserRole.MEMBER if has_active_pass else UserRole.CUSTOMER
+        """FamilyPass permissions never determine an account's role."""
+        if self.is_superuser:
+            return UserRole.ADMIN
+        return self.role
 
     def get_effective_role_display(self):
         role_val = self.effective_role
@@ -54,17 +75,6 @@ class User(AbstractUser):
             return UserRole(role_val).label
         except (ValueError, KeyError):
             return role_val
-
-    def sync_role(self):
-        """
-        Safely synchronizes the stored role field with effective_role
-        without altering account identity, wallet, or other permissions.
-        """
-        eff = self.effective_role
-        if self.role in [UserRole.CUSTOMER, UserRole.MEMBER] and self.role != eff:
-            self.role = eff
-            self.save(update_fields=['role'])
-        return eff
 
     def __str__(self):
         return f"{self.username} ({self.get_effective_role_display()})"
@@ -75,6 +85,9 @@ class Wallet(models.Model):
     balance = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.CheckConstraint(condition=models.Q(balance__gte=0), name='wallet_nonnegative')]
 
     def __str__(self):
         return f"Wallet of {self.owner.username} (৳{self.balance})"
@@ -90,6 +103,9 @@ class Merchant(models.Model):
     balance = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.CheckConstraint(condition=models.Q(balance__gte=0), name='merchant_nonnegative')]
 
     def __str__(self):
         return f"{self.business_name} [{self.category}]"
@@ -117,6 +133,11 @@ class PurposeFund(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        constraints = [
+            models.CheckConstraint(condition=models.Q(current_balance__gte=0), name='fund_nonnegative'),
+            models.CheckConstraint(condition=models.Q(allocated_amount__gte=0), name='fund_allocation_nonnegative'),
+            models.CheckConstraint(condition=models.Q(monthly_budget__gte=0), name='fund_budget_nonnegative'),
+        ]
 
     def __str__(self):
         return f"{self.name} (৳{self.current_balance}/৳{self.allocated_amount}) - {self.owner.username}"
@@ -189,6 +210,13 @@ class FamilyPass(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(used_amount__gte=0), name='pass_used_nonnegative'),
+            models.CheckConstraint(condition=models.Q(limit_amount__gt=0), name='pass_limit_positive'),
+            models.CheckConstraint(condition=models.Q(used_amount__lte=models.F('limit_amount')), name='pass_within_limit'),
+        ]
+
     @property
     def remaining_limit(self):
         rem = self.limit_amount - self.used_amount
@@ -210,7 +238,7 @@ class FamilyPass(models.Model):
         today = timezone.localdate() if timezone.is_aware(timezone.now()) else timezone.now().date()
         if self.expiry_date < today:
             return False
-        return self.remaining_limit > Decimal('0.00')
+        return self.start_date <= today and self.remaining_limit > Decimal('0.00')
 
     def get_allowed_categories(self):
         """
@@ -277,13 +305,6 @@ class FamilyPass(models.Model):
 
         super().save(*args, **kwargs)
 
-        # Trigger safe role sync for member
-        if self.member_id:
-            try:
-                self.member.sync_role()
-            except Exception:
-                pass
-
     def __str__(self):
         return f"FamilyPass: {self.owner.username} -> {self.member.username} [{self.purpose_label}] (৳{self.used_amount}/৳{self.limit_amount})"
 
@@ -339,6 +360,18 @@ class Transaction(models.Model):
 
     def __str__(self):
         return f"{self.transaction_id} | {self.transaction_type} | ৳{self.amount} | {self.status}"
+
+
+class FinancialRequest(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='financial_requests')
+    key = models.CharField(max_length=128)
+    fingerprint = models.CharField(max_length=64)
+    response = models.JSONField(default=dict)
+    response_status = models.PositiveSmallIntegerField(default=200)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'key'], name='unique_user_financial_request')]
 
 
 class TransactionItem(models.Model):
@@ -551,8 +584,8 @@ class Contact(models.Model):
 
     @property
     def matched_user(self):
-        from fundshare_app.services.phone_utils import find_user_by_phone_or_username
-        return find_user_by_phone_or_username(self.phone) or (find_user_by_phone_or_username(self.username) if self.username else None)
+        from fundshare_app.services.phone_utils import find_user_by_phone
+        return find_user_by_phone(self.phone)
 
     @property
     def is_registered(self):
@@ -560,4 +593,3 @@ class Contact(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.phone}) - {self.owner.username}"
-

@@ -202,11 +202,13 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
   transition: all 0.2s;
 }
 .fp-card:hover { box-shadow: var(--card-hover-shadow); border-color: var(--primary); }
-.fp-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.fp-member { display: flex; align-items: center; gap: 10px; }
+.fp-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.fp-header > .fp-status-badge { flex-shrink: 0; }
+.fp-recipient { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
+.fp-recipient > div:last-child { min-width: 0; }
 .fp-avatar { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--primary-dark)); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; color: #fff; flex-shrink: 0; }
-.fp-member-name { font-size: 15px; font-weight: 700; color: var(--text); }
-.fp-member-phone { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.fp-recipient-name { font-size: 15px; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+.fp-recipient-phone { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 .fp-status-badge { padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; }
 .fp-status-active { background: var(--primary-light); color: var(--primary-dark); }
 .fp-status-revoked { background: var(--danger-light); color: var(--danger); }
@@ -290,7 +292,7 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
 .metric-label { font-size: 11px; color: var(--text-muted); }
 .metric-sub { font-size: 12px; font-weight: 600; color: var(--primary); margin-top: 4px; }
 
-/* ===== MEMBER (FAMILYPASS RECEIVER) ===== */
+/* ===== RECEIVED FAMILYPASS ===== */
 .received-fp-card {
   background: linear-gradient(135deg, var(--primary), var(--primary-dark));
   border-radius: 20px; padding: 20px; color: #fff; margin-bottom: 14px;
@@ -323,6 +325,9 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
 /* ===== FORM ELEMENTS ===== */
 .form-group { margin-bottom: 16px; }
 .form-label { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: block; }
+.recipient-status { font-size: 12px; line-height: 1.5; margin-top: 6px; overflow-wrap: anywhere; }
+.recipient-status.error { color: var(--danger); }
+.recipient-status.verified { color: var(--primary-dark); }
 .form-input, .form-select {
   width: 100%; padding: 12px 14px; border: 2px solid var(--border);
   border-radius: 12px; font-size: 14px; font-family: 'Inter', sans-serif;
@@ -698,7 +703,7 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
   gap: 12px;
   margin-bottom: 12px;
 }
-.fp-act-member {
+.fp-act-recipient {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1087,10 +1092,10 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
 
   <!-- ====== FAMILYPASS TAB ====== -->
   <div class="tab-panel" id="tab-familypass">
-    <!-- Shown for Customer/Owner role -->
+    <!-- A customer can issue and receive permissions at the same time. -->
     <div id="fpOwnerView">
       <div class="section-title">
-        FamilyPass <span class="badge-new">NEW</span>
+        Shared by You
         <button class="btn-secondary" style="font-size:12px;padding:6px 14px;" onclick="openModal('createFPModal')">+ Grant Pass</button>
       </div>
       <div class="card" style="background:var(--primary-light);border:1.5px solid var(--primary);margin-bottom:14px;">
@@ -1101,11 +1106,10 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
       <div id="fpIssuedList"></div>
     </div>
 
-    <!-- Shown for Member role -->
-    <div id="fpMemberView" style="display:none">
-      <div class="section-title">Your FamilyPass</div>
+    <div id="fpRecipientView">
+      <div class="section-title">Shared with You</div>
       <div id="fpReceivedList"></div>
-      <div id="fpMemberHistory" style="margin-top:16px"></div>
+      <div id="fpRecipientHistory" style="margin-top:16px"></div>
     </div>
   </div>
 
@@ -1191,14 +1195,14 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
       </div>
       <span class="settings-item-arrow">›</span>
     </div>
-    <div class="settings-item" onclick="openModal('changePasswordModal')">
+    <div class="settings-item" onclick="openPINSettings()">
       <div class="settings-item-left">
         <div class="settings-item-icon" style="background:var(--primary-light)">🔑</div>
         <span class="settings-item-label">Change PIN</span>
       </div>
       <span class="settings-item-arrow">›</span>
     </div>
-    <div class="settings-item" onclick="openModal('seedDataModal')">
+    <div class="settings-item" id="adminResetSetting" hidden onclick="openModal('seedDataModal')">
       <div class="settings-item-left">
         <div class="settings-item-icon" style="background:var(--gold-light)">🔄</div>
         <span class="settings-item-label">Reset Demo Data</span>
@@ -1272,11 +1276,12 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
     <div class="modal-title">📤 Send Money</div>
     <div class="modal-subtitle">Send to any FundShare or upay user</div>
     <div class="form-group">
-      <label class="form-label">Recipient Phone / Username</label>
+      <label class="form-label">Recipient Phone Number</label>
       <div class="input-with-action">
-        <input type="text" class="form-input" id="sendReceiver" placeholder="01XXXXXXXXX or username">
+        <input type="tel" class="form-input" id="sendReceiver" placeholder="01XXXXXXXXX" autocomplete="tel" inputmode="tel" data-recipient-feature="SEND_MONEY" aria-describedby="sendReceiverStatus" oninput="clearRecipientLookup(this)" onblur="resolveRecipientInput(this.id)">
         <button type="button" class="input-action-btn" title="Pick from saved contacts" onclick="openContactPicker({ inputId: 'sendReceiver', feature: 'send_money', title: 'Send Money Recipient', returnModalId: 'sendMoneyModal' })">🔍</button>
       </div>
+      <div id="sendReceiverStatus" class="recipient-status" role="status" aria-live="polite"></div>
     </div>
     <div class="form-group">
       <label class="form-label">Amount (৳)</label>
@@ -1418,12 +1423,12 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
       <div class="form-hint" id="fundWalletHint">Available wallet balance: loading...</div>
     </div>
     <div class="form-group">
-      <label class="form-label">Recipient Phone / Username (Optional)</label>
+      <label class="form-label">Recipient Phone Number (Optional)</label>
       <div class="input-with-action">
-        <input type="text" class="form-input" id="fundRecipient" placeholder="01XXXXXXXXX or username (optional)">
+        <input type="tel" class="form-input" id="fundRecipient" placeholder="01XXXXXXXXX" autocomplete="tel" inputmode="tel" data-recipient-feature="FUND_SHARE" aria-describedby="fundRecipientStatus" oninput="clearRecipientLookup(this)" onblur="resolveRecipientInput(this.id)">
         <button type="button" class="input-action-btn" title="Pick from saved contacts" onclick="openContactPicker({ inputId: 'fundRecipient', feature: 'fund_share', title: 'Fund Recipient', returnModalId: 'createFundModal' })">🔍</button>
       </div>
-      <div class="form-hint">Assign fund to a contact with a registered account</div>
+      <div id="fundRecipientStatus" class="recipient-status" role="status" aria-live="polite"></div>
     </div>
     <div class="form-group">
       <label class="form-label">Monthly Budget (৳)</label>
@@ -1507,11 +1512,12 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
     </div>
     <div style="height:12px"></div>
     <div class="form-group">
-      <label class="form-label">Member Phone / Username</label>
+      <label class="form-label">Recipient Phone Number</label>
       <div class="input-with-action">
-        <input type="text" class="form-input" id="fpMember" placeholder="Member's phone or username">
-        <button type="button" class="input-action-btn" title="Pick from saved contacts" onclick="openContactPicker({ inputId: 'fpMember', feature: 'family_pass', title: 'FamilyPass Member', returnModalId: 'createFPModal' })">🔍</button>
+        <input type="tel" class="form-input" id="fpRecipient" placeholder="01XXXXXXXXX" autocomplete="tel" inputmode="tel" data-recipient-feature="FAMILY_PASS" aria-describedby="fpRecipientStatus" oninput="clearRecipientLookup(this)" onblur="resolveRecipientInput(this.id)">
+        <button type="button" class="input-action-btn" title="Pick from saved contacts" onclick="openContactPicker({ inputId: 'fpRecipient', feature: 'family_pass', title: 'FamilyPass Recipient', returnModalId: 'createFPModal' })">🔍</button>
       </div>
+      <div id="fpRecipientStatus" class="recipient-status" role="status" aria-live="polite"></div>
     </div>
     <div class="form-group">
       <label class="form-label">Spending Limit (৳)</label>
@@ -1558,8 +1564,8 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
     <div class="modal-subtitle" id="editFPSubtitle">Update spending limit, purpose, or validity</div>
     <div class="card" style="background:var(--bg);border:1px solid var(--border);padding:12px;margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:6px;">
-        <span style="color:var(--text-secondary);">Recipient Member:</span>
-        <strong id="editFPMemberName" style="color:var(--text);">---</strong>
+        <span style="color:var(--text-secondary);">Recipient Customer:</span>
+        <strong id="editFPRecipientName" style="color:var(--text);">---</strong>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:6px;">
         <span style="color:var(--text-secondary);">Already Spent:</span>
@@ -1625,12 +1631,12 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
   </div>
 </div>
 
-<!-- FamilyPass Member Pay Modal -->
-<div class="modal-overlay" id="fpMemberPayModal">
+<!-- Received FamilyPass Payment Modal -->
+<div class="modal-overlay" id="fpRecipientPayModal">
   <div class="modal-sheet" style="max-height:88vh;overflow-y:auto;">
     <div class="modal-handle"></div>
     <div class="modal-title">💳 Pay via FamilyPass</div>
-    <div class="modal-subtitle" id="fpMemberPaySub">Using FamilyPass from: ---</div>
+    <div class="modal-subtitle" id="fpRecipientPaySub">Using FamilyPass from: ---</div>
 
     <!-- Pass Details Card (Purpose, Owner, Allowance, Expiry) -->
     <div class="card" style="background:var(--primary-light);margin-bottom:12px;" id="fpPayLimitInfo">
@@ -1646,13 +1652,13 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
     <div class="checkout-items-box">
       <div class="checkout-items-header">
         <span class="checkout-items-title">🛍️ Purchased Items (Item Tracking)</span>
-        <button type="button" class="btn-secondary" style="font-size:11px;padding:3px 8px;width:auto;" onclick="addCheckoutItemRow('fpMember')">+ Add Item</button>
+        <button type="button" class="btn-secondary" style="font-size:11px;padding:3px 8px;width:auto;" onclick="addCheckoutItemRow('fpRecipient')">+ Add Item</button>
       </div>
-      <div id="fpMemberPresets" class="checkout-items-presets"></div>
-      <div id="fpMemberItemsList"></div>
+      <div id="fpRecipientPresets" class="checkout-items-presets"></div>
+      <div id="fpRecipientItemsList"></div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:12px;font-weight:600;color:var(--text-secondary);">
         <span>Items Subtotal:</span>
-        <span id="fpMemberItemsTotal">৳0.00</span>
+        <span id="fpRecipientItemsTotal">৳0.00</span>
       </div>
     </div>
 
@@ -1661,8 +1667,8 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
       <input type="number" class="form-input form-amount" id="fpPayAmount" placeholder="0" min="1">
     </div>
     <div style="height:12px"></div>
-    <button class="btn-primary" onclick="doFPMemberPay()">Pay via FamilyPass</button>
-    <div style="margin-top:10px"><button class="btn-secondary w-full" onclick="closeModal('fpMemberPayModal')">Cancel</button></div>
+    <button class="btn-primary" onclick="doFPRecipientPay()">Pay via FamilyPass</button>
+    <div style="margin-top:10px"><button class="btn-secondary w-full" onclick="closeModal('fpRecipientPayModal')">Cancel</button></div>
   </div>
 </div>
 
@@ -1702,17 +1708,27 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
 <div class="modal-overlay" id="changePasswordModal">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
-    <div class="modal-title">🔑 Change PIN</div>
+    <div class="modal-title" id="pinSettingsTitle">Transaction PIN</div>
     <div class="modal-subtitle">Update your wallet security PIN</div>
+    <form onsubmit="doSaveTransactionPIN(event)">
     <div class="form-group">
-      <label class="form-label">Current PIN</label>
-      <input type="password" class="form-input" id="currentPin" placeholder="Current PIN">
+      <label class="form-label" for="pinAccountPassword">Account Password</label>
+      <input type="password" class="form-input" id="pinAccountPassword" autocomplete="current-password" required>
+    </div>
+    <div class="form-group" id="currentPinGroup">
+      <label class="form-label" for="currentPin">Current Transaction PIN</label>
+      <input type="password" class="form-input" id="currentPin" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off">
     </div>
     <div class="form-group">
-      <label class="form-label">New PIN</label>
-      <input type="password" class="form-input" id="newPin" placeholder="New PIN (min 6 chars)">
+      <label class="form-label" for="newPin">New PIN</label>
+      <input type="password" class="form-input" id="newPin" placeholder="6 digits" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" required>
     </div>
-    <button class="btn-primary" onclick="showToast('info','Feature coming soon in production version!')">Update PIN</button>
+    <div class="form-group">
+      <label class="form-label" for="confirmNewPin">Confirm New PIN</label>
+      <input type="password" class="form-input" id="confirmNewPin" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" required>
+    </div>
+    <button type="submit" class="btn-primary" id="savePinButton">Save PIN</button>
+    </form>
     <div style="margin-top:10px"><button class="btn-secondary w-full" onclick="closeModal('changePasswordModal')">Cancel</button></div>
   </div>
 </div>
@@ -1745,11 +1761,12 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
       </select>
     </div>
     <div class="form-group">
-      <label class="form-label">Recipient Phone / Username (Optional)</label>
+      <label class="form-label">Recipient Phone Number (Optional)</label>
       <div class="input-with-action">
-        <input type="text" class="form-input" id="editFundRecipient" placeholder="01XXXXXXXXX or username">
+        <input type="tel" class="form-input" id="editFundRecipient" placeholder="01XXXXXXXXX" autocomplete="tel" inputmode="tel" data-recipient-feature="FUND_SHARE" aria-describedby="editFundRecipientStatus" oninput="clearRecipientLookup(this)" onblur="resolveRecipientInput(this.id)">
         <button type="button" class="input-action-btn" title="Pick from saved contacts" onclick="openContactPicker({ inputId: 'editFundRecipient', feature: 'fund_share', title: 'Fund Recipient', returnModalId: 'editFundModal' })">🔍</button>
       </div>
+      <div id="editFundRecipientStatus" class="recipient-status" role="status" aria-live="polite"></div>
     </div>
     <div class="form-group">
       <label class="form-label">Monthly Budget (৳)</label>
@@ -1871,6 +1888,22 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
   </div>
 </div>
 
+<dialog id="transactionPinDialog" aria-labelledby="transactionPinTitle" style="width:min(360px,calc(100% - 32px));max-height:calc(100dvh - 32px);overflow-y:auto;margin:auto;border:1px solid #ddd;border-radius:8px;padding:24px;">
+  <form method="dialog">
+    <div class="modal-title" id="transactionPinTitle">Confirm Transaction</div>
+    <p id="transactionPinSummary" style="overflow-wrap:anywhere;margin:12px 0;line-height:1.5;"></p>
+    <div class="form-group">
+      <label class="form-label" for="transactionPinInput">Your Transaction PIN</label>
+      <input type="password" id="transactionPinInput" class="form-input" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" required>
+    </div>
+    <button type="submit" value="confirm" class="btn-primary">Confirm</button>
+    <button type="submit" value="cancel" class="btn-secondary w-full" formnovalidate style="margin-top:10px;">Cancel</button>
+  </form>
+</dialog>
+<style>
+  #transactionPinDialog::backdrop { background:rgba(0,0,0,.55); }
+  [hidden] { display:none !important; }
+</style>
 <script src="{% static 'app.js' %}"></script>
 </body>
 </html>

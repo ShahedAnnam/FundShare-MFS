@@ -1,13 +1,14 @@
 import uuid
 from decimal import Decimal
-from django.db import transaction as db_transaction
+from django.db import transaction as db_transaction, connection
+from django.db.models import F
 from django.utils import timezone
 from fundshare_app.models import (
     User, Wallet, Merchant, PurposeFund, FundTransfer,
     FamilyPass, FamilyPassTransaction, Transaction, TransactionItem,
     TransactionType, PaymentSource, TransactionStatus,
     FamilyPassStatus, Notification, NotificationType, AnomalyResult,
-    BusinessCategory
+    BusinessCategory, FundStatus, UserRole
 )
 
 
@@ -19,6 +20,98 @@ class TransactionValidationError(Exception):
 
 
 class TransactionService:
+
+    BILL_PROVIDER_CATEGORIES = {
+        'DESCO': BusinessCategory.ELECTRICITY,
+        'DPDC': BusinessCategory.ELECTRICITY,
+        'NESCO': BusinessCategory.ELECTRICITY,
+        'BREB': BusinessCategory.ELECTRICITY,
+        'Titas Gas': BusinessCategory.ELECTRICITY,
+        'WASA': BusinessCategory.ELECTRICITY,
+        'KGDCL': BusinessCategory.ELECTRICITY,
+        'Link3 Internet': BusinessCategory.ELECTRICITY,
+        'Carnival Internet': BusinessCategory.ELECTRICITY,
+        'Eastern Housing Rental': BusinessCategory.RENT,
+        'Apartment Rent': BusinessCategory.RENT,
+        'Scholastica School': BusinessCategory.EDUCATION,
+        'Tuition Fee': BusinessCategory.EDUCATION,
+        'University Fee': BusinessCategory.EDUCATION,
+        'General Utility': BusinessCategory.OTHER,
+        'Other Service': BusinessCategory.OTHER,
+    }
+
+    @staticmethod
+    def validate_amount(amount, allow_zero=False):
+        if not isinstance(amount, Decimal) or not amount.is_finite():
+            raise TransactionValidationError('Enter a valid monetary amount.', 'INVALID_AMOUNT')
+        if amount < 0 or (amount == 0 and not allow_zero) or amount > Decimal('9999999999.99') or amount != amount.quantize(Decimal('0.01')):
+            raise TransactionValidationError('Amount must be positive and contain no more than two decimal places.', 'INVALID_AMOUNT')
+
+    @staticmethod
+    def lock_wallets(owner_ids):
+        for owner_id in sorted(set(owner_ids)):
+            Wallet.objects.get_or_create(owner_id=owner_id)
+        if connection.vendor == 'sqlite':
+            Wallet.objects.filter(owner_id__in=owner_ids).update(balance=F('balance'))
+        return list(Wallet.objects.select_for_update().filter(owner_id__in=owner_ids).order_by('owner_id'))
+
+    @classmethod
+    def execute_transaction(cls, sender, transaction_type, amount=None, receiver=None, merchant=None,
+                            payment_source=PaymentSource.NORMAL_WALLET, purpose_fund=None,
+                            family_pass=None, category=None, reference='', metadata=None, items=None):
+        try:
+            with db_transaction.atomic():
+                if not sender.is_active or sender.role == UserRole.MERCHANT:
+                    raise TransactionValidationError('This account cannot spend from a personal wallet.', 'ACCOUNT_UNAUTHORIZED')
+                if payment_source not in PaymentSource.values:
+                    raise TransactionValidationError('Select a valid payment source.', 'INVALID_PAYMENT_SOURCE')
+                if payment_source != PaymentSource.NORMAL_WALLET and transaction_type not in (TransactionType.MERCHANT_PAYMENT, TransactionType.BILL_PAYMENT):
+                    raise TransactionValidationError('This payment source does not support the selected action.', 'ACTION_NOT_ALLOWED')
+                if transaction_type == TransactionType.BILL_PAYMENT and payment_source == PaymentSource.PURPOSE_FUND:
+                    raise TransactionValidationError('Purpose Funds support merchant payments only.', 'ACTION_NOT_ALLOWED')
+                if receiver and not receiver.is_active:
+                    raise TransactionValidationError('The recipient account is inactive.', 'RECIPIENT_INACTIVE')
+                if purpose_fund and purpose_fund.owner_id != sender.id:
+                    raise TransactionValidationError('Unauthorized: You do not own this Purpose Fund.', 'FUND_UNAUTHORIZED')
+                if family_pass and family_pass.member_id != sender.id:
+                    raise TransactionValidationError('Unauthorized user for this FamilyPass delegation.', 'FAMILYPASS_UNAUTHORIZED')
+                owner_ids = [sender.id]
+                if receiver:
+                    owner_ids.append(receiver.id)
+                if family_pass:
+                    owner_ids.append(family_pass.owner_id)
+                cls.lock_wallets(owner_ids)
+                if purpose_fund:
+                    purpose_fund.refresh_from_db()
+                    purpose_fund = PurposeFund.objects.select_for_update().get(pk=purpose_fund.pk)
+                    if purpose_fund.status != FundStatus.ACTIVE:
+                        raise TransactionValidationError('This Purpose Fund has been archived.', 'FUND_INACTIVE')
+                if family_pass:
+                    family_pass = FamilyPass.objects.select_for_update().get(pk=family_pass.pk)
+                    if sender.effective_role != UserRole.CUSTOMER or not family_pass.owner.is_active or family_pass.owner.effective_role != UserRole.CUSTOMER:
+                        raise TransactionValidationError('FamilyPass spending requires an active customer owner and recipient.', 'FAMILYPASS_ACCOUNT_INELIGIBLE')
+                    if family_pass.start_date > timezone.localdate():
+                        raise TransactionValidationError('This FamilyPass has not started yet.', 'FAMILYPASS_NOT_STARTED')
+                if merchant:
+                    merchant = Merchant.objects.select_for_update().get(pk=merchant.pk)
+                if transaction_type == TransactionType.BILL_PAYMENT:
+                    # The provider determines the category; the client cannot relabel a bill.
+                    provider = (metadata or {}).get('provider')
+                    if provider:
+                        category = cls.resolve_bill_category(provider)
+                sender._state.fields_cache.pop('wallet', None)
+                return cls._execute_transaction(sender, transaction_type, amount, receiver, merchant,
+                                                payment_source, purpose_fund, family_pass, category,
+                                                reference, metadata, items)
+        except TransactionValidationError as exc:
+            if exc.code in ('CATEGORY_RESTRICTION_ERROR', 'FAMILYPASS_CATEGORY_MISMATCH') and amount and amount.is_finite():
+                exc.audit_data = dict(sender=sender, merchant=merchant, amount=amount,
+                    transaction_type=transaction_type, payment_source=payment_source,
+                    purpose_fund=purpose_fund, family_pass=family_pass,
+                    category=merchant.category if merchant else category or '', status=TransactionStatus.REJECTED,
+                    rejection_reason=exc.message, reference=reference, metadata=metadata or {})
+                Transaction.objects.create(**exc.audit_data)
+            raise
 
     PROVIDER_OR_TYPE_TO_CATEGORY = {
         'desco': BusinessCategory.ELECTRICITY,
@@ -56,8 +149,8 @@ class TransactionService:
         """
         Resolves the canonical BusinessCategory for a bill payment from its provider or bill_type.
         """
-        if bill_type and bill_type in BusinessCategory.values:
-            return bill_type
+        if provider in cls.BILL_PROVIDER_CATEGORIES:
+            return cls.BILL_PROVIDER_CATEGORIES[provider]
         if provider and provider in BusinessCategory.values:
             return provider
 
@@ -68,6 +161,8 @@ class TransactionService:
                     return cat
 
         if bill_type:
+            if bill_type in BusinessCategory.values:
+                return bill_type
             bt_lower = str(bill_type).strip().lower()
             for k, cat in cls.PROVIDER_OR_TYPE_TO_CATEGORY.items():
                 if k in bt_lower:
@@ -94,7 +189,7 @@ class TransactionService:
             TransactionItem.objects.bulk_create(items_to_create)
 
     @classmethod
-    def execute_transaction(
+    def _execute_transaction(
         cls,
         sender: User,
         transaction_type: str,
@@ -133,28 +228,28 @@ class TransactionService:
                         qty = Decimal(str(itm.get('quantity', '1')))
                     except Exception:
                         raise TransactionValidationError(f"Invalid quantity for item '{name}'.", code="INVALID_ITEM_QUANTITY")
-                    if qty <= Decimal('0.00'):
+                    if not qty.is_finite() or qty <= Decimal('0.00'):
                         raise TransactionValidationError(f"Quantity for item '{name}' must be greater than zero.", code="INVALID_ITEM_QUANTITY")
 
                     try:
                         price = Decimal(str(itm.get('unit_price', '0')))
                     except Exception:
                         raise TransactionValidationError(f"Invalid unit price for item '{name}'.", code="INVALID_ITEM_PRICE")
-                    if price < Decimal('0.00'):
+                    if not price.is_finite() or price < Decimal('0.00'):
                         raise TransactionValidationError(f"Unit price for item '{name}' cannot be negative.", code="INVALID_ITEM_PRICE")
 
                     try:
                         discount = Decimal(str(itm.get('discount', '0') or '0'))
                     except Exception:
                         raise TransactionValidationError(f"Invalid discount for item '{name}'.", code="INVALID_ITEM_DISCOUNT")
-                    if discount < Decimal('0.00'):
+                    if not discount.is_finite() or discount < Decimal('0.00'):
                         raise TransactionValidationError(f"Discount for item '{name}' cannot be negative.", code="INVALID_ITEM_DISCOUNT")
 
                     try:
                         tax = Decimal(str(itm.get('tax', '0') or '0'))
                     except Exception:
                         raise TransactionValidationError(f"Invalid tax for item '{name}'.", code="INVALID_ITEM_TAX")
-                    if tax < Decimal('0.00'):
+                    if not tax.is_finite() or tax < Decimal('0.00'):
                         raise TransactionValidationError(f"Tax for item '{name}' cannot be negative.", code="INVALID_ITEM_TAX")
 
                     line_total = (qty * price) - discount + tax
@@ -189,8 +284,7 @@ class TransactionService:
                         raise TransactionValidationError("Invalid payment amount format.", code="INVALID_AMOUNT")
                 amount = items_sum
 
-        if amount is None or amount <= Decimal('0.00'):
-            raise TransactionValidationError("Transaction amount must be greater than zero.", code="INVALID_AMOUNT")
+        cls.validate_amount(amount)
 
         if transaction_type == TransactionType.MERCHANT_PAYMENT:
             if not merchant:
@@ -243,10 +337,11 @@ class TransactionService:
             if family_pass.expiry_date < today:
                 family_pass.status = FamilyPassStatus.EXPIRED
                 family_pass.save(update_fields=['status', 'updated_at'])
-                family_pass.member.sync_role()
                 raise TransactionValidationError(f"FamilyPass expired on {family_pass.expiry_date}.", code="FAMILYPASS_EXPIRED")
-            if family_pass.allowed_action not in ['MERCHANT_PAYMENT', 'ALL']:
+            if family_pass.allowed_action not in ['MERCHANT_PAYMENT', 'ALL', 'GROCERY_MEDICINE']:
                 raise TransactionValidationError("Action not permitted under current FamilyPass policy.", code="FAMILYPASS_ACTION_DENIED")
+            if family_pass.allowed_action == 'GROCERY_MEDICINE' and (not merchant or merchant.category not in ('Grocery', 'Medicine')):
+                raise TransactionValidationError('This FamilyPass only allows Grocery and Medicine merchant payments.', 'FAMILYPASS_ACTION_DENIED')
 
             if transaction_type == TransactionType.MERCHANT_PAYMENT:
                 target_cat = merchant.category if merchant else None
@@ -326,19 +421,19 @@ class TransactionService:
                     payment_source=PaymentSource.NORMAL_WALLET,
                     category='Transfer',
                     status=TransactionStatus.COMPLETED,
-                    reference=reference or f"Sent to {receiver.full_name or receiver.username}",
+                    reference=reference or f"Sent to {receiver.full_name or receiver.phone or 'Customer'}",
                     metadata=metadata
                 )
                 Notification.objects.create(
                     user=sender,
                     title="Money Sent",
-                    message=f"৳{amount:,.2f} sent to {receiver.full_name or receiver.username}. Remaining balance: ৳{wallet.balance:,.2f}",
+                    message=f"৳{amount:,.2f} sent to {receiver.full_name or receiver.phone or 'Customer'}. Remaining balance: ৳{wallet.balance:,.2f}",
                     notification_type=NotificationType.TRANSACTION
                 )
                 Notification.objects.create(
                     user=receiver,
                     title="Money Received",
-                    message=f"Received ৳{amount:,.2f} from {sender.full_name or sender.username}. New balance: ৳{receiver_wallet.balance:,.2f}",
+                    message=f"Received ৳{amount:,.2f} from {sender.full_name or sender.phone or 'Customer'}. New balance: ৳{receiver_wallet.balance:,.2f}",
                     notification_type=NotificationType.TRANSACTION
                 )
                 return txn
@@ -445,7 +540,6 @@ class TransactionService:
                     if family_pass.expiry_date < today:
                         family_pass.status = FamilyPassStatus.EXPIRED
                         family_pass.save(update_fields=['status', 'updated_at'])
-                        family_pass.member.sync_role()
                         raise TransactionValidationError(f"FamilyPass expired on {family_pass.expiry_date}.", code="FAMILYPASS_EXPIRED")
 
                     # 3. Member authentication match (must NOT share credentials)
@@ -453,7 +547,7 @@ class TransactionService:
                         raise TransactionValidationError("Unauthorized user for this FamilyPass delegation.", code="FAMILYPASS_UNAUTHORIZED")
 
                     # 4. Action permission check
-                    if family_pass.allowed_action not in ['MERCHANT_PAYMENT', 'ALL']:
+                    if family_pass.allowed_action not in ['MERCHANT_PAYMENT', 'ALL', 'GROCERY_MEDICINE']:
                         raise TransactionValidationError("Action not permitted under current FamilyPass policy.", code="FAMILYPASS_ACTION_DENIED")
 
                     # 5. Remaining spending limit check
@@ -513,7 +607,7 @@ class TransactionService:
                         family_pass=family_pass,
                         category=merchant.category,
                         status=TransactionStatus.COMPLETED,
-                        reference=reference or f"FamilyPass spending by {sender.full_name or sender.username} at {merchant.business_name}",
+                        reference=reference or f"FamilyPass spending by {sender.full_name or sender.phone or 'Customer'} at {merchant.business_name}",
                         metadata={**metadata, 'owner_username': family_pass.owner.username, 'member_username': sender.username}
                     )
                     cls._save_transaction_items(txn, validated_items)
@@ -528,7 +622,7 @@ class TransactionService:
                     )
 
                     # Trigger simulated instant notification to Owner
-                    member_display = sender.full_name or sender.username
+                    member_display = sender.full_name or sender.phone or 'Customer'
                     Notification.objects.create(
                         user=family_pass.owner,
                         title="🔔 FamilyPass Transaction Alert",
@@ -547,7 +641,7 @@ class TransactionService:
                     Notification.objects.create(
                         user=sender,
                         title="FamilyPass Payment Successful",
-                        message=f"Paid ৳{amount:,.2f} to {merchant.business_name} via {family_pass.owner.full_name or family_pass.owner.username}'s FamilyPass. Remaining limit: ৳{family_pass.remaining_limit:,.2f}.",
+                        message=f"Paid ৳{amount:,.2f} to {merchant.business_name} via {family_pass.owner.full_name or family_pass.owner.phone or 'Customer'}'s FamilyPass. Remaining limit: ৳{family_pass.remaining_limit:,.2f}.",
                         notification_type=NotificationType.TRANSACTION
                     )
 
@@ -607,7 +701,6 @@ class TransactionService:
                     if family_pass.expiry_date < today:
                         family_pass.status = FamilyPassStatus.EXPIRED
                         family_pass.save(update_fields=['status', 'updated_at'])
-                        family_pass.member.sync_role()
                         raise TransactionValidationError(f"FamilyPass expired on {family_pass.expiry_date}.", code="FAMILYPASS_EXPIRED")
 
                     # 3. Member authorization check
@@ -682,7 +775,7 @@ class TransactionService:
                     )
 
                     # Instant notification to Owner
-                    member_display = sender.full_name or sender.username
+                    member_display = sender.full_name or sender.phone or 'Customer'
                     Notification.objects.create(
                         user=family_pass.owner,
                         title="🔔 FamilyPass Transaction Alert",
@@ -702,7 +795,7 @@ class TransactionService:
                     Notification.objects.create(
                         user=sender,
                         title="Bill Payment Successful",
-                        message=f"Paid ৳{amount:,.2f} for {provider_name} via {family_pass.owner.full_name or family_pass.owner.username}'s FamilyPass. Remaining limit: ৳{family_pass.remaining_limit:,.2f}.",
+                        message=f"Paid ৳{amount:,.2f} for {provider_name} via {family_pass.owner.full_name or family_pass.owner.phone or 'Customer'}'s FamilyPass. Remaining limit: ৳{family_pass.remaining_limit:,.2f}.",
                         notification_type=NotificationType.TRANSACTION
                     )
 
@@ -747,12 +840,17 @@ class TransactionService:
                 raise TransactionValidationError(f"Unsupported transaction type: {transaction_type}")
 
     @classmethod
+    @db_transaction.atomic
     def allocate_to_fund(cls, user: User, purpose_fund: PurposeFund, amount: Decimal) -> PurposeFund:
         """
         Allocates funds from the owner's normal wallet into a specific PurposeFund.
         """
-        if amount <= Decimal('0.00'):
-            raise TransactionValidationError("Allocation amount must be greater than zero.")
+        cls.validate_amount(amount)
+        cls.lock_wallets([user.id])
+        locked_fund = PurposeFund.objects.select_for_update().get(pk=purpose_fund.pk)
+        purpose_fund.refresh_from_db()
+        if locked_fund.status != FundStatus.ACTIVE:
+            raise TransactionValidationError('This Purpose Fund has been archived.', 'FUND_INACTIVE')
         if purpose_fund.owner != user:
             raise TransactionValidationError("Unauthorized fund access.")
 
@@ -789,6 +887,7 @@ class TransactionService:
         return purpose_fund
 
     @classmethod
+    @db_transaction.atomic
     def transfer_between_funds(
         cls,
         user: User,
@@ -801,8 +900,13 @@ class TransactionService:
         Transfers money between two purpose funds owned by the same user.
         Strictly an explicit user action (AI recommends, user confirms).
         """
-        if amount <= Decimal('0.00'):
-            raise TransactionValidationError("Transfer amount must be greater than zero.")
+        cls.validate_amount(amount)
+        cls.lock_wallets([user.id])
+        list(PurposeFund.objects.select_for_update().filter(pk__in=[source_fund.pk, destination_fund.pk]).order_by('pk'))
+        source_fund.refresh_from_db()
+        destination_fund.refresh_from_db()
+        if source_fund.status != FundStatus.ACTIVE or destination_fund.status != FundStatus.ACTIVE:
+            raise TransactionValidationError('Transfers require two active Purpose Funds.', 'FUND_INACTIVE')
         if source_fund == destination_fund:
             raise TransactionValidationError("Source and destination funds cannot be identical.")
         if source_fund.owner != user or destination_fund.owner != user:
@@ -850,6 +954,9 @@ class TransactionService:
         """
         Runs real-time spending anomaly detection on completed transactions.
         """
+        if connection.in_atomic_block:
+            db_transaction.on_commit(lambda: cls._check_anomaly_and_record(txn))
+            return
         try:
             from fundshare_app.ml.anomaly_detector import AnomalyDetector
             detector = AnomalyDetector.get_instance()

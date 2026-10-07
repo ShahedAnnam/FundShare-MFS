@@ -1,11 +1,23 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
+from django.db import transaction
 from .models import (
     User, Wallet, Merchant, PurposeFund, FundTransfer, FamilyPass,
     Transaction, TransactionItem, FamilyPassTransaction, Notification, FinancialGoal,
     AnomalyResult, BudgetForecast, AIInsight, ExperimentRecord, Contact
 )
+
+
+class FinancialReadOnlyAdmin(admin.ModelAdmin):
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 
@@ -63,13 +75,21 @@ class CustomUserAdmin(UserAdmin):
         }),
     )
 
-    @admin.display(description='Effective Role')
+    @admin.display(description='Account Role')
     def effective_role_display(self, obj):
         return obj.get_effective_role_display()
 
+    @transaction.atomic
+    def save_model(self, request, obj, form, change):
+        if change:
+            current = User.objects.select_for_update().get(pk=obj.pk)
+            for field in ('transaction_pin', 'pin_failed_attempts', 'pin_locked_until'):
+                setattr(obj, field, getattr(current, field))
+        super().save_model(request, obj, form, change)
+
 
 @admin.register(Wallet)
-class WalletAdmin(admin.ModelAdmin):
+class WalletAdmin(FinancialReadOnlyAdmin):
     list_display = ('id', 'owner', 'balance', 'created_at', 'updated_at')
     list_filter = ('created_at', 'updated_at')
     search_fields = ('owner__username', 'owner__full_name', 'owner__phone', 'owner__email')
@@ -86,13 +106,23 @@ class MerchantAdmin(admin.ModelAdmin):
     )
     list_filter = ('category', 'is_active', 'created_at')
     search_fields = ('business_name', 'account_number', 'contact_phone', 'user__username', 'address')
-    readonly_fields = ('created_at',)
+    readonly_fields = ('created_at', 'balance')
     raw_id_fields = ('user',)
     ordering = ('business_name',)
 
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    @transaction.atomic
+    def save_model(self, request, obj, form, change):
+        if change:
+            current = Merchant.objects.select_for_update().get(pk=obj.pk)
+            obj.balance = current.balance
+        super().save_model(request, obj, form, change)
+
 
 @admin.register(PurposeFund)
-class PurposeFundAdmin(admin.ModelAdmin):
+class PurposeFundAdmin(FinancialReadOnlyAdmin):
     list_display = (
         'id', 'name', 'owner', 'recipient', 'category', 'current_balance',
         'allocated_amount', 'monthly_budget', 'status', 'created_at'
@@ -106,7 +136,7 @@ class PurposeFundAdmin(admin.ModelAdmin):
 
 
 @admin.register(FundTransfer)
-class FundTransferAdmin(admin.ModelAdmin):
+class FundTransferAdmin(FinancialReadOnlyAdmin):
     list_display = ('id', 'owner', 'source_fund', 'destination_fund', 'amount', 'reason', 'timestamp')
     list_filter = ('timestamp',)
     search_fields = ('owner__username', 'source_fund__name', 'destination_fund__name', 'reason')
@@ -116,7 +146,7 @@ class FundTransferAdmin(admin.ModelAdmin):
 
 
 @admin.register(FamilyPass)
-class FamilyPassAdmin(admin.ModelAdmin):
+class FamilyPassAdmin(FinancialReadOnlyAdmin):
     list_display = (
         'id', 'owner', 'member', 'purpose_display', 'limit_amount', 'used_amount',
         'remaining_limit_display', 'status',
@@ -149,7 +179,7 @@ class TransactionItemInline(admin.TabularInline):
 
 
 @admin.register(Transaction)
-class TransactionAdmin(admin.ModelAdmin):
+class TransactionAdmin(FinancialReadOnlyAdmin):
     list_display = (
         'transaction_id', 'transaction_type', 'amount',
         'sender', 'receiver', 'merchant', 'payment_source',
@@ -167,7 +197,7 @@ class TransactionAdmin(admin.ModelAdmin):
 
 
 @admin.register(TransactionItem)
-class TransactionItemAdmin(admin.ModelAdmin):
+class TransactionItemAdmin(FinancialReadOnlyAdmin):
     list_display = (
         'id', 'transaction_link', 'name', 'product_id', 'quantity',
         'unit_price', 'discount', 'tax', 'total', 'merchant_display', 'created_at'
@@ -196,7 +226,7 @@ class TransactionItemAdmin(admin.ModelAdmin):
 
 
 @admin.register(FamilyPassTransaction)
-class FamilyPassTransactionAdmin(admin.ModelAdmin):
+class FamilyPassTransactionAdmin(FinancialReadOnlyAdmin):
     list_display = (
         'id', 'family_pass', 'member', 'amount',
         'remaining_limit_after', 'transaction', 'timestamp'
@@ -293,4 +323,3 @@ class ContactAdmin(admin.ModelAdmin):
     @admin.display(boolean=True, description='Registered Account')
     def is_registered_display(self, obj):
         return obj.is_registered
-

@@ -1,0 +1,57 @@
+{% extends 'login.html' %}
+
+{% block auth_title %}Create Account{% endblock %}
+{% block auth_panel_class %}registration-panel{% endblock %}
+
+{% block auth_content %}
+<div class="form-header">
+  <h2>Create your account</h2>
+  <p>Join FundShare</p>
+</div>
+
+{% if error %}
+<div class="alert-error" role="alert"><span class="alert-msg">{{ error }}</span></div>
+{% endif %}
+{% if form.non_field_errors %}
+<div class="alert-error" role="alert"><span class="alert-msg">{{ form.non_field_errors }}</span></div>
+{% endif %}
+
+<form method="post" action="{% url 'register' %}" novalidate>
+  {% csrf_token %}
+  {% for field in form %}
+  <div class="form-group">
+    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+    {{ field }}
+    <div id="{{ field.id_for_label }}_errors" class="field-errors" {% if field.errors %}role="alert"{% endif %}>
+      {% for message in field.errors %}<p>{{ message }}</p>{% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+  <button type="submit" class="btn-login">Create Account</button>
+</form>
+
+<div class="form-footer">
+  Already registered? <a href="{% url 'login' %}">Sign in</a>
+</div>
+{% endblock %}
+
+{% block auth_scripts %}
+<script>
+  (function () {
+    const form = document.querySelector('form');
+    const button = form.querySelector('button[type="submit"]');
+    let submitted = false;
+    form.addEventListener('submit', function (event) {
+      if (submitted) { event.preventDefault(); return; }
+      submitted = true;
+      button.disabled = true;
+      button.textContent = 'Creating account...';
+      setTimeout(function () {
+        submitted = false;
+        button.disabled = false;
+        button.textContent = 'Create Account';
+      }, 8000);
+    });
+  })();
+</script>
+{% endblock %}

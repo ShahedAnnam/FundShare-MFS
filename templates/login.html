@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FundShare — Powered by upay | Login</title>
+  <title>FundShare — Powered by upay | {% block auth_title %}Login{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
@@ -458,6 +458,15 @@
     }
     .form-footer a:hover { color: var(--green-dark); text-decoration: underline; }
 
+    .registration-panel .form-header { margin-bottom: 22px; }
+    .registration-panel .form-header h2 { letter-spacing: 0; }
+    .registration-panel .form-group { margin-bottom: 14px; }
+    .registration-panel label { letter-spacing: 0; }
+    .registration-input { padding-left: 14px; }
+    .field-errors { color: var(--error); font-size: .78rem; line-height: 1.5; margin-top: 6px; overflow-wrap: anywhere; }
+    .registration-input[aria-invalid="true"] { border-color: var(--error); }
+    .registration-panel .btn-login { letter-spacing: 0; }
+
     /* Divider */
     .divider {
       display: flex;
@@ -765,7 +774,8 @@
       <!-- ════════════════════════════
            RIGHT — LOGIN FORM
       ════════════════════════════ -->
-      <div class="right-panel">
+      <div class="right-panel {% block auth_panel_class %}{% endblock %}">
+        {% block auth_content %}
         <div class="form-header">
           <h2>Welcome back 👋</h2>
           <p>Sign in to your FundShare account</p>
@@ -805,7 +815,7 @@
 
           <!-- PIN -->
           <div class="form-group">
-            <label for="pin">PIN / Password</label>
+            <label for="pin">Password</label>
             <div class="input-wrapper">
               <span class="input-prefix">🔒</span>
               <input
@@ -813,11 +823,11 @@
                 id="pin"
                 name="password"
                 class="form-control"
-                placeholder="Enter your PIN"
+                placeholder="Enter your password"
                 autocomplete="current-password"
                 required
               />
-              <button type="button" class="pin-toggle" id="pinToggle" aria-label="Show/hide PIN" title="Toggle PIN visibility">👁️</button>
+              <button type="button" class="pin-toggle" id="pinToggle" aria-label="Show password" title="Toggle password visibility">👁️</button>
             </div>
           </div>
 
@@ -829,69 +839,19 @@
         </form>
 
         <div class="form-footer">
-          Forgot PIN? <a href="#">Reset via OTP</a>
-          &nbsp;·&nbsp;
-          <a href="#">Help</a>
+          New to FundShare? <a href="{% url 'register' %}">Create an account</a>
         </div>
-
-        <div class="divider"><span>demo accounts</span></div>
-
-        <!-- Demo Credentials -->
-        <div class="demo-panel">
-          <button type="button" class="demo-toggle" id="demoToggle" aria-expanded="false" aria-controls="demoContent">
-            <span>🔑 Demo Credentials</span>
-            <span class="toggle-icon">▾</span>
-          </button>
-
-          <div class="demo-content" id="demoContent" role="region" aria-label="Demo credentials">
-            <div class="demo-header-row">
-              <div class="dot"></div>
-              <span>Test Accounts — Click a row to auto-fill</span>
-            </div>
-            <table class="demo-table">
-              <thead>
-                <tr>
-                  <th>Role</th>
-                  <th>Username</th>
-                  <th>Password</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr data-user="shahed" data-pass="shahed123" title="Click to auto-fill">
-                  <td><span class="role-badge role-customer">👤 Customer</span></td>
-                  <td><code class="cred-code">shahed</code></td>
-                  <td><code class="cred-code">shahed123</code></td>
-                </tr>
-                <tr data-user="rahim" data-pass="rahim123" title="Click to auto-fill">
-                  <td><span class="role-badge role-family">👨‍👩‍👦 FamilyPass</span></td>
-                  <td><code class="cred-code">rahim</code></td>
-                  <td><code class="cred-code">rahim123</code></td>
-                </tr>
-                <tr data-user="agora_merchant" data-pass="agora123" title="Click to auto-fill">
-                  <td><span class="role-badge role-merchant">🏪 Merchant</span></td>
-                  <td><code class="cred-code">agora_merchant</code></td>
-                  <td><code class="cred-code">agora123</code></td>
-                </tr>
-                <tr data-user="admin" data-pass="admin123" title="Click to auto-fill">
-                  <td><span class="role-badge role-admin">🛡️ Admin</span></td>
-                  <td><code class="cred-code">admin</code></td>
-                  <td><code class="cred-code">admin123</code></td>
-                </tr>
-              </tbody>
-            </table>
-            <div class="demo-hint">⚡ Click any row to auto-fill credentials</div>
-          </div>
-        </div>
+        {% endblock %}
 
       </div><!-- /right-panel -->
     </div><!-- /login-card -->
 
     <div class="page-footer">
-      &copy; 2025 FundShare &mdash; Powered by upay &nbsp;|&nbsp;
-      Secure 256-bit encrypted connection &nbsp;🔐
+      &copy; 2026 FundShare
     </div>
   </div><!-- /page-wrapper -->
 
+  {% block auth_scripts %}
   <script>
     /* =============================================
        PIN VISIBILITY TOGGLE
@@ -904,53 +864,8 @@
         const isPassword = pinInput.type === 'password';
         pinInput.type = isPassword ? 'text' : 'password';
         pinToggle.textContent = isPassword ? '🙈' : '👁️';
-        pinToggle.setAttribute('aria-label', isPassword ? 'Hide PIN' : 'Show PIN');
+        pinToggle.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
         pinInput.focus();
-      });
-    })();
-
-    /* =============================================
-       DEMO CREDENTIALS TOGGLE
-    ============================================= */
-    (function () {
-      const btn     = document.getElementById('demoToggle');
-      const content = document.getElementById('demoContent');
-
-      btn.addEventListener('click', function () {
-        const isOpen = content.classList.toggle('open');
-        btn.classList.toggle('open', isOpen);
-        btn.setAttribute('aria-expanded', String(isOpen));
-      });
-    })();
-
-    /* =============================================
-       AUTO-FILL ON ROW CLICK
-    ============================================= */
-    (function () {
-      const rows     = document.querySelectorAll('.demo-table tbody tr[data-user]');
-      const userInput = document.getElementById('username');
-      const pinInput  = document.getElementById('pin');
-
-      rows.forEach(function (row) {
-        row.addEventListener('click', function () {
-          const user = this.getAttribute('data-user');
-          const pass = this.getAttribute('data-pass');
-
-          userInput.value = user;
-          pinInput.value  = pass;
-
-          /* brief flash to confirm */
-          [userInput, pinInput].forEach(function (el) {
-            el.style.transition = 'background .25s';
-            el.style.background = '#E6F5F0';
-            setTimeout(function () { el.style.background = ''; }, 600);
-          });
-
-          /* Close panel and focus submit */
-          document.getElementById('demoContent').classList.remove('open');
-          document.getElementById('demoToggle').classList.remove('open');
-          document.querySelector('.btn-login').focus();
-        });
       });
     })();
 
@@ -962,8 +877,8 @@
       const btn  = document.querySelector('.btn-login');
       let submitted = false;
 
-      form.addEventListener('submit', function () {
-        if (submitted) return;
+      form.addEventListener('submit', function (event) {
+        if (submitted) { event.preventDefault(); return; }
         submitted = true;
         btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:8px"><span style="border:2.5px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;width:18px;height:18px;animation:spin .7s linear infinite;display:inline-block"></span> Signing in…</span>';
         btn.disabled = true;
@@ -988,6 +903,7 @@
       document.head.appendChild(style);
     })();
   </script>
+  {% endblock %}
 
 </body>
 </html>

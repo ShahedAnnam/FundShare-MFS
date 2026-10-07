@@ -4,9 +4,10 @@ from fundshare_app.views import api_views
 urlpatterns = [
     # Auth
     path('auth/login/', api_views.LoginView.as_view(), name='api-login'),
+    path('auth/register/', api_views.RegistrationView.as_view(), name='api-register'),
     path('auth/logout/', api_views.LogoutView.as_view(), name='api-logout'),
     path('auth/me/', api_views.MeView.as_view(), name='api-me'),
-    path('auth/switch-role/', api_views.SwitchRoleView.as_view(), name='api-switch-role'),
+    path('auth/pin/', api_views.TransactionPINView.as_view(), name='api-pin'),
 
     # Wallet
     path('wallet/summary/', api_views.WalletSummaryView.as_view(), name='api-wallet-summary'),
@@ -25,7 +26,8 @@ urlpatterns = [
     # Contact Book
     path('contacts/', api_views.ContactsListView.as_view(), name='api-contacts-list'),
     path('contacts/search/', api_views.ContactSearchView.as_view(), name='api-contacts-search'),
-    path('contacts/resolve/', api_views.ContactResolveView.as_view(), name='api-contacts-resolve'),
+    path('recipients/resolve/', api_views.RecipientResolveView.as_view(), name='api-recipient-resolve'),
+    path('contacts/resolve/', api_views.RecipientResolveView.as_view(), name='api-contacts-resolve'),
     path('contacts/<int:pk>/', api_views.ContactDetailView.as_view(), name='api-contact-detail'),
 
 
@@ -38,7 +40,8 @@ urlpatterns = [
     # FamilyPass
     path('family-pass/', api_views.FamilyPassListView.as_view(), name='api-familypass-list'),   # JS uses /api/family-pass/
     path('familypass/', api_views.FamilyPassListView.as_view(), name='api-familypass-list2'),
-    path('familypass/members-list/', api_views.AvailableMembersView.as_view(), name='api-familypass-members'),
+    path('familypass/recipients/', api_views.AvailableFamilyPassRecipientsView.as_view(), name='api-familypass-recipients'),
+    path('familypass/members-list/', api_views.AvailableFamilyPassRecipientsView.as_view(), name='api-familypass-members'),
     path('family-pass/<int:pk>/', api_views.FamilyPassDetailView.as_view(), name='api-fp-detail'),
     path('familypass/<int:pk>/', api_views.FamilyPassDetailView.as_view(), name='api-familypass-detail'),
     path('family-pass/<int:pk>/edit/', api_views.FamilyPassDetailView.as_view(), name='api-fp-edit'),
