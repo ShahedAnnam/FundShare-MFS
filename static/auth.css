@@ -1,0 +1,47 @@
+* { box-sizing: border-box; margin: 0; padding: 0; letter-spacing: 0; }
+body { background: #f5f7fa; color: #172b43; font-family: 'Inter', Arial, sans-serif; font-size: 14px; min-height: 100vh; }
+button, input { font-family: inherit; }
+.lucide { width: 20px; height: 20px; stroke-width: 1.8; flex: 0 0 auto; }
+.auth-header { height: 76px; background: #ffcf00; border-bottom: 1px solid #eac500; display: flex; justify-content: space-between; align-items: center; padding: 0 32px; }
+.auth-brand { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 800; color: #172b43; text-decoration: none; }
+.auth-mark { width: 38px; height: 38px; border-radius: 8px; display: grid; place-items: center; background: #0859b7; color: white; }
+.auth-mark .lucide { width: 24px; height: 24px; }
+.auth-mark img { width: 100%; height: 100%; display: block; }
+.auth-prototype { color: #6f6020; font-size: 11px; }
+.auth-main { min-height: calc(100vh - 76px); padding: 56px 24px 28px; display: flex; align-items: center; flex-direction: column; justify-content: center; }
+.auth-panel { width: 100%; max-width: 440px; padding: 36px; background: white; border: 1px solid #e3e9ef; border-radius: 8px; }
+.registration-panel { max-width: 480px; }
+.form-header { margin-bottom: 30px; }
+.auth-emblem { display: grid; place-items: center; color: #0859b7; background: #eef5fd; width: 44px; height: 44px; border-radius: 8px; margin-bottom: 20px; }
+.auth-emblem .lucide { width: 24px; height: 24px; }
+.form-header h2 { font-size: 25px; font-weight: 750; line-height: 1.4; }
+.form-header p { color: #63758a; font-size: 13px; line-height: 1.6; margin-top: 8px; }
+.form-group { margin-bottom: 22px; }
+.form-group label { font-size: 12px; font-weight: 600; color: #51677f; display: block; margin-bottom: 9px; }
+.input-wrapper { position: relative; }
+.input-prefix { position: absolute; left: 13px; top: 14px; color: #91a1b2; display: flex; }
+.input-prefix .lucide { width: 18px; height: 18px; }
+.form-control { width: 100%; min-height: 48px; padding: 13px 42px; border: 1px solid #dce3eb; border-radius: 6px; background: white; font-size: 14px; color: #172b43; }
+.form-control::placeholder { color: #97a4b2; }
+.registration-input { padding: 13px; }
+.form-control:focus { outline: 0; border-color: #0859b7; box-shadow: 0 0 0 3px #0859b715; }
+.pin-toggle { position: absolute; right: 8px; top: 8px; display: grid; place-items: center; width: 32px; height: 32px; background: none; border: 0; color: #71869e; border-radius: 4px; cursor: pointer; }
+.pin-toggle .lucide { width: 18px; height: 18px; }
+.btn-login { width: 100%; min-height: 48px; border: 0; border-radius: 6px; background: #0859b7; color: white; font-size: 13px; font-weight: 650; display: flex; align-items: center; justify-content: center; gap: 12px; cursor: pointer; margin-top: 6px; }
+.btn-login:hover { background: #06458d; }
+.btn-login:disabled { opacity: .65; cursor: wait; }
+.btn-login .lucide { width: 17px; height: 17px; }
+.form-footer { padding-top: 24px; margin-top: 24px; border-top: 1px solid #e8edf2; text-align: center; font-size: 12px; line-height: 1.8; color: #718297; }
+.form-footer a { color: #0859b7; font-weight: 600; text-decoration: none; }
+.form-footer a:hover { text-decoration: underline; }
+.alert-error { display: flex; gap: 9px; align-items: flex-start; padding: 13px; border: 1px solid #f3cdd3; background: #fff3f4; color: #b82e40; border-radius: 6px; font-size: 12px; line-height: 1.6; margin-bottom: 24px; }
+.alert-error .lucide { margin-top: 2px; width: 16px; height: 16px; }
+.field-errors { font-size: 11px; color: #c53447; line-height: 1.5; margin-top: 6px; }
+.errorlist { list-style: none; }
+.page-footer { margin-top: 24px; color: #8898a8; display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.page-footer .lucide { width: 13px; height: 13px; }
+.auth-spinner { width: 16px; height: 16px; display: inline-block; border: 2px solid #ffffff50; border-top-color: white; border-radius: 50%; animation: spin .7s linear infinite; }
+:focus-visible { outline: 3px solid #508dd2; outline-offset: 3px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 600px) { .auth-header { height: 68px; padding: 0 20px; } .auth-brand { font-size: 20px; } .auth-mark { width: 34px; height: 34px; } .auth-prototype { font-size: 9px; } .auth-main { min-height: calc(100vh - 68px); padding: 32px 20px 24px; justify-content: flex-start; } .auth-panel { padding: 26px 22px; } .form-header h2 { font-size: 23px; } }
+@media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; } }

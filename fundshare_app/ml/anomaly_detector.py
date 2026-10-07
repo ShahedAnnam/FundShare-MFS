@@ -56,10 +56,12 @@ class AnomalyDetector:
             with open(metrics_path, 'r') as f:
                 data = json.load(f)
                 perf = data.get('model_performance', {})
+                f1_val = perf.get("f1", 0.0)
                 return {
                     "precision": perf.get("precision", 0.0),
                     "recall": perf.get("recall", 0.0),
-                    "f1": perf.get("f1", 0.0),
+                    "f1": f1_val,
+                    "f1_score": f1_val,
                     "roc_auc": perf.get("roc_auc", 0.0),
                     "pr_auc": perf.get("pr_auc", 0.0),
                     "sample_size": data.get("samples", {}).get("total", 0),
@@ -72,6 +74,7 @@ class AnomalyDetector:
             "precision": 0.0,
             "recall": 0.0,
             "f1": 0.0,
+            "f1_score": 0.0,
             "roc_auc": 0.0,
             "pr_auc": 0.0,
             "sample_size": 0,

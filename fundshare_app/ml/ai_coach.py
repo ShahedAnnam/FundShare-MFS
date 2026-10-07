@@ -7,6 +7,7 @@ Integrates:
 - Graceful offline fallback to deterministic financial analytics
 - Transaction-level explainability ("unusual != fraudulent")
 """
+import json
 import os
 import re
 from decimal import Decimal
@@ -19,6 +20,8 @@ from fundshare_app.ml.context_builder import MLContextBuilder
 from fundshare_app.ml.anomaly_detector import AnomalyDetector
 from fundshare_app.ml.budget_forecaster import BudgetForecaster
 from fundshare_app.ml.recommendation_engine import RecommendationEngine
+from fundshare_app.ml.demo_qa import DEMO_QA, find_demo_answer, demo_response
+from fundshare_app.ml.support_context import get_support_context, SUPPORT_INSTRUCTION
 
 
 class FinancialAIService:
@@ -178,8 +181,8 @@ class FinancialAIService:
         Invokes Gemini with the 19 strict grounded AI Coach guidelines.
         Returns None if Gemini key is missing, call fails, or times out.
         """
-        gemini_key = getattr(settings, 'GEMINI_API_KEY', '') or os.environ.get('GEMINI_API_KEY', '')
-        if not gemini_key or not gemini_key.strip():
+        gemini_key = getattr(settings, 'GEMINI_API_KEY', '').strip()
+        if not gemini_key:
             return None
 
         # Autonomous action defense: Intercept action requests immediately
@@ -227,26 +230,32 @@ class FinancialAIService:
                 f"Provide a concise, grounded, empathetic answer:"
             )
 
-            # Try supported Gemini models
-            for model_name in ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash']:
-                try:
-                    response = client.models.generate_content(
-                        model=model_name,
-                        contents=system_instruction + "\n\n" + user_prompt
-                    )
-                    if response and response.text:
-                        return {
-                            "question": question,
-                            "answer": response.text.strip(),
-                            "source": f"{model_name} (AI-Grounded)",
-                            "ai_powered": True,
-                            "online": True,
-                            "intent": intent,
-                            "grounded_facts": facts,
-                            "suggested_actions": cls._suggest_actions_for_intent(intent, facts)
-                        }
-                except Exception:
-                    continue
+            # Build support context and contents
+            from google import genai
+            from google.genai import types
+
+            context = get_support_context(user)
+            model_name = getattr(settings, 'GEMINI_MODEL', 'gemini-3.1-flash-lite')
+            system_instruction = SUPPORT_INSTRUCTION + f"\nReply in {'Bengali' if lang == 'bn' else 'English'}."
+            contents = json.dumps({'authorized_context': context, 'user_question': question}, default=str)
+
+            with genai.Client(api_key=gemini_key, http_options=types.HttpOptions(timeout=15000, retry_options=types.HttpRetryOptions(attempts=1))) as client:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=contents,
+                    config=types.GenerateContentConfig(system_instruction=system_instruction, max_output_tokens=1200),
+                )
+            if response and response.text and response.text.strip():
+                return {
+                    "question": question,
+                    "answer": response.text.strip(),
+                    "source": f"{model_name} (AI-Grounded)",
+                    "ai_powered": True,
+                    "online": True,
+                    "intent": intent,
+                    "grounded_facts": context,
+                    "suggested_actions": cls._suggest_actions_for_intent(intent, context),
+                }
 
         except Exception:
             pass
@@ -443,11 +452,17 @@ class FinancialAIService:
     def answer_query(cls, user, question: str, lang: str = "en") -> Dict[str, Any]:
         """
         Main query entry point:
-        1. Gathers ground-truth user financial facts
-        2. Detects intent (Action Refusal vs Anomaly vs Budget vs General)
-        3. Attempts Online Gemini Generation (with timeout)
-        4. Falls back seamlessly to Deterministic Offline Analytics if offline or on error
+        1. Checks exact predefined product demo QA first
+        2. Gathers ground-truth user financial facts
+        3. Detects intent (Action Refusal vs Anomaly vs Budget vs General)
+        4. Attempts Online Gemini Generation (with timeout)
+        5. Falls back seamlessly to Deterministic Offline Analytics if offline or on error
         """
+        # Exact predefined demo QA bypasses online LLM and ledger
+        entry = find_demo_answer(question)
+        if entry:
+            return demo_response(question, entry)
+
         facts = cls.get_user_financial_context(user)
         intent = cls.detect_intent(question)
 
@@ -461,7 +476,10 @@ class FinancialAIService:
             return online_response
 
         # Fallback to Deterministic Offline Analytics
-        return cls.deterministic_offline_analysis(user, question, intent, facts, lang)
+        fallback_res = cls.deterministic_offline_analysis(user, question, intent, facts, lang)
+        fallback_res['fallback'] = True
+        fallback_res['notice'] = 'Gemini is unavailable. Demo answers and local financial insights are still available.'
+        return fallback_res
 
 
 # Backward-compatible alias

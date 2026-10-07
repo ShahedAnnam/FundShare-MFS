@@ -1,0 +1,40 @@
+"""Public product guidance shared by the chat UI and backend."""
+import re
+
+
+DEMO_QA = [
+    {'id': 'overview', 'topic': 'Getting Started', 'question': 'What is FUNDShare?', 'answer': 'FUNDShare is a wallet prototype for everyday payments, purpose-based budgeting, and controlled sharing. Use Home for services, Account for balances and reports, FamilyPass for shared access, History for transactions, and More for settings. Prototype transactions do not provide real external settlement.'},
+    {'id': 'purpose', 'topic': 'Funds', 'question': 'What are Purpose Funds?', 'answer': 'Purpose Funds set aside wallet money for a specific category, such as groceries or education. Create a fund from Purpose Funds, choose its category, allocation, and monthly budget, then select it as a payment source at an eligible merchant. Allocation moves money out of your available wallet into the fund; it does not create extra money.'},
+    {'id': 'shared', 'topic': 'Funds', 'question': 'How do Shared Funds work?', 'answer': 'You can assign a registered customer to one of your Purpose Funds using their phone number. The fund stays under your ownership. Assigning a recipient does not give unrestricted wallet access or automatically grant payment permission; use FamilyPass to delegate controlled spending. You can edit or remove a fund recipient without changing either account role.'},
+    {'id': 'pass', 'topic': 'FamilyPass', 'question': 'What is FamilyPass?', 'aliases': ['What is Family Pass?'], 'answer': 'FamilyPass is controlled spending access between CUSTOMER accounts, not a user role or a separate wallet. The owner grants a limit, expiry date, purpose, and allowed actions/categories. The recipient can make eligible payments using that access. You can share your own access and receive another customer\'s access at the same time.'},
+    {'id': 'grant', 'topic': 'FamilyPass', 'question': 'How do I share a FamilyPass?', 'answer': 'Open FamilyPass and choose Grant Pass. Enter the recipient\'s registered phone number, set a spending limit and expiry, and choose the purpose and permissions. Saved Contacts are optional. Review the details before granting access. The owner can later edit or revoke the pass from Shared by You.'},
+    {'id': 'use-pass', 'topic': 'FamilyPass', 'question': 'How do I use a received FamilyPass?', 'answer': 'Open FamilyPass and look under Shared with You, then choose an eligible payment. You can also select an eligible FamilyPass in a supported payment-source selector. Confirm the transaction with your own PIN. Successful spending uses the owner\'s money and the pass\'s remaining limit, not your personal wallet balance.'},
+    {'id': 'restrictions', 'topic': 'FamilyPass', 'question': 'Why was my shared payment rejected?', 'answer': 'A payment may be rejected if the FamilyPass is expired, revoked, not started, exhausted, or does not allow the action or merchant category. The owner must also have enough money. Purpose Funds have their own merchant-category and balance restrictions. Read the rejection message and ask the owner to review access; restrictions cannot be bypassed through chat.'},
+    {'id': 'revoke', 'topic': 'FamilyPass', 'question': 'What happens when a FamilyPass expires or is revoked?', 'answer': 'New spending through that pass is rejected. Past transactions remain in History and pass activity. Your account remains a CUSTOMER, and your own wallet, funds, and other valid passes continue to work.'},
+    {'id': 'send', 'topic': 'Payments', 'question': 'How do I send money?', 'answer': 'Choose Send Money from Home, enter the recipient\'s registered phone number and amount, review the details, and confirm with your transaction PIN. A saved Contact or username is not required. If the phone number is not registered, the app shows: "This account is not registered yet."'},
+    {'id': 'merchant', 'topic': 'Payments', 'question': 'How do merchant payments work?', 'answer': 'Open Make Payment, choose a merchant, and enter the amount or checkout items. Select your wallet, a compatible Purpose Fund, or an eligible FamilyPass. Review the payment and verify your PIN. The backend checks balances, limits, permissions, expiry, and merchant/category restrictions before moving any money.'},
+    {'id': 'pin', 'topic': 'Security', 'question': 'Why do transactions need a PIN?', 'answer': 'Your transaction PIN confirms financial actions separately from login. Payments, Send Money, fund spending/allocation, and transfers require PIN verification. An incorrect PIN prevents execution. Set or change your PIN from More > Change PIN; never share a PIN or password in chat.'},
+    {'id': 'security', 'topic': 'Security', 'question': 'How does FUNDShare protect transactions?', 'answer': 'The prototype uses authenticated accounts, server-side ownership and permission checks, PIN confirmation, atomic accounting, and idempotent payment requests. Repeated failed login or PIN attempts trigger a one-minute lockout after the configured threshold. Chat cannot execute payments, move funds, change permissions, or disable security controls.'},
+    {'id': 'retry', 'topic': 'Payments', 'question': 'What should I do if a payment times out?', 'answer': 'A timeout may mean the response was lost, not that the payment failed. Check History. Retry the same details through the existing flow so its idempotency key can safely confirm the original request without deducting twice. Do not create a new payment with changed details until you know the original outcome.'},
+    {'id': 'budget', 'topic': 'Funds', 'question': 'How do I manage my budget?', 'answer': 'Create Purpose Funds for your main spending categories and set realistic monthly budgets. Review each fund\'s balance and risk indicators, then use Account reports for spending by category. Fund Transfer moves money between your own funds and requires PIN confirmation. Forecasts are estimates, not guaranteed outcomes.'},
+    {'id': 'insights', 'topic': 'Insights', 'question': 'What do AI insights show?', 'answer': 'Financial Insights and Account reports help explain recorded spending, budget forecasts, suggested allocations, unusual transaction alerts, and FamilyPass usage. These insights are guidance, not automatic decisions. Review the underlying records and confirm any changes yourself through the normal secured app flows.'},
+    {'id': 'history', 'topic': 'Getting Started', 'question': 'Where can I find my transaction history?', 'answer': 'Open History to filter transactions and view a receipt with the recorded amount, status, time, and payment source. Transaction Summary covers the loaded records, not a complete account statement. FamilyPass activity also helps an owner review spending made through a shared pass.'},
+    {'id': 'contacts', 'topic': 'Getting Started', 'question': 'Do I need to save a Contact first?', 'answer': 'No. Contacts are an optional address book. Send Money, fund recipient assignment, and FamilyPass sharing can use a registered phone number directly. Saving or deleting a Contact does not create, revoke, or change transaction permissions.'},
+    {'id': 'chat', 'topic': 'Insights', 'question': 'What can this AI Chat do?', 'answer': 'I can explain FUNDShare features and help you understand your authorized recent activity. Demo questions use predefined local answers. Other questions use Gemini when available, with read-only context; local financial analytics remain available if Gemini fails. I cannot execute transactions, change access, or bypass PIN checks.'},
+]
+
+
+def normalize_question(question):
+    return re.sub(r'[^\w\s]', '', question.casefold()).split()
+
+
+def find_demo_answer(question):
+    normalized = normalize_question(question)
+    for entry in DEMO_QA:
+        if any(normalized == normalize_question(candidate) for candidate in [entry['question'], *entry.get('aliases', [])]):
+            return entry
+    return None
+
+
+def demo_response(question, entry):
+    return {'question': question, 'answer': entry['answer'], 'source': 'FUNDShare Demo Guide', 'ai_powered': False, 'online': False, 'intent': 'DEMO_QA', 'suggested_actions': []}

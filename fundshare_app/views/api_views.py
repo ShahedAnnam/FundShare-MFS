@@ -1237,10 +1237,15 @@ class AICoachQueryView(APIView):
             return err
         question = request.data.get('question') or request.data.get('message') or request.data.get('query', '')
         lang = request.data.get('lang', 'en')
-        if not question or not str(question).strip():
+        if not isinstance(question, str) or not question.strip():
             return Response({"error": "Question is required."}, status=status.HTTP_400_BAD_REQUEST)
+        question = question.strip()
+        if len(question) > 2000:
+            return Response({"error": "Please keep your question within 2,000 characters."}, status=status.HTTP_400_BAD_REQUEST)
+        if lang not in ('en', 'bn'):
+            return Response({"error": "Unsupported language."}, status=status.HTTP_400_BAD_REQUEST)
 
-        response = AICoach.answer_query(user, str(question).strip(), lang)
+        response = AICoach.answer_query(user, question, lang)
         return Response(response)
 
 
@@ -1357,6 +1362,57 @@ class EvaluationMetricsView(AdminAPIView):
                 "human_control": "Zero automated transfers or budget changes. All financial actions require explicit user confirmation."
             }
         })
+
+
+class MLTransactionReportView(AdminAPIView):
+    """Paginated, read-only ledger predictions for administrator review."""
+    def get(self, request):
+        from rest_framework.pagination import PageNumberPagination
+        from django.db.models import Count, Q
+        detector = AnomalyDetector.get_instance()
+        model = detector.evaluation_metrics
+        version = model.get('model_version')
+        ledger = Transaction.objects.select_related('sender', 'receiver', 'merchant', 'purpose_fund', 'anomaly_analysis').prefetch_related('items')
+        current = Q(anomaly_analysis__model_version=version) if version else Q(pk__in=[])
+        summary = ledger.aggregate(
+            total=Count('pk'),
+            normal=Count('pk', filter=current & Q(anomaly_analysis__is_anomaly=False)),
+            anomaly=Count('pk', filter=current & Q(anomaly_analysis__is_anomaly=True))
+        )
+        summary['unscored'] = summary['total'] - summary['normal'] - summary['anomaly']
+        prediction = request.query_params.get('prediction', '')
+        if prediction not in ('', '0', '1', 'unscored'):
+            return Response({'error': 'Prediction must be 0, 1, or unscored.'}, status=400)
+        if prediction == 'unscored':
+            ledger = ledger.exclude(current)
+        elif prediction:
+            ledger = ledger.filter(current, anomaly_analysis__is_anomaly=prediction == '1')
+        transaction_type = request.query_params.get('type', '')
+        if transaction_type:
+            if transaction_type not in TransactionType.values:
+                return Response({'error': 'Invalid transaction type.'}, status=400)
+            ledger = ledger.filter(transaction_type=transaction_type)
+        search = request.query_params.get('search', '').strip()
+        if len(search) > 64:
+            return Response({'error': 'Transaction search must be 64 characters or fewer.'}, status=400)
+        if search:
+            ledger = ledger.filter(transaction_id__icontains=search)
+        pagination = PageNumberPagination()
+        pagination.page_size = 20
+        page = pagination.paginate_queryset(ledger.order_by('-timestamp', '-pk'), request)
+        rows = []
+        for txn in page:
+            analysis = getattr(txn, 'anomaly_analysis', None)
+            valid = analysis is not None
+            rows.append({
+                'transaction': TransactionSerializer(txn).data,
+                'prediction': analysis.prediction if valid else None,
+                'label': ('Anomaly' if analysis.is_anomaly else 'Normal') if valid else 'Unscored',
+                'analysis': AnomalyResultSerializer(analysis).data if valid else None
+            })
+        response = pagination.get_paginated_response(rows)
+        response.data.update(summary=summary, model=model, transaction_types=list(TransactionType.values))
+        return response
 
 
 class ExperimentRecordsView(AdminAPIView):
