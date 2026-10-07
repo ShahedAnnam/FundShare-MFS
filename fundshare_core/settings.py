@@ -38,6 +38,7 @@ if _env_file.exists():
 
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+GEMINI_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-3.1-flash-lite')
 
 
 # ============================================================
@@ -211,21 +212,15 @@ WSGI_APPLICATION = 'fundshare_core.wsgi.application'
 # DATABASE
 # ============================================================
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-        'OPTIONS': {'timeout': 20, 'transaction_mode': 'IMMEDIATE'},
-    }
-}
+import dj_database_url
 
-if os.environ.get('DATABASE_URL'):
-    import dj_database_url
-    DATABASES['default'] = dj_database_url.parse(os.environ['DATABASE_URL'], conn_max_age=60)
-elif not DEBUG:
-    raise RuntimeError('DATABASE_URL must specify PostgreSQL when DEBUG=False.')
-if not DEBUG and DATABASES['default']['ENGINE'] != 'django.db.backends.postgresql':
-    raise RuntimeError('Production requires PostgreSQL for transaction row locking.')
+database_url = os.environ.get('DATABASE_URL', '').strip()
+if not database_url:
+    raise RuntimeError('DATABASE_URL is required. Configure a PostgreSQL connection in .env.')
+DATABASES = {'default': dj_database_url.parse(database_url, conn_max_age=0 if DEBUG else 60, conn_health_checks=True)}
+if DATABASES['default']['ENGINE'] != 'django.db.backends.postgresql':
+    raise RuntimeError('FUNDShare requires PostgreSQL; SQLite is supported only as a legacy import source.')
+DATABASES['default'].setdefault('OPTIONS', {}).setdefault('connect_timeout', 10)
 
 ENABLE_DEMO_RESET = DEBUG and os.environ.get('ENABLE_DEMO_RESET', 'false').lower() == 'true'
 ENABLE_SIMULATED_CASH_IN = DEBUG and os.environ.get('ENABLE_SIMULATED_CASH_IN', 'true').lower() == 'true'

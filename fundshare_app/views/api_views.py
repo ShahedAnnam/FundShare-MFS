@@ -1233,8 +1233,13 @@ class AICoachQueryView(APIView):
             return err
         question = request.data.get('question', '')
         lang = request.data.get('lang', 'en')
-        if not question:
+        if not isinstance(question, str) or not question.strip():
             return Response({"error": "Question is required."}, status=status.HTTP_400_BAD_REQUEST)
+        question = question.strip()
+        if len(question) > 2000:
+            return Response({"error": "Please keep your question within 2,000 characters."}, status=status.HTTP_400_BAD_REQUEST)
+        if lang not in ('en', 'bn'):
+            return Response({"error": "Unsupported language."}, status=status.HTTP_400_BAD_REQUEST)
 
         response = AICoach.answer_query(user, question, lang)
         return Response(response)

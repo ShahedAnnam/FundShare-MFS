@@ -1464,77 +1464,112 @@ function closeNotifications() {
 // AI COACH
 // ============================================================
 let aiInitialized = false;
+let aiRequestPending = false;
+let demoQuestions = [];
+
+function normalizeDemoQuestion(value) {
+  return value.toLowerCase().replace(/[^\p{L}\p{N}_\s]/gu, '').trim().replace(/\s+/g, ' ');
+}
 
 function initAiChat() {
   if (aiInitialized) return;
   aiInitialized = true;
-  const badge = document.getElementById('aiInitBadge');
-  if (badge) {
-    badge.textContent = 'Ready';
-    badge.className = 'ai-source-badge ai-powered-badge';
-  }
+  demoQuestions = JSON.parse(document.getElementById('demoQACatalog').textContent);
+  const select = document.getElementById('demoQuestionTopic');
+  [...new Set(demoQuestions.map(entry => entry.topic))].forEach(topic => select.add(new Option(topic, topic)));
+  document.getElementById('demoQuestionCount').textContent = demoQuestions.length + ' questions';
+  renderDemoPrompts();
 }
 
-function sendQuickPrompt(prompt) {
-  const input = document.getElementById('chatInput');
-  if (input) input.value = prompt;
-  sendAiMessage();
+function renderDemoPrompts(topic = '') {
+  const container = document.getElementById('demoQuestionPrompts');
+  container.replaceChildren();
+  demoQuestions.filter(entry => !topic || entry.topic === topic).forEach(entry => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'demo-question-button';
+    button.innerHTML = iconMarkup('message-circle') + '<span>' + escapeHtml(entry.question) + '</span>';
+    button.addEventListener('click', () => sendQuickPrompt(entry.question));
+    container.appendChild(button);
+  });
 }
 
-async function sendAiMessage() {
-  const input = document.getElementById('chatInput');
-  const question = input?.value?.trim();
-  if (!question) return;
-  input.value = '';
+function sendQuickPrompt(prompt) { sendAiMessage(prompt); }
 
+function appendChatMessage(kind, answer, source = '', notice = '') {
   const container = document.getElementById('chatContainer');
-  // Add user message
-  container.innerHTML += `<div class="chat-msg user">
-    <div class="chat-bubble">${escapeHtml(question)}</div>
-    <div class="chat-time">${new Date().toLocaleTimeString('en-BD', {hour:'2-digit',minute:'2-digit',hour12:true})}</div>
-  </div>`;
-
-  // Add loading
-  const loadId = 'loading_' + Date.now();
-  container.innerHTML += `<div class="chat-msg ai" id="${loadId}">
-    <div class="chat-bubble">🤔 Analyzing your financial data...</div>
-  </div>`;
+  const message = document.createElement('div');
+  message.className = 'chat-msg ' + kind;
+  const formatted = escapeHtml(answer).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+  message.innerHTML = '<div class="chat-bubble">' + formatted + '</div><div class="chat-time">' +
+    new Date().toLocaleTimeString('en-BD', {hour: '2-digit', minute: '2-digit', hour12: true}) +
+    (source ? ' <span class="ai-source-badge">' + escapeHtml(source) + '</span>' : '') + '</div>';
+  if (notice) {
+    const note = document.createElement('div');
+    note.className = 'chat-notice';
+    note.textContent = notice;
+    message.appendChild(note);
+  }
+  container.appendChild(message);
   container.scrollTop = container.scrollHeight;
+  return message;
+}
 
-  const result = await apiPost('/api/ai/query/', { question, lang: 'en' });
-  document.getElementById(loadId)?.remove();
-
-  if (!result || !result.data) {
-    container.innerHTML += `<div class="chat-msg ai"><div class="chat-bubble">⚠️ Could not get AI response. Please try again.</div></div>`;
-    container.scrollTop = container.scrollHeight;
+async function sendAiMessage(questionOverride = null) {
+  initAiChat();
+  const input = document.getElementById('chatInput');
+  const question = typeof questionOverride === 'string' ? questionOverride.trim() : input.value.trim();
+  if (!question) return;
+  if (question.length > 2000) { showToast('error', 'Please keep your question within 2,000 characters.'); return; }
+  const key = normalizeDemoQuestion(question);
+  const entry = demoQuestions.find(item => [item.question, ...(item.aliases || [])].some(candidate => normalizeDemoQuestion(candidate) === key));
+  if (aiRequestPending && !entry) return;
+  if (questionOverride === null) input.value = '';
+  appendChatMessage('user', question);
+  if (entry) {
+    appendChatMessage('ai', entry.answer, 'FUNDShare Demo Guide');
     return;
   }
 
-  const resp = result.data;
-  const answer = resp.answer || resp.error || 'No response';
-  const source = resp.source || (resp.ai_powered ? 'Gemini 3.8 Flash' : 'Offline Engine');
-  const isGemini = resp.ai_powered;
-
-  const statusText = document.getElementById('aiStatusText');
-  if (statusText) {
-    statusText.textContent = isGemini ? 'Online (Gemini)' : 'Offline Engine';
-  }
-  const initBadge = document.getElementById('aiInitBadge');
-  if (initBadge) {
-    initBadge.textContent = isGemini ? 'Gemini 3.8 Flash' : 'Offline Engine';
-    initBadge.className = `ai-source-badge ${isGemini ? 'ai-powered-badge' : ''}`;
-  }
-
-  const formattedAnswer = escapeHtml(answer).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>').replace(/•/g, '<br>•');
-
-  container.innerHTML += `<div class="chat-msg ai">
-    <div class="chat-bubble">${formattedAnswer}</div>
-    <div class="chat-time">
-      ${new Date().toLocaleTimeString('en-BD', {hour:'2-digit',minute:'2-digit',hour12:true})}
-      <span class="ai-source-badge ${isGemini ? 'ai-powered-badge' : ''}">${source}</span>
-    </div>
-  </div>`;
+  aiRequestPending = true;
+  const sendButton = document.getElementById('sendBtn');
+  sendButton.disabled = true;
+  sendButton.setAttribute('aria-busy', 'true');
+  const container = document.getElementById('chatContainer');
+  const loading = document.createElement('div');
+  loading.className = 'chat-msg ai chat-loading';
+  loading.setAttribute('role', 'status');
+  loading.innerHTML = '<div class="chat-bubble"><span class="spinner"></span> Thinking...</div>';
+  container.appendChild(loading);
   container.scrollTop = container.scrollHeight;
+  try {
+    const result = await apiPost('/api/ai/query/', { question, lang: 'en' });
+    if (!result?.ok || !result.data?.answer) {
+      const message = appendChatMessage('ai', 'Unable to get a response right now. Demo questions are still available.', 'Connection Error');
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.className = 'btn-secondary chat-retry';
+      retry.innerHTML = iconMarkup('refresh-cw') + ' Try Again';
+      retry.addEventListener('click', () => { if (!aiRequestPending) { message.remove(); sendAiMessage(question); } });
+      message.appendChild(retry);
+      document.getElementById('aiStatusText').textContent = 'Demo Guide Available';
+      return;
+    }
+    const response = result.data;
+    appendChatMessage('ai', response.answer, response.source || 'Local Financial Insights', response.notice || '');
+    document.getElementById('aiStatusText').textContent = response.ai_powered ? 'Gemini 3.1 Flash-Lite' : 'Local Financial Insights';
+    const badge = document.getElementById('aiInitBadge');
+    badge.textContent = response.ai_powered ? 'Gemini' : 'Demo Guide';
+    badge.className = 'ai-source-badge';
+  } catch {
+    appendChatMessage('ai', 'Unable to get a response right now. Please try again or choose a demo question.', 'Connection Error');
+  } finally {
+    loading.remove();
+    aiRequestPending = false;
+    sendButton.disabled = false;
+    sendButton.removeAttribute('aria-busy');
+    container.scrollTop = container.scrollHeight;
+  }
 }
 
 // ============================================================

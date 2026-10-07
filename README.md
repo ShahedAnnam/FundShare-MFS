@@ -31,7 +31,7 @@
 D:\WebPython\Antigravity Projects\Hackathon\
 │
 ├── manage.py                       # Django CLI management script
-├── db.sqlite3                      # Pre-seeded SQLite database (PostgreSQL-ready schema)
+├── .local/                         # Ignored local PostgreSQL runtime, data and migration backups
 ├── fundshare_core/                 # Project core configuration
 │   ├── __init__.py
 │   ├── settings.py                 # Django settings (REST framework, CORS, Custom User)
@@ -159,6 +159,7 @@ D:\WebPython\Antigravity Projects\Hackathon\
 ### Prerequisites
 - Python 3.10+ (Tested on Python 3.13)
 - Windows PowerShell, macOS Terminal, or Linux bash
+- PostgreSQL 14+ and a `DATABASE_URL` in the ignored `.env` file. SQLite is not an application or test database.
 
 ### Step 1: Navigate to the Project Directory
 ```powershell
@@ -170,18 +171,24 @@ cd "D:\WebPython\Antigravity Projects\Hackathon"
 python -m pip install -r requirements.txt
 ```
 
-### Step 3: Apply Migrations & Seed Synthetic Data
+### Step 3: Configure PostgreSQL and Apply Migrations
+Configure `DATABASE_URL=postgresql://fundshare:YOUR_PASSWORD@127.0.0.1:5432/fundshare` in `.env`. Use a PostgreSQL database owned by the application role, not a superuser. For this workspace, local PostgreSQL is already initialized under `.local/postgresql` with random credentials in `.env` and loopback-only access. After restarting Windows, start it with:
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-postgres.ps1 Start
+```
+Use `Status` or `Stop` as the argument to inspect or stop it. This portable instance is not a Windows service and does not start automatically. Its files must stay outside version control; retain `.local/postgresql/data` when recreating the Python virtual environment. New installations can use the [official PostgreSQL Windows installer or binaries](https://www.postgresql.org/download/windows/) or an existing PostgreSQL server, then create a database and application role and configure `.env`.
+
 ```powershell
 python manage.py migrate
-python manage.py seed_fundshare
 ```
+Use the guarded legacy import described below to preserve existing data. `python manage.py seed_fundshare` remains an optional local-development action for an empty database; do not seed or reset a migrated database.
 
 ### Step 4: Run the Automated Test Suite
 ```powershell
 python manage.py test fundshare_app
 ```
 The suite includes the original business rules plus registration, authentication, PIN, idempotency, authorization, and concurrent transaction checks.
-For a faster local run, use `python manage.py test fundshare_app --settings=fundshare_core.test_settings`. This uses inexpensive fixture hashes and a temporary SQLite test file, while a dedicated test verifies the production PIN hasher. When `DATABASE_URL` specifies PostgreSQL, this test configuration retains PostgreSQL.
+For a faster local run, use `python manage.py test fundshare_app --settings=fundshare_core.test_settings`. This uses inexpensive fixture hashes, disables external AI requests, and creates a separate PostgreSQL test database; the application role needs `CREATEDB` locally for tests. The regular application role should not have `CREATEDB` in production. A dedicated test verifies the production PIN hasher.
 
 ### Step 5: Start the Development Server
 ```powershell
@@ -296,7 +303,17 @@ DEBUG=True
 - Upay agent cash-in biometric confirmation.
 ## Deployment and Financial API Contract
 
-### Wallet Interface
+### Hybrid AI Chat
+
+AI Chat keeps the existing financial-coach prompts and local ledger analytics. Its 18 demo questions are defined once in `fundshare_app/ml/demo_qa.py` and embedded as a safe JSON catalog: selecting a demo question answers immediately in the browser without a network request. Matching typed questions also use the predefined answer, including at `/api/ai/query/`.
+
+Other questions go only to the authenticated backend endpoint. Configure `GEMINI_API_KEY` in the ignored local `.env` (never in frontend code); `GEMINI_MODEL` defaults to `gemini-3.1-flash-lite`, the [official Gemini 3.1 Flash-Lite model](https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite). Restart the server after changing environment variables. No API key is included in rendered pages, chat context, or API responses. `.env.example` contains blank placeholders only.
+
+Gemini receives read-only support instructions and a limited authorized snapshot: six owned funds with forecasts and recipient-assignment flags, four issued and four received active passes with limited activity, eight relevant transactions, monthly totals, and available insight/alert types. Names, phone numbers, usernames, passwords, PINs, private references, and credentials are excluded. Recipient assignment does not expose another owner's funds or wallet. The AI has no transaction tools and cannot execute payments or change permissions. Missing keys, timeouts, blocked/empty answers, and provider errors fall back to the existing local financial analytics with a clear notice; demo questions remain available even when the chat endpoint cannot be reached. External answers are limited to 1,200 output tokens with a 15-second request timeout and one attempt.
+
+Regression tests in `fundshare_app/test_ai_chat.py` cover hybrid routing, no-call offline answers, authorization/privacy boundaries, provider failure, model configuration, and input validation. Test settings disable real Gemini requests.
+
+### Wallet Layout
 
 The interface uses the supplied Upay screenshots as a layout reference while retaining FundShare branding and its existing API contracts. Mobile navigation is Home, Account, FamilyPass, History, and More; Purpose Funds, Make Payment, Contacts, and Financial Insights remain accessible through services and account menus. Desktop adds a persistent sidebar. FamilyPass remains a first-class destination for both issued and received access.
 
@@ -306,7 +323,20 @@ Presentation styles are in `static/ui.css` and `static/auth.css`; UI helpers are
 
 UI regression coverage is in `fundshare_app/test_ui_redesign.py`, alongside the authentication, accounting, permissions, and recipient tests. Before deployment, also verify real browser flows at mobile, tablet, and desktop widths, including successful and rejected PIN-confirmed payments.
 
-For local development, configure `DEBUG=True` and a random `SECRET_KEY` in `.env` using `.env.example`, then run migrations. SQLite uses immediate transactions locally; production requires PostgreSQL for row locking. New PIN fields are intentionally empty after migration: each user sets their own PIN in Settings. Existing login passwords are preserved.
+For local development, configure `DEBUG=True`, a random `SECRET_KEY`, and PostgreSQL `DATABASE_URL` in `.env` using `.env.example`, then run migrations. Both development and production require PostgreSQL and use ordered row locks and atomic financial transactions. Existing imported passwords and PIN hashes are preserved; accounts without a PIN set one in Settings.
+
+### Legacy Data Import
+
+Stop all application writers before import. Keep the original SQLite database; the target PostgreSQL database must be empty of application data and have all migrations applied. Source SQLite must already have migration `0009_canonical_phones_and_lockouts`; upgrade an older source copy with the previous release first.
+
+```powershell
+python manage.py migrate
+python manage.py import_legacy_sqlite --source db.sqlite3
+```
+
+The command reads the source without modifying it, retains a consistent backup in `.local/backups`, preserves account IDs, password/PIN hashes, wallets, funds/recipient assignments, FamilyPass limits and activity, transactions/items, idempotency records, contacts, notifications, insights and sessions. Default Django content types and permissions are recreated by migrations; group/account permission links use natural keys. The entire import runs in one PostgreSQL transaction, enforces foreign keys and constraints, compares all serialized records before commit, and resets primary-key sequences. Any mismatch or invalid record rolls back the import; populated destinations are never merged or overwritten. Overlong SQLite values are rejected, not silently truncated. Backups contain private financial data and credential hashes: keep them private and never commit them.
+
+Migration `0010_postgresql_accounting_indexes` adds owner/recipient fund indexes, pass status/expiry indexes, history/activity indexes, and positive-amount/nonnegative-remaining constraints. Existing nonnegative wallet/fund/merchant balances, FamilyPass limits, unique phones, and unique financial-request keys remain enforced. PostgreSQL uses Django's default READ COMMITTED isolation with explicit row locking; lock order is wallet IDs, fund/pass IDs, then merchant. Repeated requests retain the same idempotency key and cannot deduct twice. See `fundshare_app/test_postgresql.py` and the concurrent financial tests in `fundshare_app/test_security.py`.
 
 For production, set `DEBUG=False`, a unique random `SECRET_KEY`, `ALLOWED_HOSTS`, `DATABASE_URL` for PostgreSQL, and `REDIS_URL` for shared login throttling. Serve behind HTTPS. Set `TRUST_PROXY_HTTPS=True` only when the trusted reverse proxy strips incoming forwarding headers and sets the correct HTTPS header. Secure session cookies, HTTPS redirect, HSTS, and CSRF protection are enabled in production.
 

@@ -408,4 +408,22 @@ button:disabled { cursor: not-allowed; }
   .bar-value { font-size: 10px; min-width: 65px; }
 }
 @media (max-width: 360px) { .avatar-name { max-width: 110px; } .header-balance { padding: 7px; } .app-body { padding-left: 12px; padding-right: 12px; } .service-button { font-size: 8px; } .prototype-tag { display: none; } .fp-stats { gap: 4px; } .fp-stat-value { font-size: 15px; } }
+.demo-question-section { margin: 18px 0 14px; border-bottom: 1px solid var(--border); padding-bottom: 14px; }
+.demo-question-section summary { cursor: pointer; font-size: 14px; font-weight: 700; color: var(--text); }
+.demo-question-section summary span { font-size: 11px; font-weight: 400; margin-left: 8px; color: var(--text-muted); }
+.demo-filter { display: flex; align-items: center; gap: 12px; margin: 12px 0; font-size: 12px; }
+.demo-filter select { width: 200px; padding: 8px 12px; font-size: 12px; }
+.demo-question-prompts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; max-height: 160px; overflow-y: auto; padding: 2px 4px 4px 2px; }
+.demo-question-button { display: flex; align-items: center; gap: 8px; padding: 10px 12px; text-align: left; border: 1px solid var(--border); border-radius: 6px; background: white; color: var(--primary); font: inherit; font-size: 12px; line-height: 1.4; min-height: 48px; cursor: pointer; }
+.demo-question-button:hover { background: #eef6ff; border-color: var(--primary); }
+.demo-question-button .lucide { width: 16px; height: 16px; flex-shrink: 0; }
+.demo-question-button span { overflow-wrap: anywhere; }
+#tab-ai .chat-container { height: 380px; min-width: 0; }
+#tab-ai .chat-bubble { overflow-wrap: anywhere; }
+.chat-loading .chat-bubble { display: flex; align-items: center; gap: 10px; }
+.chat-notice { font-size: 11px; line-height: 1.5; padding: 10px 12px; margin-top: 6px; background: #fff6d6; color: #775700; border-radius: 4px; }
+.chat-retry { align-self: flex-start; font-size: 12px; margin-top: 8px; }
+.chat-send-btn:disabled { opacity: .6; cursor: wait; }
+@media (max-width: 760px) { .demo-question-prompts { grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: 150px; } .demo-question-button { font-size: 11px; padding: 8px; } #tab-ai .chat-container { height: 300px; padding: 12px; } .ai-header-title { font-size: 20px; } }
+@media (max-width: 360px) { .demo-question-prompts { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }

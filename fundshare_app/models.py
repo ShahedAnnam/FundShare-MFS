@@ -133,6 +133,7 @@ class PurposeFund(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [models.Index(fields=['owner', 'status'], name='fund_owner_status_idx'), models.Index(fields=['recipient', 'status'], name='fund_recipient_status_idx')]
         constraints = [
             models.CheckConstraint(condition=models.Q(current_balance__gte=0), name='fund_nonnegative'),
             models.CheckConstraint(condition=models.Q(allocated_amount__gte=0), name='fund_allocation_nonnegative'),
@@ -150,6 +151,9 @@ class FundTransfer(models.Model):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     reason = models.CharField(max_length=255, blank=True, default='')
     timestamp = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [models.CheckConstraint(condition=models.Q(amount__gt=0), name='transfer_amount_positive')]
 
     def __str__(self):
         return f"Transfer ৳{self.amount}: {self.source_fund.name} -> {self.destination_fund.name} ({self.owner.username})"
@@ -211,6 +215,7 @@ class FamilyPass(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        indexes = [models.Index(fields=['owner', 'status', 'expiry_date'], name='pass_owner_status_exp_idx'), models.Index(fields=['member', 'status', 'expiry_date'], name='pass_member_status_exp_idx')]
         constraints = [
             models.CheckConstraint(condition=models.Q(used_amount__gte=0), name='pass_used_nonnegative'),
             models.CheckConstraint(condition=models.Q(limit_amount__gt=0), name='pass_limit_positive'),
@@ -356,7 +361,11 @@ class Transaction(models.Model):
             models.Index(fields=['sender', 'timestamp']),
             models.Index(fields=['transaction_type']),
             models.Index(fields=['payment_source']),
+            models.Index(fields=['receiver', '-timestamp'], name='txn_receiver_time_idx'),
+            models.Index(fields=['family_pass', '-timestamp'], name='txn_pass_time_idx'),
+            models.Index(fields=['merchant', '-timestamp'], name='txn_merchant_time_idx'),
         ]
+        constraints = [models.CheckConstraint(condition=models.Q(amount__gt=0), name='transaction_amount_positive')]
 
     def __str__(self):
         return f"{self.transaction_id} | {self.transaction_type} | ৳{self.amount} | {self.status}"
@@ -431,6 +440,8 @@ class FamilyPassTransaction(models.Model):
 
     class Meta:
         ordering = ['-timestamp']
+        indexes = [models.Index(fields=['family_pass', '-timestamp'], name='pass_activity_time_idx')]
+        constraints = [models.CheckConstraint(condition=models.Q(amount__gt=0), name='pass_activity_amount_positive'), models.CheckConstraint(condition=models.Q(remaining_limit_after__gte=0), name='pass_activity_remaining_valid')]
 
     def __str__(self):
         return f"{self.member.username} spent ৳{self.amount} via FamilyPass ({self.family_pass.id})"

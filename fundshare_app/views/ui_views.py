@@ -8,6 +8,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.utils.decorators import method_decorator
 from fundshare_app.forms import RegistrationForm
+from fundshare_app.ml.demo_qa import DEMO_QA
 from fundshare_app.services.security_service import check_login_rate, record_login_failure, clear_login_failures, check_registration_rate, SecurityError
 
 
@@ -19,6 +20,7 @@ class IndexView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        ctx['demo_qa'] = DEMO_QA
         if self.request.user.is_authenticated:
             ctx['user'] = self.request.user
             ctx['user_role'] = self.request.user.effective_role

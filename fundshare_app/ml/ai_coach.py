@@ -1,4 +1,4 @@
-import os
+import json
 import re
 import datetime
 from decimal import Decimal
@@ -7,6 +7,8 @@ from django.conf import settings
 from fundshare_app.models import PurposeFund, Transaction, FamilyPass, FamilyPassTransaction, AnomalyResult
 from fundshare_app.services.report_service import ReportService
 from fundshare_app.ml.budget_forecaster import BudgetForecaster
+from fundshare_app.ml.demo_qa import find_demo_answer, demo_response
+from fundshare_app.ml.support_context import get_support_context, SUPPORT_INSTRUCTION
 
 
 class FinancialAIService:
@@ -14,9 +16,9 @@ class FinancialAIService:
     Centralized Financial AI Service for FundShare:
     - Detects user intent (General Conversation vs Structured Financial Query)
     - Retrieves authoritative, grounded financial context from the active user's ledger
-    - Invokes Gemini Online AI (using gemini-3.8-flash / gemini-3.7-flash with strict timeout)
+    - Answers predefined product questions locally and uses Gemini 3.1 Flash-Lite for other queries
     - Falls back smoothly to authoritative Deterministic Local Analytics on network failure or offline mode
-    - Zero static mock values, zero hardcoded placeholders
+    - Product guidance is predefined; personal financial analytics never use mock balances
     """
 
     @classmethod
@@ -219,7 +221,7 @@ class FinancialAIService:
 
     @classmethod
     def generate_online_response(cls, user, question: str, intent: str, facts: dict, lang: str = 'en') -> dict:
-        gemini_key = getattr(settings, 'GEMINI_API_KEY', '') or os.environ.get('GEMINI_API_KEY', '')
+        gemini_key = getattr(settings, 'GEMINI_API_KEY', '').strip()
         if not gemini_key:
             return None
 
@@ -227,69 +229,30 @@ class FinancialAIService:
             from google import genai
             from google.genai import types
 
-            client = genai.Client(api_key=gemini_key, http_options=types.HttpOptions(timeout=15000))
-
-            if intent == "GENERAL":
-                prompt = (
-                    f"You are the AI Financial Coach for FundShare, an innovative MFS (Mobile Financial Services) platform in Bangladesh.\n"
-                    f"The user is having a general conversation or asking a general question.\n"
-                    f"Answer politely, accurately, and naturally in {'Bengali' if lang == 'bn' else 'English'}.\n"
-                    f"Do NOT invent or inject unrequested financial summaries.\n\n"
-                    f"User question: {question}"
+            context = get_support_context(user)
+            model_name = getattr(settings, 'GEMINI_MODEL', 'gemini-3.1-flash-lite')
+            system_instruction = SUPPORT_INSTRUCTION + f"\nReply in {'Bengali' if lang == 'bn' else 'English'}."
+            contents = json.dumps({'authorized_context': context, 'user_question': question}, default=str)
+            with genai.Client(api_key=gemini_key, http_options=types.HttpOptions(timeout=15000, retry_options=types.HttpRetryOptions(attempts=1))) as client:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=contents,
+                    config=types.GenerateContentConfig(system_instruction=system_instruction, max_output_tokens=1200),
                 )
-            else:
-                mr = facts['monthly_report']
-                prompt = (
-                    f"You are the AI Financial Coach for FundShare, an innovative MFS (Mobile Financial Services) platform in Bangladesh.\n"
-                    f"Answer the user's financial question strictly grounded in the authoritative financial facts provided below.\n"
-                    f"Do NOT invent any transaction amounts, balances, savings rates, or member names that are not in the facts.\n"
-                    f"All financial amounts in Bangladeshi Taka (৳).\n"
-                    f"Language: {'Bengali' if lang == 'bn' else 'English'}.\n\n"
-                    f"AUTHORITATIVE USER FINANCIAL FACTS:\n"
-                    f"- User: {facts['user_name']} ({facts['username']}, role: {facts['role']})\n"
-                    f"- Normal Wallet Balance: ৳{facts['wallet_balance']:,.2f}\n"
-                    f"- This Month's Total Income: ৳{mr['total_income']:,.2f}\n"
-                    f"- This Month's Total Spent: ৳{mr['total_spent']:,.2f}\n"
-                    f"- This Month's Net Savings: ৳{mr['net_savings']:,.2f} (Savings Rate: {mr['savings_rate']}%)\n"
-                    f"- Total Completed Transactions: {mr['total_transactions']} (Average: ৳{mr['average_transaction']:,.2f})\n"
-                    f"- Category Spending Breakdown: {mr['by_category']}\n"
-                    f"- Active Purpose Funds: {facts['purpose_funds']}\n"
-                    f"- FamilyPass Issued (for family members): {facts['family_passes_issued']}\n"
-                    f"- FamilyPass Received (from family owners): {facts['family_passes_received']}\n"
-                    f"- Recent Transactions: {facts['recent_transactions']}\n"
-                    f"- Anomaly Alerts: {facts['anomalies']}\n"
-                    f"- Market Signals Status: {facts['market_signals']}\n\n"
-                    f"User question: {question}\n\n"
-                    f"Guidelines:\n"
-                    f"- Keep response concise, empathetic, and actionable with clean bullet points and bold numbers.\n"
-                    f"- Reference actual category numbers, fund balances, or FamilyPass limits accurately.\n"
-                    f"- If the user has 0 spending or 0 income, acknowledge it truthfully without inventing mock data."
-                )
-
-            # Try latest supported models
-            for model_name in ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-flash-latest']:
-                try:
-                    response = client.models.generate_content(
-                        model=model_name,
-                        contents=prompt
-                    )
-                    if response and response.text:
-                        return {
-                            "question": question,
-                            "answer": response.text,
-                            "source": f"{model_name} (AI-Grounded)" if intent != "GENERAL" else model_name,
-                            "ai_powered": True,
-                            "online": True,
-                            "intent": intent,
-                            "grounded_facts": facts if intent != "GENERAL" else None,
-                            "suggested_actions": cls._suggest_actions_for_intent(intent, facts)
-                        }
-                except Exception:
-                    continue
-
+            if response and response.text and response.text.strip():
+                return {
+                    "question": question,
+                    "answer": response.text,
+                    "source": "Gemini 3.1 Flash-Lite",
+                    "ai_powered": True,
+                    "online": True,
+                    "intent": intent,
+                    "grounded_facts": context,
+                    "suggested_actions": cls._suggest_actions_for_intent(intent, context),
+                }
         except Exception:
+            # Never return or log provider exceptions: they can contain credentials.
             pass
-
         return None
 
     @classmethod
@@ -544,21 +507,26 @@ class FinancialAIService:
     def answer_query(cls, user, question: str, lang: str = "en") -> dict:
         """
         Main query entry point:
-        1. Gathers ground-truth user financial facts
-        2. Detects intent (General vs Specific Financial)
-        3. Attempts Online Gemini Generation (with timeout)
-        4. Falls back seamlessly to Deterministic Offline Engine if offline or on error
+        1. Matches exact predefined product questions without external calls
+        2. Detects intent and attempts bounded, authorized Gemini support
+        3. Preserves deterministic financial analytics on provider failure
         """
-        facts = cls.get_user_financial_context(user)
+        entry = find_demo_answer(question)
+        if entry:
+            return demo_response(question, entry)
         intent = cls.detect_intent(question)
 
         # Attempt Online Gemini call first
-        online_response = cls.generate_online_response(user, question, intent, facts, lang)
+        online_response = cls.generate_online_response(user, question, intent, {}, lang)
         if online_response:
             return online_response
 
         # Fallback to Deterministic Offline Analytics
-        return cls.deterministic_offline_analysis(user, question, intent, facts, lang)
+        facts = cls.get_user_financial_context(user)
+        response = cls.deterministic_offline_analysis(user, question, intent, facts, lang)
+        response['fallback'] = True
+        response['notice'] = 'Gemini is unavailable. Demo answers and local financial insights are still available.'
+        return response
 
 
 # Backward-compatible alias for existing imports

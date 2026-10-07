@@ -1,7 +1,6 @@
 import uuid
 from decimal import Decimal
 from django.db import transaction as db_transaction, connection
-from django.db.models import F
 from django.utils import timezone
 from fundshare_app.models import (
     User, Wallet, Merchant, PurposeFund, FundTransfer,
@@ -51,8 +50,6 @@ class TransactionService:
     def lock_wallets(owner_ids):
         for owner_id in sorted(set(owner_ids)):
             Wallet.objects.get_or_create(owner_id=owner_id)
-        if connection.vendor == 'sqlite':
-            Wallet.objects.filter(owner_id__in=owner_ids).update(balance=F('balance'))
         return list(Wallet.objects.select_for_update().filter(owner_id__in=owner_ids).order_by('owner_id'))
 
     @classmethod

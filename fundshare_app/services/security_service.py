@@ -5,7 +5,6 @@ import re
 from django.core.cache import cache
 from django.conf import settings
 from django.db import transaction
-from django.db.models import F
 from django.utils import timezone
 
 from fundshare_app.models import User
@@ -73,8 +72,6 @@ def check_registration_rate(request):
 def verify_pin(user, pin):
     error = None
     with transaction.atomic():
-        # The first write also serializes PIN attempts on SQLite.
-        User.objects.filter(pk=user.pk).update(pin_failed_attempts=F('pin_failed_attempts'))
         account = User.objects.select_for_update().get(pk=user.pk)
         if not account.is_active:
             error = SecurityError('Your account is inactive.', 'ACCOUNT_INACTIVE', 403)

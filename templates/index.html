@@ -1035,13 +1035,19 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
   </div>
 
   <!-- ====== AI COACH TAB ====== -->
+  {{ demo_qa|json_script:"demoQACatalog" }}
   <div class="tab-panel" id="tab-ai">
     <div class="ai-header">
-      <div class="ai-header-title"><i data-lucide="sparkles"></i> AI Financial Coach</div>
+      <div class="ai-header-title"><i data-lucide="sparkles"></i> AI Chat & Financial Coach</div>
       <div class="ai-header-sub" id="aiHeaderSource">Grounded in your wallet activity</div>
-      <div class="ai-status-badge"><span class="ai-status-dot"></span> <span id="aiStatusText">Online</span></div>
+      <div class="ai-status-badge"><span class="ai-status-dot"></span> <span id="aiStatusText">Demo Guide Ready</span></div>
     </div>
 
+    <details class="demo-question-section" open>
+      <summary>Demo Questions <span id="demoQuestionCount"></span></summary>
+      <div class="demo-filter"><label for="demoQuestionTopic">Topic</label><select id="demoQuestionTopic" class="form-select" onchange="renderDemoPrompts(this.value)"><option value="">All Topics</option></select></div>
+      <div id="demoQuestionPrompts" class="demo-question-prompts"></div>
+    </details>
     <div class="ai-quick-prompts" id="aiQuickPrompts">
       <button class="ai-prompt-chip" onclick="sendQuickPrompt('Which fund is at risk of overrun?')">⚠️ Fund risks</button>
       <button class="ai-prompt-chip" onclick="sendQuickPrompt('Recommend next month allocations')">📊 Next month</button>
@@ -1050,16 +1056,16 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
       <button class="ai-prompt-chip" onclick="sendQuickPrompt('Give me my financial health summary')">📑 Summary</button>
     </div>
 
-    <div class="chat-container" id="chatContainer">
+    <div class="chat-container" id="chatContainer" role="log" aria-label="AI Chat messages" aria-live="polite">
       <div class="chat-msg ai">
-        <div class="chat-bubble"><strong>Hello.</strong> What would you like to know about your finances?</div>
-        <div class="chat-time">Now <span class="ai-source-badge" id="aiInitBadge">Loading...</span></div>
+        <div class="chat-bubble"><strong>Hello.</strong> What would you like to know about FUNDShare or your recent activity?</div>
+        <div class="chat-time">Now <span class="ai-source-badge" id="aiInitBadge">Demo Guide</span></div>
       </div>
     </div>
 
     <div class="chat-input-row">
-      <input type="text" class="chat-input" id="chatInput" placeholder="Ask about your finances..." onkeypress="if(event.key==='Enter') sendAiMessage()">
-      <button class="chat-send-btn" onclick="sendAiMessage()" id="sendBtn">➤</button>
+      <input type="text" class="chat-input" id="chatInput" maxlength="2000" placeholder="Ask about FUNDShare..." onkeydown="if(event.key==='Enter' && !event.isComposing) sendAiMessage()">
+      <button class="chat-send-btn" onclick="sendAiMessage()" id="sendBtn" aria-label="Send Message" title="Send Message"><i data-lucide="send"></i></button>
     </div>
   </div>
 
