@@ -172,6 +172,21 @@ class AnomalyIntegrationTests(TestCase):
         self.assertEqual(response.json()['model']['test_size'], 144)
         self.assertContains(self.client.get('/'), 'id="evalSection"')
 
+    def test_iso_forest_v2_model_version_transactions_are_scored_correctly(self):
+        self.client.force_login(self.admin)
+        txn2 = Transaction.objects.create(sender=self.customer, amount=5000, category='Rent',
+                                          transaction_type='MERCHANT_PAYMENT', payment_source='NORMAL_WALLET')
+        AnomalyResult.objects.create(
+            transaction=txn2, user=self.customer, is_anomaly=True,
+            anomaly_score=0.88, model_version='iso_forest_v2.0'
+        )
+        response = self.client.get('/api/admin/ml/transactions/').json()
+        summary = response['summary']
+        self.assertGreaterEqual(summary['anomaly'], 1)
+        self.assertEqual(summary['unscored'], 0)
+        filtered = self.client.get('/api/admin/ml/transactions/?prediction=1').json()
+        self.assertTrue(any(r['transaction']['transaction_id'] == str(txn2.transaction_id) for r in filtered['results']))
+
     def test_filters_pagination_and_stale_model_are_explicit(self):
         self.client.force_login(self.admin)
         for i in range(21):

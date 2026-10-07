@@ -1381,8 +1381,9 @@ class MLTransactionReportView(AdminAPIView):
         detector = AnomalyDetector.get_instance()
         model = detector.evaluation_metrics
         version = model.get('model_version')
+        active_versions = {v for v in [version, 'iso_forest_v2.0', 'iso_forest_v2.0_causal'] if v}
         ledger = Transaction.objects.select_related('sender', 'receiver', 'merchant', 'purpose_fund', 'anomaly_analysis').prefetch_related('items')
-        current = Q(anomaly_analysis__model_version=version) if version else Q(pk__in=[])
+        current = Q(anomaly_analysis__model_version__in=active_versions)
         summary = ledger.aggregate(
             total=Count('pk'),
             normal=Count('pk', filter=current & Q(anomaly_analysis__is_anomaly=False)),
@@ -1412,7 +1413,7 @@ class MLTransactionReportView(AdminAPIView):
         rows = []
         for txn in page:
             analysis = getattr(txn, 'anomaly_analysis', None)
-            valid = analysis is not None and (analysis.model_version == version if version else True)
+            valid = analysis is not None and (analysis.model_version in active_versions)
             rows.append({
                 'transaction': TransactionSerializer(txn).data,
                 'prediction': analysis.prediction if valid else None,
