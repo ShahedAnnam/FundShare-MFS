@@ -1,0 +1,42 @@
+<div class="tab-panel" id="tab-more">
+  <div class="page-heading"><div><p class="eyebrow">YOUR WALLET, YOUR WAY</p><h1>More</h1></div></div>
+  <div class="settings-group-title">SETTINGS</div>
+  <button class="settings-item" onclick="openPINSettings()"><span class="settings-item-left"><span class="settings-item-icon yellow"><i data-lucide="lock-keyhole"></i></span><span class="settings-item-label">Change PIN</span></span><i data-lucide="chevron-right"></i></button>
+  <button class="settings-item" onclick="openContactBookModal()"><span class="settings-item-left"><span class="settings-item-icon mint"><i data-lucide="contact-round"></i></span><span class="settings-item-label">Contacts</span></span><i data-lucide="chevron-right"></i></button>
+  <button class="settings-item" onclick="openNotifications()"><span class="settings-item-left"><span class="settings-item-icon sky"><i data-lucide="bell"></i></span><span class="settings-item-label">Notifications</span></span><i data-lucide="chevron-right"></i></button>
+  <button class="settings-item customer-only" onclick="navigateTo('familypass')"><span class="settings-item-left"><span class="settings-item-icon lavender"><i data-lucide="shield-check"></i></span><span class="settings-item-label">FamilyPass Permissions</span></span><i data-lucide="chevron-right"></i></button>
+  <div class="settings-group-title wallet-user-only">ACCOUNT SERVICES</div>
+  <button class="settings-item wallet-user-only" onclick="navigateTo('funds')"><span class="settings-item-left"><span class="settings-item-icon peach"><i data-lucide="folders"></i></span><span class="settings-item-label">Purpose &amp; Shared Funds</span></span><i data-lucide="chevron-right"></i></button>
+  <button class="settings-item wallet-user-only" onclick="navigateTo('account')"><span class="settings-item-left"><span class="settings-item-icon sky"><i data-lucide="chart-pie"></i></span><span class="settings-item-label">Financial Reports</span></span><i data-lucide="chevron-right"></i></button>
+  <button class="settings-item wallet-user-only" onclick="navigateTo('ai')"><span class="settings-item-left"><span class="settings-item-icon mint"><i data-lucide="chart-no-axes-combined"></i></span><span class="settings-item-label">Financial Insights</span></span><i data-lucide="chevron-right"></i></button>
+  <div class="settings-group-title">FUTURE FEATURES</div>
+  <button class="settings-item" disabled><span class="settings-item-left"><span class="settings-item-icon muted"><i data-lucide="languages"></i></span><span class="settings-item-label">Change Language</span></span><small>Coming Soon</small></button>
+  <button class="settings-item" disabled><span class="settings-item-left"><span class="settings-item-icon muted"><i data-lucide="fingerprint"></i></span><span class="settings-item-label">Fingerprint / Face ID</span></span><small>Coming Soon</small></button>
+  <button class="settings-item" disabled><span class="settings-item-left"><span class="settings-item-icon muted"><i data-lucide="credit-card"></i></span><span class="settings-item-label">Linked Cards</span></span><small>Coming Soon</small></button>
+  <div class="settings-group-title">SESSION</div>
+  <button class="settings-item" onclick="doLogout()"><span class="settings-item-left"><span class="settings-item-icon coral"><i data-lucide="log-out"></i></span><span class="settings-item-label" style="color:var(--danger)">Log Out</span></span><i data-lucide="chevron-right"></i></button>
+  <button class="settings-item" id="adminResetSetting" hidden onclick="openModal('seedDataModal')"><span class="settings-item-left"><span class="settings-item-icon yellow"><i data-lucide="rotate-ccw"></i></span><span class="settings-item-label">Reset Demo Data</span></span><i data-lucide="chevron-right"></i></button>
+    <!-- Merchant Dashboard (shown for MERCHANT role) -->
+    <div id="merchantDashSection" style="display:none">
+      <div class="section-title">Business Dashboard</div>
+      <div class="merchant-header">
+        <div class="merchant-name" id="mDashName">Your Business</div>
+        <div class="merchant-cat" id="mDashCat">Category</div>
+        <div class="merchant-total" id="mDashTotal">৳0</div>
+        <div class="merchant-total-label">Total Received (Last 20 txns)</div>
+      </div>
+      <div class="card">
+        <div class="card-title" style="margin-bottom:12px">Recent Payments Received</div>
+        <div id="merchantTxnList"></div>
+      </div>
+    </div>
+
+    <!-- Admin/Evaluator Section -->
+    <div id="evalSection" style="display:none">
+      <div class="section-title">📊 Evaluation Dashboard</div>
+      <div class="metrics-grid" id="evalMetrics"></div>
+      <div class="card" id="evalDetailsCard"></div>
+    </div>
+
+
+</div>

@@ -16,6 +16,7 @@ const state = {
   selectedFamilyPass: null,
   contacts: [],
   pickerConfig: null,
+  historyTransactions: [],
 };
 
 function escapeHtml(value) {
@@ -88,9 +89,16 @@ async function resolveRecipientInput(inputId) {
 }
 
 async function apiGet(url) {
-  const r = await fetch(url, { credentials: 'same-origin' });
-  if (r.status === 401) { window.location.href = '/login/'; return null; }
-  return r.json();
+  try {
+    const r = await fetch(url, { credentials: 'same-origin' });
+    if (r.status === 401) { window.location.href = '/login/'; return null; }
+    const result = await r.json();
+    if (!r.ok) { showToast('error', result.error || result.detail || 'Unable to load this information.'); return null; }
+    return result;
+  } catch (_) {
+    showToast('error', 'Connection failed. Please try again.');
+    return null;
+  }
 }
 
 async function apiPost(url, data) {
@@ -98,14 +106,7 @@ async function apiPost(url, data) {
 }
 
 async function apiPatch(url, data) {
-  const r = await fetch(url, {
-    method: 'PATCH',
-    credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
-    body: JSON.stringify(data)
-  });
-  if (r.status === 401) { window.location.href = '/login/'; return null; }
-  return { ok: r.ok, status: r.status, data: await r.json() };
+  return apiMutation(url, 'PATCH', data);
 }
 
 async function apiDelete(url) {
@@ -240,17 +241,29 @@ async function doSaveTransactionPIN(event) {
 // TOAST NOTIFICATIONS
 // ============================================================
 function showToast(type, message, duration = 4000) {
-  const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+  const icons = { success: 'circle-check', error: 'circle-alert', warning: 'triangle-alert', info: 'info' };
+  message = String(message).replace(/^[\p{Extended_Pictographic}\u200d\ufe0f]+\s*/u, '');
+  const container = document.getElementById('toastContainer');
+  if ([...container.children].some(node => node.dataset.message === message)) return;
+  while (container.children.length >= 3) container.firstElementChild.remove();
   const el = document.createElement('div');
   el.className = `toast ${type}`;
+  el.dataset.message = message;
+  el.setAttribute('role', type === 'error' ? 'alert' : 'status');
   const icon = document.createElement('span');
   icon.className = 'toast-icon';
-  icon.textContent = icons[type] || 'Info';
+  icon.appendChild(iconElement(icons[type] || 'info'));
   const msg = document.createElement('span');
   msg.className = 'toast-msg';
   msg.textContent = message;
   el.append(icon, msg);
-  const container = document.getElementById('toastContainer');
+  const close = document.createElement('button');
+  close.className = 'toast-close';
+  close.setAttribute('aria-label', 'Dismiss notification');
+  close.title = 'Dismiss';
+  close.appendChild(iconElement('x'));
+  close.addEventListener('click', () => el.remove());
+  el.appendChild(close);
   container.appendChild(el);
   setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateY(-10px)'; el.style.transition = '0.3s'; setTimeout(() => el.remove(), 300); }, duration);
 }
@@ -260,19 +273,33 @@ function showToast(type, message, duration = 4000) {
 // ============================================================
 function openModal(id) {
   const el = document.getElementById(id);
-  if (el) { el.classList.add('show'); document.body.style.overflow = 'hidden'; }
+  if (el) {
+    if (!el.classList.contains('show')) modalReturnFocus.set(id, document.activeElement);
+    el.classList.add('show');
+    document.body.style.overflow = 'hidden';
+    requestAnimationFrame(() => { if (el.classList.contains('show')) el.querySelector('input:not([type="hidden"]),select,button:not(:disabled)')?.focus(); });
+  }
   // Pre-populate wallet hint for fund creation
   if (id === 'createFundModal' && state.wallet) {
     document.getElementById('fundWalletHint').textContent = `Available wallet balance: ৳${fmt(state.wallet)}`;
   }
-  if (id === 'transferFundModal') populateFundSelects();
+  if (id === 'transferFundModal') {
+    populateFundSelects();
+    loadFunds().then(populateFundSelects);
+  }
   if (id === 'fpRecipientPayModal') populateFPMerchantSelect();
   if (id === 'billModal') initBillModal();
 }
 
 function closeModal(id) {
   const el = document.getElementById(id);
-  if (el) { el.classList.remove('show'); document.body.style.overflow = ''; }
+  if (el) {
+    el.classList.remove('show');
+    document.body.style.overflow = document.querySelector('.modal-overlay.show') ? 'hidden' : '';
+    const previous = modalReturnFocus.get(id);
+    if (previous?.isConnected && previous.getClientRects().length) previous.focus();
+    modalReturnFocus.delete(id);
+  }
 }
 
 // Close on overlay click
@@ -285,27 +312,28 @@ document.addEventListener('click', e => {
 // ============================================================
 const TAB_MAP = {
   home: 'home', funds: 'funds', payments: 'payments', familypass: 'familypass',
-  ai: 'ai', more: 'more', history: 'home'
+  ai: 'ai', more: 'more', history: 'history', account: 'account'
 };
 
 function navigateTo(tab) {
-  if (tab === 'history') {
-    openTxnHistoryModal();
-    return;
-  }
   const mapped = TAB_MAP[tab] || tab;
+  if (!document.getElementById(`tab-${mapped}`)) return;
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const panel = document.getElementById(`tab-${mapped}`);
   const navBtn = document.getElementById(`nav-${mapped}`);
   if (panel) panel.classList.add('active');
   if (navBtn) navBtn.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(button => button.setAttribute('aria-current', button === navBtn ? 'page' : 'false'));
   state.currentTab = mapped;
   if (mapped === 'funds') loadFunds();
   if (mapped === 'payments') loadMerchants();
   if (mapped === 'familypass') loadFamilyPass();
   if (mapped === 'more') loadMoreTab();
+  if (mapped === 'account') loadAccount();
+  if (mapped === 'history') loadTxnHistory('');
   if (mapped === 'ai') initAiChat();
+  window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
 // ============================================================
@@ -337,8 +365,8 @@ const CATEGORY_COLORS = {
   'Transport': '#6366F1', 'Rent': '#8B5CF6', 'Shopping': '#EC4899', 'Other': '#6B7280'
 };
 const TXN_TYPE_LABELS = {
-  'CASH_IN': 'Add Money', 'SEND_MONEY': 'Send Money', 'MERCHANT_PAYMENT': 'Payment',
-  'MOBILE_RECHARGE': 'Recharge', 'BILL_PAYMENT': 'Bill Pay', 'CASH_OUT': 'Cash Out',
+  'CASH_IN': 'Add Money', 'SEND_MONEY': 'Send Money', 'MERCHANT_PAYMENT': 'Make Payment',
+  'MOBILE_RECHARGE': 'Mobile Recharge', 'BILL_PAYMENT': 'Pay Bill', 'CASH_OUT': 'Cash Out',
   'FUND_ALLOCATION': 'Fund Allocation', 'FUND_TRANSFER': 'Fund Transfer'
 };
 
@@ -347,13 +375,19 @@ const TXN_TYPE_LABELS = {
 // ============================================================
 async function initApp() {
   const meData = await apiGet('/api/auth/me/');
-  if (!meData) return;
+  if (!meData) {
+    document.getElementById('appStatus').hidden = false;
+    renderLoadError('appStatus', 'initApp()');
+    return;
+  }
+  document.getElementById('appStatus').hidden = true;
 
   state.user = meData.user;
   state.wallet = meData.wallet_balance;
   state.unreadNotifications = meData.unread_notifications || 0;
 
   renderHeader();
+  renderAccountIdentity();
   checkRoleBasedUI();
   await loadDashboard();
   loadNotifications();
@@ -389,6 +423,8 @@ function checkRoleBasedUI() {
   const ov = document.getElementById('fpOwnerView');
   const mv = document.getElementById('fpRecipientView');
   const resetControl = document.getElementById('adminResetSetting');
+  document.querySelectorAll('.customer-only').forEach(element => { element.hidden = role !== 'CUSTOMER'; });
+  document.querySelectorAll('.wallet-user-only').forEach(element => { element.hidden = role === 'MERCHANT'; });
   if (resetControl) resetControl.hidden = role !== 'ADMIN' || !state.user.can_reset_demo;
 
   if (role === 'MERCHANT') {
@@ -408,9 +444,9 @@ function checkRoleBasedUI() {
   const roleBadge = document.getElementById('profileRoleBadge');
   if (roleBadge) {
     const labels = {
-      CUSTOMER: '👤 Customer / Wallet Owner',
-      MERCHANT: '🏪 Merchant',
-      ADMIN: '🔑 Admin / Evaluator'
+      CUSTOMER: 'Customer / Wallet Owner',
+      MERCHANT: 'Merchant',
+      ADMIN: 'Admin / Evaluator'
     };
     roleBadge.textContent = labels[role] || role;
   }
@@ -421,12 +457,10 @@ function checkRoleBasedUI() {
 // ============================================================
 async function loadDashboard() {
   const data = await apiGet('/api/wallet/summary/');
-  if (!data) return;
+  if (!data) { renderLoadError('recentTxns', 'loadDashboard()'); return; }
 
   state.wallet = data.wallet_balance;
-  document.getElementById('walletBalance').textContent = fmt(data.wallet_balance);
-  document.getElementById('balanceSub').textContent =
-    `Total Wealth: ৳${fmt(data.total_liquid_wealth)} • Funds: ৳${fmt(data.funds_total_balance)}`;
+  renderWalletOverview(data);
 
   // Recent transactions
   renderRecentTxns(data.recent_transactions || []);
@@ -440,15 +474,17 @@ async function loadDashboard() {
         Used: <strong>৳${fmt(data.family_pass_total_used)}</strong> • 
         Remaining: <strong>৳${fmt(data.family_pass_total_limit - data.family_pass_total_used)}</strong>
       </div>`;
+  } else {
+    document.getElementById('fpAlertCard').style.display = 'none';
   }
 
-  // Overrun warning
-  if (data.overrun_funds_count > 0) {
-    showToast('warning', `⚠️ ${data.overrun_funds_count} fund(s) may exceed budget this month`);
-  }
+  const warning = document.getElementById('budgetWarning');
+  warning.hidden = !data.overrun_funds_count;
+  document.getElementById('budgetWarningText').textContent = `${data.overrun_funds_count} fund(s) at risk of exceeding budget`;
 }
 
 function renderTxnItemHtml(t) {
+  receiptTransactions.set(t.id, t);
   const currentUserId = state.user ? state.user.id : null;
   const isRejected = t.status === 'REJECTED';
   const isCashIn = t.transaction_type === 'CASH_IN';
@@ -458,7 +494,8 @@ function renderTxnItemHtml(t) {
   const isFpMember = isFp && currentUserId && (t.sender === currentUserId);
   const isFpOwner = isFp && currentUserId && (t.sender !== currentUserId);
 
-  let icon = CATEGORY_ICONS[t.category] || (isCredit ? '💚' : '💸');
+  const typeIcons = { SEND_MONEY: 'send', CASH_OUT: 'banknote', MOBILE_RECHARGE: 'smartphone', BILL_PAYMENT: 'receipt-text', FUND_ALLOCATION: 'folders', FUND_TRANSFER: 'arrow-right-left' };
+  let icon = iconMarkup(typeIcons[t.transaction_type] || categoryIconNames[t.category] || 'store');
   if (isRejected) icon = '🚫';
   else if (isFp) icon = '👨‍👩‍👧';
   else if (isCredit) icon = '⬆️';
@@ -500,14 +537,14 @@ function renderTxnItemHtml(t) {
     amountHtml = `<div class="txn-amount debit">-৳${fmt(t.amount)}</div>`;
   }
 
-  return `<div class="txn-item">
+  return `<button type="button" class="txn-item txn-row" onclick="openTransactionDetails(${t.id})" aria-label="View transaction details">
     <div class="txn-icon ${isRejected ? 'debit' : (isCredit ? 'credit' : (isFp ? 'purple' : 'debit'))}">${icon}</div>
     <div class="txn-info">
       <div class="txn-name">${title}</div>
       <div class="txn-meta">${escapeHtml(meta)}</div>
     </div>
     ${amountHtml}
-  </div>`;
+  </button>`;
 }
 
 function renderRecentTxns(txns) {
@@ -520,30 +557,48 @@ function renderRecentTxns(txns) {
 }
 
 let currentTxnFilter = '';
+let historyRequestVersion = 0;
 
 async function openTxnHistoryModal() {
-  openModal('txnHistoryModal');
-  await loadTxnHistory('');
+  navigateTo('history');
 }
 
 async function loadTxnHistory(filterType = '') {
+  const version = ++historyRequestVersion;
   currentTxnFilter = filterType;
   document.querySelectorAll('#txnHistoryFilters .ai-prompt-chip').forEach(btn => btn.classList.remove('active'));
   const activeId = filterType === 'MERCHANT_PAYMENT' ? 'thf-pay' :
                    filterType === 'CASH_IN' ? 'thf-cashin' :
                    filterType === 'SEND_MONEY' ? 'thf-send' :
-                   filterType === 'CASH_OUT' ? 'thf-cashout' : 'thf-all';
+                   filterType === 'CASH_OUT' ? 'thf-cashout' :
+                   filterType === 'RECEIVED_MONEY' ? 'thf-received' :
+                   filterType === 'MOBILE_RECHARGE' ? 'thf-recharge' :
+                   filterType === 'BILL_PAYMENT' ? 'thf-bill' : 'thf-all';
   const activeBtn = document.getElementById(activeId);
   if (activeBtn) activeBtn.classList.add('active');
 
   const el = document.getElementById('fullTxnList');
   if (!el) return;
-  el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);">Loading transactions...</div>';
+  renderLoading('fullTxnList', 'Loading transactions');
+  state.historyTransactions = [];
+  renderLoading('historySummary', 'Loading summary');
 
   let url = '/api/transactions/';
-  if (filterType) url += `?type=${filterType}`;
-  const data = await apiGet(url);
-  if (!data || data.length === 0) {
+  if (filterType) url += `?type=${filterType === 'RECEIVED_MONEY' ? 'SEND_MONEY' : filterType}`;
+  let data = await apiGet(url);
+  if (version !== historyRequestVersion) return;
+  el.removeAttribute('aria-busy');
+  document.getElementById('historySummary').removeAttribute('aria-busy');
+  if (!data) {
+    renderLoadError('fullTxnList', 'loadTxnHistory(currentTxnFilter)');
+    renderLoadError('historySummary', 'loadTxnHistory(currentTxnFilter)');
+    return;
+  }
+  if (filterType === 'RECEIVED_MONEY') data = data.filter(txn => txn.receiver === state.user.id && txn.sender !== state.user.id);
+  if (filterType === 'SEND_MONEY') data = data.filter(txn => txn.sender === state.user.id);
+  state.historyTransactions = data;
+  renderHistorySummary();
+  if (data.length === 0) {
     el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No transactions found</div></div>';
     return;
   }
@@ -555,14 +610,18 @@ async function refreshFinancialState() {
   if (state.currentTab === 'funds') loadFunds();
   if (state.currentTab === 'familypass') loadFamilyPass();
   if (state.currentTab === 'more') loadMoreTab();
+  if (state.currentTab === 'account') loadAccount();
+  if (state.currentTab === 'history') loadTxnHistory(currentTxnFilter);
 }
 
 // ============================================================
 // FUNDS
 // ============================================================
 async function loadFunds() {
+  if (!state.funds.length) renderLoading('fundsList', 'Loading purpose funds');
   const funds = await apiGet('/api/funds/');
-  if (!funds) return;
+  document.getElementById('fundsList').removeAttribute('aria-busy');
+  if (!funds) { renderLoadError('fundsList', 'loadFunds()'); return; }
   state.funds = Array.isArray(funds) ? funds : [];
   renderFunds();
 }
@@ -588,7 +647,7 @@ function renderFunds() {
     const spent = Math.max(0, alloc - curr);
     const pct = alloc > 0 ? Math.min(100, (spent / alloc) * 100) : 0;
     const color = CATEGORY_COLORS[f.category] || '#10B981';
-    const icon = CATEGORY_ICONS[f.category] || '💰';
+    const icon = iconMarkup(categoryIconNames[f.category] || 'folders');
     const fc = f.forecast;
     let forecastBadge = '';
     if (fc) {
@@ -641,8 +700,10 @@ let activeCategory = '';
 
 async function loadMerchants() {
   if (allMerchants.length > 0) { renderMerchants(); return; }
+  renderLoading('merchantGrid', 'Loading merchants');
   const merchants = await apiGet('/api/merchants/');
-  if (!merchants) return;
+  document.getElementById('merchantGrid').removeAttribute('aria-busy');
+  if (!merchants) { renderLoadError('merchantGrid', 'loadMerchants()'); return; }
   allMerchants = merchants;
   state.merchants = merchants;
   renderMerchants();
@@ -677,18 +738,18 @@ function renderMerchantGrid(merchants) {
     return;
   }
   el.innerHTML = merchants.map(m => {
-    const icon = CATEGORY_ICONS[m.category] || '🏪';
+    const icon = iconMarkup(categoryIconNames[m.category] || 'store');
     const color = CATEGORY_COLORS[m.category] || '#6B7280';
-    return `<div class="card" style="margin-bottom:10px;cursor:pointer;border-left:4px solid ${color};" onclick="selectMerchant(${m.id})">
+    return `<button type="button" class="card merchant-card" style="margin-bottom:10px;cursor:pointer;border-left:4px solid ${color};" onclick="selectMerchant(${m.id})">
       <div style="display:flex;align-items:center;gap:12px;">
         <div style="width:46px;height:46px;border-radius:12px;background:${color}22;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">${icon}</div>
         <div style="flex:1;min-width:0;">
           <div style="font-size:14px;font-weight:700;color:var(--text);">${escapeHtml(m.business_name)}</div>
           <div style="font-size:12px;color:var(--text-muted);">${m.category}</div>
         </div>
-        <div style="font-size:20px;">›</div>
+        <span>${iconMarkup('chevron-right')}</span>
       </div>
-    </div>`;
+    </button>`;
   }).join('');
 }
 
@@ -698,7 +759,8 @@ async function selectMerchant(id) {
   const m = state.selectedMerchant;
   document.getElementById('payMerchantSub').textContent = `Paying: ${m.business_name} (${m.category})`;
 
-  // Customers may receive new permissions while their own issued passes are cached.
+  // Refresh both sources when payment is opened directly from Home.
+  await loadFunds();
   await loadFamilyPass();
 
   buildPaymentSourceSelector(m);
@@ -1088,8 +1150,16 @@ async function loadFamilyPass() {
     state.familyPasses = { issued: [], received: [] };
     return;
   }
+  if (!state.familyPasses.issued.length) renderLoading('fpIssuedList', 'Loading shared access');
+  if (!state.familyPasses.received.length) renderLoading('fpReceivedList', 'Loading received access');
   const data = await apiGet('/api/family-pass/');
-  if (!data) return;
+  document.getElementById('fpIssuedList').removeAttribute('aria-busy');
+  document.getElementById('fpReceivedList').removeAttribute('aria-busy');
+  if (!data) {
+    renderLoadError('fpIssuedList', 'loadFamilyPass()');
+    renderLoadError('fpReceivedList', 'loadFamilyPass()');
+    return;
+  }
   state.familyPasses = { issued: data.issued_passes || [], received: data.received_passes || [] };
   renderFamilyPass();
 }
@@ -1222,9 +1292,6 @@ async function loadMoreTab() {
   } else if (role === 'ADMIN') {
     document.getElementById('evalSection').style.display = 'block';
     await loadEvalDashboard();
-    loadReport('monthly');
-  } else {
-    loadReport('monthly');
   }
 }
 
@@ -1290,9 +1357,15 @@ async function loadEvalDashboard() {
     </div>`;
 }
 
+let reportRequestVersion = 0;
 async function loadReport(period) {
+  const version = ++reportRequestVersion;
+  document.querySelectorAll('#reportPeriods button').forEach(button => button.classList.toggle('active', button.dataset.period === period));
+  renderLoading('reportContent', 'Loading financial report');
   const data = await apiGet(`/api/reports/?period=${period}`);
-  if (!data) return;
+  if (version !== reportRequestVersion) return;
+  document.getElementById('reportContent').removeAttribute('aria-busy');
+  if (!data) { renderLoadError('reportContent', `loadReport('${period}')`); return; }
   const el = document.getElementById('reportContent');
   const stats = data.overview || {};
   const byCategory = data.by_category || {};
@@ -1339,8 +1412,10 @@ async function loadReport(period) {
 // NOTIFICATIONS
 // ============================================================
 async function loadNotifications() {
+  if (!state.notifications.length) renderLoading('notifList', 'Loading notifications');
   const data = await apiGet('/api/notifications/');
-  if (!data) return;
+  document.getElementById('notifList').removeAttribute('aria-busy');
+  if (!data) { renderLoadError('notifList', 'loadNotifications()'); return; }
   state.notifications = data;
   renderNotifications();
 }
@@ -1352,30 +1427,37 @@ function renderNotifications() {
     return;
   }
   el.innerHTML = state.notifications.map(n => `
-    <div class="notif-item ${!n.is_read ? 'unread' : ''}" onclick="markNotifRead(${n.id})">
+    <button type="button" class="notif-item ${!n.is_read ? 'unread' : ''}" onclick="markNotifRead(${n.id})">
       <div class="notif-item-title">${escapeHtml(n.title)}</div>
       <div class="notif-item-msg">${escapeHtml(n.message)}</div>
       <div class="notif-item-time">${timeAgo(n.created_at)}</div>
-    </div>`).join('');
+    </button>`).join('');
 }
 
 async function markNotifRead(id) {
-  await apiPost(`/api/notifications/${id}/read/`, {});
+  const result = await apiPost(`/api/notifications/${id}/read/`, {});
+  if (!result?.ok) { showToast('error', result?.data.error || 'Unable to mark this notification as read.'); return; }
   const notif = state.notifications.find(n => n.id === id);
   if (notif) notif.is_read = true;
   renderNotifications();
 }
 
 function openNotifications() {
+  modalReturnFocus.set('notifications', document.activeElement);
   document.getElementById('notifPanel').classList.add('open');
   document.getElementById('notifOverlay').classList.add('show');
   document.getElementById('notifCount').style.display = 'none';
+  document.body.style.overflow = 'hidden';
+  document.querySelector('.notif-panel-close').focus();
   loadNotifications();
 }
 
 function closeNotifications() {
   document.getElementById('notifPanel').classList.remove('open');
   document.getElementById('notifOverlay').classList.remove('show');
+  document.body.style.overflow = document.querySelector('.modal-overlay.show') ? 'hidden' : '';
+  modalReturnFocus.get('notifications')?.focus();
+  modalReturnFocus.delete('notifications');
 }
 
 // ============================================================
@@ -1469,7 +1551,7 @@ async function doCashIn() {
     closeModal('cashInModal');
     document.getElementById('cashInAmount').value = '';
     state.wallet = r.data.new_balance;
-    document.getElementById('walletBalance').textContent = fmt(state.wallet);
+    document.getElementById('walletBalance').textContent = balanceHidden ? '••••' : fmt(state.wallet);
     refreshFinancialState();
   } else {
     showToast('error', r.data.error || 'Failed to add money');
@@ -2350,7 +2432,7 @@ async function doSeedData() {
 // PROFILE / LOGOUT
 // ============================================================
 function showProfile() {
-  navigateTo('more');
+  navigateTo('account');
 }
 
 async function doLogout() {
@@ -2373,17 +2455,19 @@ async function doLogout() {
 async function loadContacts(query = '') {
   const url = query ? `/api/contacts/search/?q=${encodeURIComponent(query)}` : '/api/contacts/';
   const data = await apiGet(url);
-  if (!data) return [];
+  if (!data) return null;
   state.contacts = Array.isArray(data) ? data : [];
   return state.contacts;
 }
 
 function openContactBookModal() {
-  loadContacts().then(() => {
+  openModal('contactBookModal');
+  renderLoading('contactBookList', 'Loading contacts');
+  loadContacts().then(data => {
+    if (!data) { renderLoadError('contactBookList', 'openContactBookModal()'); return; }
     const searchInput = document.getElementById('contactBookSearch');
     if (searchInput) searchInput.value = '';
     renderContacts();
-    openModal('contactBookModal');
   });
 }
 
@@ -2403,6 +2487,7 @@ function filterContacts(query) {
 
 function renderContacts(list = state.contacts) {
   const el = document.getElementById('contactBookList');
+  el?.removeAttribute('aria-busy');
   if (!el) return;
 
   if (!list || list.length === 0) {
@@ -2563,7 +2648,8 @@ async function openContactPicker(config) {
     closeModal(config.returnModalId);
   }
 
-  await loadContacts();
+  const contacts = await loadContacts();
+  if (!contacts) { openModal('contactPickerModal'); renderLoadError('contactPickerList', 'openContactPicker(state.pickerConfig)'); return; }
   renderPickerList();
   openModal('contactPickerModal');
 }

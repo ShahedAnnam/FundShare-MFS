@@ -1,0 +1,45 @@
+<div class="tab-panel active" id="tab-home">
+  <div class="page-heading"><div><p class="eyebrow">YOUR EVERYDAY WALLET</p><h1><span class="desktop-home-title">Home</span><span class="mobile-home-title">FundShare</span></h1></div><span class="prototype-tag"><i data-lucide="flask-conical"></i> Prototype</span></div>
+  <div id="appStatus" role="status" aria-live="polite" hidden></div>
+  <div class="home-layout">
+    <div class="home-main">
+      <section class="service-section" aria-labelledby="servicesTitle">
+        <div class="section-title" id="servicesTitle">Services</div>
+        <div class="service-grid">
+          <button class="service-button" onclick="openModal('sendMoneyModal')"><span class="service-icon sky"><i data-lucide="send"></i></span><span>Send Money</span></button>
+          <button class="service-button" onclick="openModal('rechargeModal')"><span class="service-icon coral"><i data-lucide="smartphone"></i></span><span>Mobile Recharge</span></button>
+          <button class="service-button" onclick="openModal('cashOutModal')"><span class="service-icon mint"><i data-lucide="banknote"></i></span><span>Cash Out</span></button>
+          <button class="service-button" onclick="openModal('billModal')"><span class="service-icon lavender"><i data-lucide="receipt-text"></i></span><span>Pay Bill</span></button>
+          <button class="service-button" onclick="openModal('cashInModal')"><span class="service-icon mint"><i data-lucide="wallet"></i></span><span>Add Money</span></button>
+          <button class="service-button" onclick="navigateTo('funds')"><span class="service-icon peach"><i data-lucide="folders"></i></span><span>Purpose Funds</span></button>
+          <button class="service-button" onclick="openModal('transferFundModal')"><span class="service-icon sky"><i data-lucide="arrow-right-left"></i></span><span>Fund Transfer</span></button>
+          <button class="service-button family-service customer-only" onclick="navigateTo('familypass')"><span class="service-icon yellow"><i data-lucide="users-round"></i></span><span>FamilyPass</span></button>
+          <button class="service-button" onclick="navigateTo('payments')"><span class="service-icon lavender"><i data-lucide="store"></i></span><span>Make Payment</span></button>
+          <button class="service-button" onclick="openContactBookModal()"><span class="service-icon coral"><i data-lucide="contact-round"></i></span><span>Contacts</span></button>
+          <button class="service-button" onclick="navigateTo('ai')"><span class="service-icon sky"><i data-lucide="chart-no-axes-combined"></i></span><span>Financial Insights</span></button>
+          <button class="service-button" disabled title="Request Money is a future feature"><span class="service-icon muted"><i data-lucide="hand-coins"></i></span><span>Request Money</span><small>Coming Soon</small></button>
+        </div>
+      </section>
+      <section class="family-feature customer-only" aria-labelledby="familyFeatureTitle">
+        <div class="family-feature-symbol"><i data-lucide="users-round"></i></div>
+        <div class="family-feature-copy"><span class="eyebrow">SHARED ACCESS. YOUR CONTROL.</span><h2 id="familyFeatureTitle">A little trust. A clear limit.</h2><p>FamilyPass</p></div>
+        <button class="icon-button" title="Open FamilyPass" aria-label="Open FamilyPass" onclick="navigateTo('familypass')"><i data-lucide="arrow-up-right"></i></button>
+      </section>
+      <section class="activity-section" aria-labelledby="activityTitle">
+        <div class="section-title"><span id="activityTitle">Recent Activity</span><button class="card-action" onclick="openTxnHistoryModal()">View History <i data-lucide="arrow-right"></i></button></div>
+        <div id="recentTxns"><div class="loading-state" role="status"><span class="spinner"></span> Loading activity</div></div>
+      </section>
+    </div>
+    <aside class="home-aside" aria-label="Wallet overview">
+      <section class="balance-card" id="balanceCard">
+        <div class="balance-card-top"><span class="balance-label">Available Balance</span><button class="icon-button" id="balanceVisibility" title="Hide balance" aria-label="Hide balance" aria-pressed="false" onclick="toggleBalanceVisibility()"><i data-lucide="eye"></i></button></div>
+        <div class="balance-amount"><span class="currency">৳</span><span id="walletBalance">--</span></div>
+        <div class="balance-sub" id="balanceSub">Loading your wallet</div>
+        <div class="wallet-divider"></div><div class="wallet-footer"><i data-lucide="shield-check"></i><span>PIN-protected transactions</span><span class="wallet-brand">FundShare</span></div>
+      </section>
+      <section class="overview-section" aria-labelledby="overviewTitle"><div class="section-title" id="overviewTitle">Your Overview</div><div class="overview-row"><span><i data-lucide="folders"></i> In your funds</span><strong id="overviewFunds">--</strong></div><div class="overview-row"><span><i data-lucide="wallet-cards"></i> Total wallet &amp; funds</span><strong id="overviewWealth">--</strong></div><div class="budget-warning" id="budgetWarning" hidden role="status"><i data-lucide="triangle-alert"></i><span id="budgetWarningText"></span><button title="Review purpose funds" aria-label="Review purpose funds" onclick="navigateTo('funds')"><i data-lucide="arrow-right"></i></button></div><button class="text-link" onclick="navigateTo('account')">View Account <i data-lucide="arrow-right"></i></button></section>
+      <section class="overview-section" id="fpAlertCard" style="display:none"><div class="section-title"><span>FamilyPass Activity</span><button class="card-action" onclick="navigateTo('familypass')">Manage</button></div><div id="fpAlertContent"></div></section>
+      <section class="future-section" aria-labelledby="futureTitle"><div class="section-title" id="futureTitle">On the Horizon</div><button class="future-row" disabled><span class="service-icon sky"><i data-lucide="scan-line"></i></span><span>Scan &amp; Pay<small>Coming Soon</small></span><i data-lucide="lock-keyhole"></i></button><button class="future-row" disabled><span class="service-icon peach"><i data-lucide="credit-card"></i></span><span>Prepaid Card<small>Coming Soon</small></span><i data-lucide="lock-keyhole"></i></button></section>
+    </aside>
+  </div>
+</div>

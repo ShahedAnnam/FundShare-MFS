@@ -296,6 +296,16 @@ DEBUG=True
 - Upay agent cash-in biometric confirmation.
 ## Deployment and Financial API Contract
 
+### Wallet Interface
+
+The interface uses the supplied Upay screenshots as a layout reference while retaining FundShare branding and its existing API contracts. Mobile navigation is Home, Account, FamilyPass, History, and More; Purpose Funds, Make Payment, Contacts, and Financial Insights remain accessible through services and account menus. Desktop adds a persistent sidebar. FamilyPass remains a first-class destination for both issued and received access.
+
+Account displays real wallet and fund balances plus the existing financial reports. History filters existing transactions and opens receipts from the returned ledger data. Transaction Summary covers only loaded records, excludes internal fund transfers, and separates received FamilyPass spending; it is not a full account statement. Unsupported request-money, QR scanning, cards, language switching, and biometric login are explicitly disabled rather than simulated.
+
+Presentation styles are in `static/ui.css` and `static/auth.css`; UI helpers are in `static/ui.js`. Core transaction handlers remain in `static/app.js`. Icons are self-hosted from pinned Lucide 0.468.0, with its license in `static/vendor/lucide-LICENSE`; the local brand bitmap is derived from its wallet-cards icon. This avoids a runtime icon CDN dependency, following the [Lucide vanilla JavaScript documentation](https://v0.lucide.dev/guide/packages/lucide). Keyboard-accessible dialogs, native PIN confirmation, loading/error states, optional contacts, and phone-only recipient lookup are retained.
+
+UI regression coverage is in `fundshare_app/test_ui_redesign.py`, alongside the authentication, accounting, permissions, and recipient tests. Before deployment, also verify real browser flows at mobile, tablet, and desktop widths, including successful and rejected PIN-confirmed payments.
+
 For local development, configure `DEBUG=True` and a random `SECRET_KEY` in `.env` using `.env.example`, then run migrations. SQLite uses immediate transactions locally; production requires PostgreSQL for row locking. New PIN fields are intentionally empty after migration: each user sets their own PIN in Settings. Existing login passwords are preserved.
 
 For production, set `DEBUG=False`, a unique random `SECRET_KEY`, `ALLOWED_HOSTS`, `DATABASE_URL` for PostgreSQL, and `REDIS_URL` for shared login throttling. Serve behind HTTPS. Set `TRUST_PROXY_HTTPS=True` only when the trusted reverse proxy strips incoming forwarding headers and sets the correct HTTPS header. Secure session cookies, HTTPS redirect, HSTS, and CSRF protection are enabled in production.
