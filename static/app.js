@@ -2552,6 +2552,15 @@ function showProfile() {
   navigateTo('account');
 }
 
+function confirmLogout() {
+  const modal = document.getElementById('logoutConfirmModal');
+  if (modal) {
+    openModal('logoutConfirmModal');
+  } else if (confirm('Are you sure you want to sign out? You will be signed out of your account.')) {
+    doLogout();
+  }
+}
+
 async function doLogout() {
   try {
     const csrfToken = getCsrfToken();

@@ -52,6 +52,7 @@ media/
 *.log
 *.tmp
 *.temp
+scratch/
 
 # IDE & Editor configs
 .vscode/

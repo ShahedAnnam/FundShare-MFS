@@ -8,10 +8,13 @@ Integrates:
 - Transaction-level explainability ("unusual != fraudulent")
 """
 import json
+import logging
 import os
 import re
 from decimal import Decimal
 from typing import Dict, Any, Optional
+
+logger = logging.getLogger(__name__)
 
 from django.conf import settings
 from django.utils import timezone
@@ -197,7 +200,7 @@ class FinancialAIService:
             from google.genai import types
 
             context = get_support_context(user)
-            model_name = getattr(settings, 'GEMINI_MODEL', 'gemini-3.1-flash-lite')
+            model_name = getattr(settings, 'GEMINI_MODEL', 'gemini-3.5-flash-lite')
             system_instruction = SUPPORT_INSTRUCTION + f"\nReply in {'Bengali' if lang == 'bn' else 'English'}."
             contents = json.dumps({'authorized_context': context, 'user_question': question}, default=str)
 
@@ -219,8 +222,11 @@ class FinancialAIService:
                     "suggested_actions": cls._suggest_actions_for_intent(intent, context),
                 }
 
-        except Exception:
-            pass
+        except Exception as e:
+            msg = str(e)
+            if gemini_key and gemini_key in msg:
+                msg = msg.replace(gemini_key, "[REDACTED_API_KEY]")
+            logger.warning("Gemini generation failed (%s: %s); falling back to deterministic financial engine.", type(e).__name__, msg)
 
         return None
 
