@@ -13,6 +13,13 @@ import pandas as pd
 from django.conf import settings
 from django.utils import timezone
 
+import warnings
+
+try:
+    from sklearn.exceptions import InconsistentVersionWarning
+except ImportError:
+    InconsistentVersionWarning = UserWarning
+
 from fundshare_app.models import PurposeFund, Transaction, BudgetForecast, RiskLevel, AIInsight, InsightType
 
 FORECASTING_ARTIFACTS_DIR = os.path.join(settings.BASE_DIR, 'ml_artifacts', 'forecasting')
@@ -30,14 +37,28 @@ class BudgetForecaster:
             model_path = os.path.join(FORECASTING_ARTIFACTS_DIR, 'model.joblib')
             if os.path.exists(model_path):
                 try:
-                    cls._model = joblib.load(model_path)
+                    import sys
+                    if '_loss' not in sys.modules:
+                        try:
+                            import sklearn._loss._loss
+                            sys.modules['_loss'] = sklearn._loss._loss
+                        except Exception:
+                            pass
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", category=InconsistentVersionWarning)
+                        cls._model = joblib.load(model_path)
                 except Exception:
                     cls._model = None
             if cls._model is None:
                 from fundshare_app.ml.experiment_runner import run_forecasting_experiment
-                run_forecasting_experiment()
-                if os.path.exists(model_path):
-                    cls._model = joblib.load(model_path)
+                try:
+                    run_forecasting_experiment()
+                    if os.path.exists(model_path):
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("ignore", category=InconsistentVersionWarning)
+                            cls._model = joblib.load(model_path)
+                except Exception:
+                    pass
         return cls._model
 
     @classmethod

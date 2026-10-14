@@ -1,0 +1,25 @@
+# FundShare-MFS Trust & Risk Policy Configuration
+# Externalized policy thresholds and rules - modifiable on-site without ML redeployment.
+
+version: "1.0"
+
+bands:
+  allow_threshold: 0.35           # risk score < 0.35 -> action ALLOW
+  step_up_threshold: 0.70         # 0.35 <= risk score < 0.70 -> action STEP_UP_PIN
+                                  # risk score >= 0.70 -> action FLAG_FOR_REVIEW (auto-hold)
+
+actions:
+  low: ALLOW
+  medium: STEP_UP_PIN
+  high: FLAG_FOR_REVIEW
+
+risk_tiers:
+  low: LOW
+  medium: MEDIUM
+  high: HIGH
+
+velocity_rules:
+  max_txns_per_hour: 5            # Hard rule: > 5 txns in 1 hour triggers escalation
+  amount_spike_ratio: 3.5         # Hard rule: amount > 3.5x user or category baseline triggers escalation
+  off_peak_hours: [1, 2, 3, 4]    # High-risk night hours (01:00 - 04:00)
+  zscore_threshold: 3.5           # Statistical deviation threshold (> 3.5 sigma)

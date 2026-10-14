@@ -17,7 +17,14 @@ from sklearn.ensemble import IsolationForest
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix
 
-from fundshare_app.models import Transaction, AnomalyResult
+import warnings
+
+try:
+    from sklearn.exceptions import InconsistentVersionWarning
+except ImportError:
+    InconsistentVersionWarning = UserWarning
+
+from fundshare_app.models import Transaction, AnomalyResult, FraudIncident
 
 logger = logging.getLogger(__name__)
 ARTIFACT = Path(settings.BASE_DIR) / 'model' / 'artifacts' / 'anomaly.joblib'
@@ -123,7 +130,9 @@ class AnomalyDetector:
         self.artifact_path = Path(artifact_path) if artifact_path else BENCHMARK_ARTIFACT
         if self.artifact_path.exists():
             try:
-                bundle = joblib.load(self.artifact_path)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=InconsistentVersionWarning)
+                    bundle = joblib.load(self.artifact_path)
                 if bundle.get('metadata', {}).get('sklearn_version') == sklearn.__version__ and bundle.get('metadata', {}).get('input_fields') == list(INPUT_FIELDS):
                     self.bundle = bundle
             except Exception:
@@ -132,8 +141,10 @@ class AnomalyDetector:
     def _load_prod_artifacts(self):
         if PROD_MODEL_PATH.exists() and PROD_PIPELINE_PATH.exists():
             try:
-                self.prod_model = joblib.load(PROD_MODEL_PATH)
-                self.prod_pipeline = joblib.load(PROD_PIPELINE_PATH)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=InconsistentVersionWarning)
+                    self.prod_model = joblib.load(PROD_MODEL_PATH)
+                    self.prod_pipeline = joblib.load(PROD_PIPELINE_PATH)
                 self.prod_is_fitted = True
             except Exception as e:
                 logger.exception("Could not load production anomaly artifacts")
@@ -276,10 +287,60 @@ class AnomalyDetector:
         self._load_prod_artifacts()
         return self.evaluation_metrics
 
+    def _compute_top_contributions(self, amt, cat, hour, u_mean, u_ratio, u_zscore, c_mean, c_ratio, c_zscore, txns_1h):
+        """Computes top-3 contributing anomaly features based on normalized deviation metrics."""
+        candidates = [
+            {
+                'feature': 'user_ratio',
+                'deviation': max(0.0, u_ratio - 1.0),
+                'description': f"Amount is {u_ratio:.1f}× higher than user historical average (৳{u_mean:,.2f})"
+            },
+            {
+                'feature': 'category_ratio',
+                'deviation': max(0.0, c_ratio - 1.0),
+                'description': f"Amount is {c_ratio:.1f}× higher than typical {cat} average (৳{c_mean:,.2f})"
+            },
+            {
+                'feature': 'user_zscore',
+                'deviation': max(0.0, u_zscore - 1.0),
+                'description': f"Spending deviates by {u_zscore:.1f}σ from user historical norm"
+            },
+            {
+                'feature': 'category_zscore',
+                'deviation': max(0.0, c_zscore - 1.0),
+                'description': f"Spending deviates by {c_zscore:.1f}σ from {cat} benchmark"
+            },
+            {
+                'feature': 'off_peak_hour',
+                'deviation': 2.5 if hour in [1, 2, 3, 4] else 0.0,
+                'description': f"Transaction initiated during off-peak night hours ({hour:02d}:00)"
+            },
+            {
+                'feature': 'velocity_1h',
+                'deviation': float(max(0, txns_1h - 1)) * 0.8,
+                'description': f"High transaction velocity: {txns_1h} transactions in the past hour"
+            },
+            {
+                'feature': 'amount_magnitude',
+                'deviation': max(0.0, (amt - self.prod_pipeline.global_mean) / max(1.0, self.prod_pipeline.global_std)),
+                'description': f"High transaction amount (৳{amt:,.2f}) vs global average (৳{self.prod_pipeline.global_mean:,.2f})"
+            }
+        ]
+        candidates.sort(key=lambda x: x['deviation'], reverse=True)
+        return [
+            {
+                'feature': c['feature'],
+                'contribution_score': round(float(c['deviation']), 3),
+                'description': c['description']
+            }
+            for c in candidates[:3]
+        ]
+
     def analyze_transaction(self, txn):
         """
         Scores transaction using the authoritative production IsolationForest model
-        and AnomalyFeaturePipeline (iso_forest_v2.0).
+        and AnomalyFeaturePipeline (iso_forest_v2.0), extracts top-3 contributing
+        feature attributions, and wires results through RiskPolicyEngine.
         """
         if self.load_error:
             raise RuntimeError(self.load_error)
@@ -331,8 +392,105 @@ class AnomalyDetector:
         c_ratio = amt / c_mean if c_mean > 0 else 1.0
         c_zscore = abs(amt - c_mean) / c_std
 
+        # 4. Hourly transaction velocity
+        txns_1h = 1
+        try:
+            if getattr(txn, 'pk', None) and hasattr(txn, 'timestamp') and txn.timestamp:
+                one_hr_prior = txn.timestamp - timezone.timedelta(hours=1)
+                txns_1h = Transaction.objects.filter(
+                    sender_id=sender_id,
+                    timestamp__gte=one_hr_prior,
+                    timestamp__lte=txn.timestamp
+                ).count()
+        except Exception:
+            txns_1h = 1
+
+        # 5. Top-3 contributing anomaly features attribution
+        top_contributions = self._compute_top_contributions(
+            amt=amt, cat=cat, hour=hour,
+            u_mean=u_mean, u_ratio=u_ratio, u_zscore=u_zscore,
+            c_mean=c_mean, c_ratio=c_ratio, c_zscore=c_zscore,
+            txns_1h=txns_1h
+        )
+
+        # 6. NetworkX 2-Hop Mule Ring Graph Analysis
+        from fundshare_app.ml.graph import TransactionGraphEngine
+        graph_engine = TransactionGraphEngine.get_instance()
+
+        sender_user = getattr(txn, 'sender', None) or sender_id
+        receiver_user = getattr(txn, 'receiver', None) or getattr(txn, 'receiver_id', None)
+
+        sender_graph = graph_engine.analyze_account_risk(sender_user, current_amount=float(amt))
+        receiver_graph = None
+        if receiver_user:
+            receiver_graph = graph_engine.analyze_account_risk(receiver_user, current_amount=None)
+
+        mule_boost = max(
+            sender_graph.get('mule_boost', 0.0),
+            receiver_graph.get('mule_boost', 0.0) if receiver_graph else 0.0
+        )
+        is_mule_suspect = (
+            sender_graph.get('is_mule_suspect', False) or
+            (receiver_graph.get('is_mule_suspect', False) if receiver_graph else False)
+        )
+
+        graph_reasons = []
+        for r in sender_graph.get('reasons', []):
+            if r not in graph_reasons:
+                graph_reasons.append(r)
+        if receiver_graph:
+            for r in receiver_graph.get('reasons', []):
+                if r not in graph_reasons:
+                    graph_reasons.append(r)
+
+        graph_result = {
+            'is_mule_suspect': is_mule_suspect,
+            'mule_boost': mule_boost,
+            'reasons': graph_reasons,
+            'graph_metrics': {
+                'sender': sender_graph.get('graph_metrics'),
+                'receiver': receiver_graph.get('graph_metrics') if receiver_graph else None
+            }
+        }
+
+        # Combine the graph score boost with the raw ML anomaly score
+        final_risk_score = min(1.0, ml_score + graph_result['mule_boost'])
+
+        # Merge the graph reasons into top_contributions
+        if is_mule_suspect and mule_boost > 0:
+            top_contributions.insert(0, {
+                "feature": "networkx_mule_ring",
+                "contribution": round(mule_boost, 4),
+                "description": "; ".join(graph_reasons) or "NetworkX 2-hop mule ring detection"
+            })
+            top_contributions = top_contributions[:3]
+
+        # 7. Policy evaluation through RiskPolicyEngine
+        from fundshare_app.ml.policy import RiskPolicyEngine
+        policy_eval = RiskPolicyEngine.get_instance().evaluate(
+            risk_score=final_risk_score,
+            features={
+                'user_ratio': u_ratio,
+                'category_ratio': c_ratio,
+                'user_zscore': u_zscore,
+                'category_zscore': c_zscore,
+                'txns_per_hour': txns_1h,
+                'hour': hour,
+                'amount': amt,
+                'top_contributions': top_contributions,
+                'is_mule_suspect': is_mule_suspect,
+                'graph_reasons': graph_reasons
+            }
+        )
+
         reasons = []
         rules_triggered = []
+
+        if is_mule_suspect and graph_reasons:
+            rules_triggered.append("GRAPH_MULE_RING")
+            for gr in graph_reasons:
+                if gr not in reasons:
+                    reasons.append(gr)
 
         if u_ratio >= 2.5 or c_ratio >= 2.5:
             surge_ratio = max(u_ratio, c_ratio)
@@ -351,18 +509,30 @@ class AnomalyDetector:
         if is_ml_anomaly:
             reasons.append(f"Isolation Forest flagged spending pattern as anomalous (score: {ml_score:.2f}, threshold: {self.prod_model.threshold:.2f}).")
 
+        for hr in policy_eval.get('hard_rules_triggered', []):
+            if hr not in rules_triggered:
+                rules_triggered.append(hr)
+
         if not reasons:
             reasons.append(f"Spending aligns with normal historical baseline for {cat}.")
 
         explanation = "\n".join([f"• {r}" for r in reasons])
-        operational_anomaly = is_ml_anomaly or len(rules_triggered) > 0
+        operational_anomaly = is_ml_anomaly or len(rules_triggered) > 0 or (policy_eval['action'] in ['STEP_UP_PIN', 'FLAG_FOR_REVIEW'])
 
         return {
             "is_anomaly": operational_anomaly,
             "ml_is_anomaly": is_ml_anomaly,
-            "anomaly_score": round(ml_score, 4),
+            "anomaly_score": round(final_risk_score, 4),
+            "raw_ml_score": round(ml_score, 4),
+            "graph_result": graph_result,
+            "is_mule_suspect": is_mule_suspect,
+            "mule_boost": mule_boost,
             "reason": explanation,
             "rules_flagged": rules_triggered,
+            "risk_action": policy_eval['action'],
+            "risk_tier": policy_eval['risk_tier'],
+            "top_contributions": top_contributions,
+            "policy_evaluation": policy_eval,
             "features_summary": {
                 "amount": amt,
                 "category": cat,
@@ -373,7 +543,14 @@ class AnomalyDetector:
                 "category_ratio": round(c_ratio, 2),
                 "category_zscore": round(c_zscore, 2),
                 "hour": hour,
-                "in_training_domain": in_domain
+                "in_training_domain": in_domain,
+                "txns_per_hour": txns_1h,
+                "risk_action": policy_eval['action'],
+                "risk_tier": policy_eval['risk_tier'],
+                "top_contributions": top_contributions,
+                "is_mule_suspect": is_mule_suspect,
+                "mule_boost": mule_boost,
+                "graph_reasons": graph_reasons
             },
             "model_version": self.model_version
         }
@@ -382,7 +559,9 @@ class AnomalyDetector:
         """Evaluates transaction with the 480-row offline benchmark model."""
         if not self.bundle:
             self.train()
-            self.bundle = joblib.load(self.artifact_path)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=InconsistentVersionWarning)
+                self.bundle = joblib.load(self.artifact_path)
         inputs = transaction_features(txn)
         vector = self.bundle['vectorizer'].transform(feature_records([inputs]))
         model = self.bundle['model']
@@ -411,7 +590,7 @@ class AnomalyDetector:
             if not force and version and AnomalyResult.objects.filter(transaction=txn, model_version=version).exists():
                 return True
             analysis = detector.analyze_transaction(txn)
-            AnomalyResult.objects.update_or_create(
+            anomaly_result, _ = AnomalyResult.objects.update_or_create(
                 transaction=txn,
                 defaults={
                     'user_id': txn.sender_id,
@@ -421,6 +600,11 @@ class AnomalyDetector:
                     'features_summary': analysis['features_summary'],
                     'model_version': analysis['model_version']
                 }
+            )
+            FraudIncident.auto_create_from_evaluation(
+                transaction=txn,
+                anomaly_result=anomaly_result,
+                analysis=analysis
             )
             return True
         except Transaction.DoesNotExist:

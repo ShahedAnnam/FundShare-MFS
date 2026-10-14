@@ -13,8 +13,20 @@
   <button class="settings-item" disabled><span class="settings-item-left"><span class="settings-item-icon muted"><i data-lucide="languages"></i></span><span class="settings-item-label">Change Language</span></span><small>Coming Soon</small></button>
   <button class="settings-item" disabled><span class="settings-item-left"><span class="settings-item-icon muted"><i data-lucide="fingerprint"></i></span><span class="settings-item-label">Fingerprint / Face ID</span></span><small>Coming Soon</small></button>
   <button class="settings-item" disabled><span class="settings-item-left"><span class="settings-item-icon muted"><i data-lucide="credit-card"></i></span><span class="settings-item-label">Linked Cards</span></span><small>Coming Soon</small></button>
-  {% if user_role == 'ADMIN' %}
-  <div class="settings-group-title">ADMINISTRATIVE</div>
+  {% if user_role == 'ADMIN' or user.is_staff or user.is_superuser %}
+  <div class="settings-group-title">ADMINISTRATIVE &amp; RISK SURVEILLANCE</div>
+  <a href="{% url 'risk_console' %}" class="settings-item" style="text-decoration:none;">
+    <span class="settings-item-left">
+      <span class="settings-item-icon danger" style="background:#FEF2F2;color:#EF4444;"><i data-lucide="shield-alert"></i></span>
+      <span class="settings-item-label" style="font-weight:600;color:var(--text);">Trust &amp; Risk Console</span>
+    </span>
+    <span style="display:flex;align-items:center;gap:6px;">
+      {% if pending_incident_count %}
+      <span style="background:#EF4444;color:#fff;border-radius:10px;padding:2px 8px;font-size:11px;font-weight:700;">{{ pending_incident_count }} pending</span>
+      {% endif %}
+      <i data-lucide="chevron-right"></i>
+    </span>
+  </a>
   <button class="settings-item" onclick="openMLReport()"><span class="settings-item-left"><span class="settings-item-icon sky"><i data-lucide="scan-line"></i></span><span class="settings-item-label">AI / ML Transaction Report</span></span><i data-lucide="chevron-right"></i></button>
   {% endif %}
   <button class="settings-item" id="adminResetSetting" hidden onclick="openModal('seedDataModal')"><span class="settings-item-left"><span class="settings-item-icon yellow"><i data-lucide="rotate-ccw"></i></span><span class="settings-item-label">Reset Demo Data</span></span><i data-lucide="chevron-right"></i></button>

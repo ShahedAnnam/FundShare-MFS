@@ -5,7 +5,8 @@ from django.db import transaction
 from .models import (
     User, Wallet, Merchant, PurposeFund, FundTransfer, FamilyPass,
     Transaction, TransactionItem, FamilyPassTransaction, Notification, FinancialGoal,
-    AnomalyResult, BudgetForecast, AIInsight, ExperimentRecord, Contact
+    AnomalyResult, BudgetForecast, AIInsight, ExperimentRecord, Contact,
+    FraudIncident
 )
 
 
@@ -90,8 +91,8 @@ class CustomUserAdmin(UserAdmin):
 
 @admin.register(Wallet)
 class WalletAdmin(FinancialReadOnlyAdmin):
-    list_display = ('id', 'owner', 'balance', 'created_at', 'updated_at')
-    list_filter = ('created_at', 'updated_at')
+    list_display = ('id', 'owner', 'balance', 'is_frozen', 'created_at', 'updated_at')
+    list_filter = ('is_frozen', 'created_at', 'updated_at')
     search_fields = ('owner__username', 'owner__full_name', 'owner__phone', 'owner__email')
     readonly_fields = ('created_at', 'updated_at')
     raw_id_fields = ('owner',)
@@ -323,3 +324,41 @@ class ContactAdmin(admin.ModelAdmin):
     @admin.display(boolean=True, description='Registered Account')
     def is_registered_display(self, obj):
         return obj.is_registered
+
+
+@admin.register(FraudIncident)
+class FraudIncidentAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'transaction', 'risk_tier', 'policy_action',
+        'risk_score', 'status', 'created_at', 'reviewed_by'
+    )
+    list_filter = ('status', 'risk_tier', 'policy_action', 'created_at')
+    search_fields = ('transaction__id', 'reviewer_notes')
+    actions = ['mark_as_confirmed_fraud', 'mark_as_false_positive']
+    readonly_fields = ('created_at', 'updated_at', 'resolved_at')
+    raw_id_fields = ('transaction', 'anomaly_result', 'reviewed_by')
+    ordering = ('-created_at',)
+
+    @admin.action(description="Mark selected incidents as Confirmed Fraud / Blocked")
+    def mark_as_confirmed_fraud(self, request, queryset):
+        count = 0
+        for incident in queryset:
+            incident.resolve(
+                status='CONFIRMED_FRAUD',
+                reviewer=request.user,
+                notes=f"Marked as confirmed fraud by admin {request.user.username}"
+            )
+            count += 1
+        self.message_user(request, f"{count} incident(s) marked as confirmed fraud.")
+
+    @admin.action(description="Mark selected incidents as Approved / False Positive")
+    def mark_as_false_positive(self, request, queryset):
+        count = 0
+        for incident in queryset:
+            incident.resolve(
+                status='APPROVED',
+                reviewer=request.user,
+                notes=f"Marked as false positive by admin {request.user.username}"
+            )
+            count += 1
+        self.message_user(request, f"{count} incident(s) marked as false positive.")

@@ -20,6 +20,218 @@
           <button class="service-button" disabled title="Request Money is a future feature"><span class="service-icon muted"><i data-lucide="hand-coins"></i></span><span>Request Money</span><small>Coming Soon</small></button>
         </div>
       </section>
+
+      {% if request.user.is_staff or request.user.is_superuser or user.is_staff or user.is_superuser %}
+      <!-- TRUST & RISK INTELLIGENCE SURVEILLANCE EMBED -->
+      <section class="card risk-surveillance-card" id="riskSurveillanceSection" style="margin-bottom:18px;border-left:4px solid #EF4444;background:linear-gradient(180deg,#FFFFFF 0%,#FFF8F8 100%);box-shadow:0 4px 16px rgba(239,68,68,0.08);">
+        <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+          <div style="font-size:15px;font-weight:800;color:#1A1A2E;display:flex;align-items:center;gap:8px;">
+            <span style="font-size:18px;">🛡️</span>
+            <span>Trust &amp; Risk Surveillance</span>
+            <span class="badge-tier CRITICAL" id="dashRiskPendingPill" style="background:#FEF2F2;color:#DC2626;font-size:11px;font-weight:800;padding:2px 8px;border-radius:12px;border:1px solid #FECACA;">
+              {{ risk_kpis.pending_count|default:0 }} Pending
+            </span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <a href="{% url 'risk_console' %}" class="card-action" style="font-size:12px;font-weight:700;color:#DC2626;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">
+              <span>Open Console</span>
+              <i data-lucide="external-link" style="width:14px;height:14px;"></i>
+            </a>
+          </div>
+        </div>
+
+        <!-- Compact KPI Badges -->
+        <div class="dash-risk-kpi-bar" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(110px, 1fr));gap:8px;margin-bottom:14px;">
+          <div style="background:#FFF;border:1px solid #FECACA;border-radius:10px;padding:8px 10px;text-align:center;">
+            <div style="font-size:10px;font-weight:700;color:#991B1B;text-transform:uppercase;">Pending Review</div>
+            <div id="dashKpiPending" style="font-size:18px;font-weight:800;color:#DC2626;line-height:1.2;">{{ risk_kpis.pending_count|default:0 }}</div>
+          </div>
+          <div style="background:#FFF;border:1px solid #BFDBFE;border-radius:10px;padding:8px 10px;text-align:center;">
+            <div style="font-size:10px;font-weight:700;color:#1E40AF;text-transform:uppercase;">Confirmed Fraud</div>
+            <div id="dashKpiConfirmed" style="font-size:18px;font-weight:800;color:#2563EB;line-height:1.2;">{{ risk_kpis.confirmed_fraud_count|default:0 }}</div>
+          </div>
+          <div style="background:#FFF;border:1px solid #FDE68A;border-radius:10px;padding:8px 10px;text-align:center;">
+            <div style="font-size:10px;font-weight:700;color:#92400E;text-transform:uppercase;">Wallets Frozen</div>
+            <div id="dashKpiFrozen" style="font-size:18px;font-weight:800;color:#D97706;line-height:1.2;">{{ risk_kpis.frozen_wallets_count|default:0 }}</div>
+          </div>
+          <div style="background:#FFF;border:1px solid #E9D5FF;border-radius:10px;padding:8px 10px;text-align:center;">
+            <div style="font-size:10px;font-weight:700;color:#6B21A8;text-transform:uppercase;">Mule Rings</div>
+            <div id="dashKpiMule" style="font-size:18px;font-weight:800;color:#9333EA;line-height:1.2;">{{ risk_kpis.mule_detections_count|default:0 }}</div>
+          </div>
+        </div>
+
+        <!-- Triage Incident List -->
+        <div id="dashIncidentList" style="display:flex;flex-direction:column;gap:10px;">
+          {% if pending_incidents %}
+            {% for inc in pending_incidents %}
+            <div class="dash-incident-item" id="dashIncidentRow-{{ inc.id }}" style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:12px 14px;box-shadow:0 1px 4px rgba(0,0,0,0.04);transition:all 0.3s ease;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px;">
+                <div>
+                  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                    <span style="font-size:13px;font-weight:800;color:#1A1A2E;">Incident #{{ inc.id }}</span>
+                    <span class="badge-tier {{ inc.risk_tier }}" style="font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;{% if inc.risk_tier == 'HIGH' or inc.risk_tier == 'CRITICAL' %}background:#FEF2F2;color:#DC2626;border:1px solid #FECACA;{% else %}background:#FFFBEB;color:#D97706;{% endif %}">
+                      {{ inc.risk_tier }} ({{ inc.risk_score|floatformat:2 }})
+                    </span>
+                    <span style="font-size:10px;font-weight:700;background:#7F1D1D;color:#FFF;padding:1px 5px;border-radius:4px;">
+                      {{ inc.policy_action }}
+                    </span>
+                  </div>
+                  <div style="font-size:11px;color:#4B5563;margin-top:4px;">
+                    {% if inc.transaction %}
+                      <strong>৳{{ inc.transaction.amount }}</strong> &bull; From: <strong>{{ inc.transaction.sender.username }}</strong> &rarr; To: <strong>{{ inc.transaction.receiver.username }}</strong>
+                    {% else %}
+                      <span style="color:#9CA3AF;">Anomaly record without transaction</span>
+                    {% endif %}
+                  </div>
+                </div>
+                <div style="font-size:10px;color:#9CA3AF;white-space:nowrap;">
+                  {{ inc.created_at|date:"H:i:s" }} UTC
+                </div>
+              </div>
+
+              <!-- XAI Top-3 Feature Deviations -->
+              {% if inc.top_contributions %}
+              <div style="background:#F8FAFC;border:1px solid #EDF2F7;border-radius:8px;padding:6px 10px;margin-bottom:8px;font-size:11px;">
+                <div style="font-size:10px;font-weight:700;color:#64748B;text-transform:uppercase;margin-bottom:3px;">
+                  Top XAI Contributing Deviations:
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                  {% for item in inc.top_contributions %}
+                  <span style="display:inline-flex;align-items:center;gap:4px;background:#FFF;border:1px solid #E2E8F0;border-radius:4px;padding:2px 6px;font-size:10px;">
+                    {% if 'mule' in item.feature|lower or 'networkx' in item.feature|lower %}
+                      <strong style="color:#7C3AED;">🕸️ {{ item.feature }}</strong>
+                    {% else %}
+                      <strong>{{ item.feature }}</strong>
+                    {% endif %}
+                    <span style="color:#64748B;font-family:monospace;">
+                      {% if item.contribution %}+{{ item.contribution|floatformat:2 }}{% elif item.contribution_score %}{{ item.contribution_score|floatformat:2 }}x{% endif %}
+                    </span>
+                  </span>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
+
+              <!-- Trigger Reasons -->
+              {% if inc.reasons %}
+              <div style="margin-bottom:8px;font-size:11px;color:#DC2626;line-height:1.3;">
+                {% for r in inc.reasons %}
+                  <div>&bull; {{ r }}</div>
+                {% endfor %}
+              </div>
+              {% endif %}
+
+              <!-- Inline Action Buttons -->
+              <div style="display:flex;gap:8px;margin-top:6px;">
+                <button type="button" onclick="dashResolveIncident({{ inc.id }}, 'confirm_fraud')" style="flex:1;background:#DC2626;color:#FFF;border:none;border-radius:6px;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:4px;transition:background 0.2s;">
+                  <i data-lucide="shield-alert" style="width:13px;height:13px;"></i>
+                  <span>Confirm Fraud &amp; Freeze</span>
+                </button>
+                <button type="button" onclick="dashResolveIncident({{ inc.id }}, 'approve')" style="flex:1;background:#059669;color:#FFF;border:none;border-radius:6px;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:4px;transition:background 0.2s;">
+                  <i data-lucide="check-circle" style="width:13px;height:13px;"></i>
+                  <span>Mark False Positive</span>
+                </button>
+              </div>
+            </div>
+            {% endfor %}
+          {% else %}
+            <div style="text-align:center;padding:18px 10px;color:#64748B;font-size:12px;">
+              <span style="font-size:24px;display:block;margin-bottom:4px;">✅</span>
+              <strong>All Systems Nominal</strong> &mdash; Zero transactions currently flagged for review hold.
+            </div>
+          {% endif %}
+        </div>
+      </section>
+
+      <script>
+        async function dashResolveIncident(incidentId, action) {
+          const row = document.getElementById(`dashIncidentRow-${incidentId}`);
+          if (action === 'confirm_fraud') {
+            if (!confirm(`Confirm Fraud for Incident #${incidentId}?\nThis will freeze the sender's wallet immediately.`)) {
+              return;
+            }
+          }
+
+          if (row) {
+            row.style.opacity = '0.5';
+            row.style.pointerEvents = 'none';
+          }
+
+          try {
+            const csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : (document.cookie.split('; ').find(v => v.startsWith('csrftoken=')) || '').split('=')[1];
+            const formData = new FormData();
+            formData.append('action', action);
+            formData.append('incident_id', incidentId);
+
+            const res = await fetch(`/risk-console/resolve/${incidentId}/`, {
+              method: 'POST',
+              headers: {
+                'X-CSRFToken': csrf,
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+              },
+              body: formData
+            });
+
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+
+            if (data.success) {
+              if (typeof showToast === 'function') {
+                showToast(action === 'confirm_fraud' ? 'error' : 'success', data.message);
+              } else {
+                alert(data.message);
+              }
+
+              // Update counters
+              if (data.kpis) {
+                const p1 = document.getElementById('dashKpiPending');
+                const p2 = document.getElementById('dashRiskPendingPill');
+                const p3 = document.getElementById('dashKpiConfirmed');
+                const p4 = document.getElementById('dashKpiFrozen');
+                const headBadge = document.querySelector('.risk-badge-count');
+
+                if (p1) p1.textContent = data.kpis.pending_count;
+                if (p2) p2.textContent = `${data.kpis.pending_count} Pending`;
+                if (p3) p3.textContent = data.kpis.confirmed_fraud_count;
+                if (p4) p4.textContent = data.kpis.frozen_wallets_count;
+                if (headBadge) {
+                  headBadge.textContent = data.kpis.pending_count;
+                  if (data.kpis.pending_count === 0) headBadge.style.display = 'none';
+                }
+              }
+
+              if (row) {
+                row.style.transition = 'all 0.4s ease';
+                row.style.transform = 'scale(0.96)';
+                row.style.opacity = '0';
+                setTimeout(() => {
+                  row.remove();
+                  const list = document.getElementById('dashIncidentList');
+                  if (list && list.querySelectorAll('.dash-incident-item').length === 0) {
+                    list.innerHTML = `<div style="text-align:center;padding:18px 10px;color:#64748B;font-size:12px;"><span style="font-size:24px;display:block;margin-bottom:4px;">✅</span><strong>All Systems Nominal</strong> &mdash; Zero transactions currently flagged for review hold.</div>`;
+                  }
+                }, 400);
+              }
+            } else {
+              alert(data.error || 'Failed to update incident');
+              if (row) {
+                row.style.opacity = '1';
+                row.style.pointerEvents = 'auto';
+              }
+            }
+          } catch (err) {
+            console.error('Resolution failed:', err);
+            alert('Failed to resolve incident: ' + err.message);
+            if (row) {
+              row.style.opacity = '1';
+              row.style.pointerEvents = 'auto';
+            }
+          }
+        }
+      </script>
+      {% endif %}
+
       <section class="family-feature customer-only" aria-labelledby="familyFeatureTitle">
         <div class="family-feature-symbol"><i data-lucide="users-round"></i></div>
         <div class="family-feature-copy"><span class="eyebrow">SHARED ACCESS. YOUR CONTROL.</span><h2 id="familyFeatureTitle">A little trust. A clear limit.</h2><p>FamilyPass</p></div>

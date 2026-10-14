@@ -1,0 +1,1841 @@
+{% load static %}
+<div class="admin-command-center">
+  <!-- TOP BANNER -->
+  <section class="admin-banner-card">
+    <div class="admin-banner-content">
+      <div class="admin-banner-badge">
+        <span class="live-dot"></span> CENTRAL BANKING &amp; TRUST SURVEILLANCE
+      </div>
+      <h1 class="admin-banner-title">FundShare Operations Platform</h1>
+      <p class="admin-banner-sub">
+        Real-time telemetry, platform-wide liquidity reserves, FamilyPass circles oversight, and proactive fraud surveillance.
+      </p>
+      <div class="admin-banner-meta">
+        <span class="meta-item"><i data-lucide="shield-check"></i> Operator: <strong>{{ user.username }}</strong></span>
+        <span class="meta-item"><i data-lucide="clock"></i> System Time: <strong>{% now "Y-m-d H:i" %} UTC</strong></span>
+        <span class="meta-item"><i data-lucide="server"></i> Core Ledger: <strong style="color:#10B981;">100% ONLINE</strong></span>
+      </div>
+    </div>
+    <div class="admin-banner-actions">
+      <a href="{% url 'risk_console' %}" class="btn-admin-action danger">
+        <i data-lucide="shield-alert"></i> Trust &amp; Risk Console
+        {% if pending_incident_count %}
+        <span class="admin-btn-pill">{{ pending_incident_count }}</span>
+        {% endif %}
+      </a>
+      <button class="btn-admin-action secondary" onclick="window.location.reload()">
+        <i data-lucide="refresh-cw"></i> Refresh Telemetry
+      </button>
+    </div>
+  </section>
+
+  <!-- SECTION 1: PLATFORM AGGREGATES & LIQUIDITY -->
+  <section class="admin-section" id="sectionLiquidity">
+    <div class="admin-section-header">
+      <div class="admin-section-title-wrap">
+        <span class="admin-section-icon">📊</span>
+        <div>
+          <h2 class="admin-section-title">Platform Aggregates &amp; Liquidity</h2>
+          <p class="admin-section-desc">Consolidated float, customer balances, and multi-tier transaction settlement volume</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="admin-kpi-grid">
+      <!-- Total Float -->
+      <div class="admin-kpi-card emerald-accent">
+        <div class="kpi-top">
+          <span class="kpi-label">TOTAL PLATFORM FLOAT</span>
+          <span class="kpi-icon-pill emerald"><i data-lucide="coins"></i></span>
+        </div>
+        <div class="kpi-value">৳ {{ platform_aggregates.total_float|floatformat:2 }}</div>
+        <div class="kpi-sub">
+          Circulating across <strong>{{ platform_aggregates.total_wallets }}</strong> customer wallets
+        </div>
+        <div class="kpi-footer-bar">
+          <span class="kpi-trend positive"><i data-lucide="trending-up"></i> 100% Reserve Backed</span>
+        </div>
+      </div>
+
+      <!-- Wallet Breakdown -->
+      <div class="admin-kpi-card amber-accent">
+        <div class="kpi-top">
+          <span class="kpi-label">CUSTOMER WALLETS BREAKDOWN</span>
+          <span class="kpi-icon-pill amber"><i data-lucide="wallet"></i></span>
+        </div>
+        <div class="kpi-value" id="kpiActiveWallets">{{ platform_aggregates.active_wallets }} <span class="kpi-unit">Active</span></div>
+        <div class="kpi-sub">
+          <span class="badge-frozen-count" id="kpiFrozenBadge">{{ platform_aggregates.frozen_wallets }} Frozen</span>
+          &bull; <strong>{{ platform_aggregates.total_customers }}</strong> registered accounts
+        </div>
+        <div class="kpi-footer-bar">
+          <span style="font-size:11px;color:var(--text-secondary);">Direct control in User &amp; Wallet Directory below</span>
+        </div>
+      </div>
+
+      <!-- 24h Volume -->
+      <div class="admin-kpi-card blue-accent">
+        <div class="kpi-top">
+          <span class="kpi-label">24H TRANSACTION VOLUME</span>
+          <span class="kpi-icon-pill blue"><i data-lucide="activity"></i></span>
+        </div>
+        <div class="kpi-value">৳ {{ platform_aggregates.volume_24h|floatformat:2 }}</div>
+        <div class="kpi-sub">
+          <strong>{{ platform_aggregates.count_24h }}</strong> successful settlements in past 24 hours
+        </div>
+        <div class="kpi-footer-bar">
+          <span class="kpi-trend positive"><i data-lucide="zap"></i> Instant Settlement</span>
+        </div>
+      </div>
+
+      <!-- All-Time Volume -->
+      <div class="admin-kpi-card purple-accent">
+        <div class="kpi-top">
+          <span class="kpi-label">ALL-TIME SETTLED VOLUME</span>
+          <span class="kpi-icon-pill purple"><i data-lucide="check-circle-2"></i></span>
+        </div>
+        <div class="kpi-value">৳ {{ platform_aggregates.volume_all_time|floatformat:2 }}</div>
+        <div class="kpi-sub">
+          <strong>{{ platform_aggregates.count_all_time }}</strong> completed ledger transactions
+        </div>
+        <div class="kpi-footer-bar">
+          <span style="font-size:11px;color:var(--text-secondary);">System Audit Trail Verified</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 2: SYSTEM-WIDE FAMILYPASS INTELLIGENCE & CRUD -->
+  <section class="admin-section" id="sectionFamilyPass">
+    <div class="admin-section-header">
+      <div class="admin-section-title-wrap">
+        <span class="admin-section-icon">👨‍👩‍👧‍👦</span>
+        <div>
+          <h2 class="admin-section-title">System-Wide FamilyPass Intelligence &amp; Circles CRUD</h2>
+          <p class="admin-section-desc">Manage all delegated spending permissions, dependent linkages, and category breakdown</p>
+        </div>
+      </div>
+      <div class="admin-stat-pills">
+        <span class="stat-pill">Circles: <strong>{{ familypass_platform.total_circles }}</strong></span>
+        <span class="stat-pill active">Active: <strong>{{ familypass_platform.active_circles }}</strong></span>
+        <span class="stat-pill">Linked Dependents: <strong>{{ familypass_platform.total_dependents }}</strong></span>
+        <span class="stat-pill">Volume: <strong>৳{{ familypass_platform.total_volume|floatformat:2 }}</strong></span>
+      </div>
+    </div>
+
+    <!-- Category Volume Distribution Card -->
+    <div class="admin-card category-breakdown-card">
+      <div class="card-inner-header">
+        <div style="font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px;">
+          <i data-lucide="pie-chart" style="width:16px;height:16px;color:var(--primary);"></i>
+          Allowance Volume by Category
+        </div>
+        <span style="font-size:11px;color:var(--text-secondary);">Categorical spending policy distribution</span>
+      </div>
+
+      <!-- Multi-color Stacked Progress Bar -->
+      <div class="cat-stacked-bar">
+        {% for cat in familypass_platform.categories %}
+        <div class="cat-bar-segment cat-color-{{ forloop.counter }}" style="width: {{ cat.percentage }}%;" title="{{ cat.name }}: {{ cat.percentage }}% (৳{{ cat.volume|floatformat:2 }})"></div>
+        {% endfor %}
+      </div>
+
+      <!-- Category Legend Grid -->
+      <div class="cat-legend-grid">
+        {% for cat in familypass_platform.categories %}
+        <div class="cat-legend-item">
+          <span class="cat-dot cat-dot-{{ forloop.counter }}"></span>
+          <span class="cat-legend-name">{{ cat.name }}:</span>
+          <strong class="cat-legend-pct">{{ cat.percentage }}%</strong>
+          {% if cat.volume > 0 %}
+          <span class="cat-legend-vol">(৳{{ cat.volume|floatformat:2 }})</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- FamilyPass Circles CRUD Table -->
+    <div class="admin-card table-card">
+      <div class="table-card-toolbar">
+        <div class="search-box">
+          <i data-lucide="search" class="search-icon"></i>
+          <input type="text" id="fpSearchInput" placeholder="Search circles by owner, member, or purpose..." oninput="filterFpCircles(this.value)">
+        </div>
+        <div class="filter-pills">
+          <button class="filter-btn active" onclick="filterFpStatus('ALL', this)">All ({{ familypass_platform.circles|length }})</button>
+          <button class="filter-btn" onclick="filterFpStatus('ACTIVE', this)">Active Only</button>
+          <button class="filter-btn" onclick="filterFpStatus('REVOKED', this)">Revoked / Expired</button>
+        </div>
+      </div>
+
+      <div class="admin-table-container">
+        <table class="admin-table" id="fpCirclesTable">
+          <thead>
+            <tr>
+              <th>Circle ID</th>
+              <th>Primary Owner</th>
+              <th>Dependent Member</th>
+              <th>Purpose &amp; Categories</th>
+              <th>Limit &amp; Consumption</th>
+              <th>Expiry</th>
+              <th>Status</th>
+              <th style="text-align:right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for pass in familypass_platform.circles %}
+            <tr class="fp-circle-row" id="fpRow-{{ pass.id }}" data-status="{{ pass.status }}" data-text="{{ pass.owner.username }} {{ pass.owner.phone }} {{ pass.member.username }} {{ pass.member.phone }} {{ pass.purpose_label }} {{ pass.custom_purpose }}">
+              <td>
+                <span class="cell-id">#{{ pass.id }}</span>
+              </td>
+              <td>
+                <div class="user-cell">
+                  <div class="avatar-sm">{{ pass.owner.username|slice:":2"|upper }}</div>
+                  <div>
+                    <div class="cell-primary">{{ pass.owner.full_name|default:pass.owner.username }}</div>
+                    <div class="cell-secondary">{{ pass.owner.phone|default:pass.owner.username }}</div>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <div class="user-cell">
+                  <div class="avatar-sm member">{{ pass.member.username|slice:":2"|upper }}</div>
+                  <div>
+                    <div class="cell-primary">{{ pass.member.full_name|default:pass.member.username }}</div>
+                    <div class="cell-secondary">{{ pass.member.phone|default:pass.member.username }}</div>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <div class="purpose-cell">
+                  <span class="purpose-badge">{{ pass.purpose_label }}</span>
+                  {% if pass.allowed_categories %}
+                  <div class="cat-tags">
+                    {% for c in pass.allowed_categories %}
+                    <span class="cat-tag">{{ c }}</span>
+                    {% endfor %}
+                  </div>
+                  {% else %}
+                  <span class="cat-tag unrestricted">Unrestricted</span>
+                  {% endif %}
+                </div>
+              </td>
+              <td>
+                <div class="limit-cell">
+                  <div class="limit-text">
+                    <strong>৳{{ pass.used_amount|floatformat:2 }}</strong> / ৳{{ pass.limit_amount|floatformat:2 }}
+                  </div>
+                  <div class="limit-bar-wrap">
+                    <div class="limit-bar-fill" style="width: {% widthratio pass.used_amount pass.limit_amount 100 %}%;"></div>
+                  </div>
+                  <div class="limit-rem">Remaining: ৳{{ pass.remaining_limit|floatformat:2 }}</div>
+                </div>
+              </td>
+              <td>
+                <span class="cell-date">{{ pass.expiry_date|date:"Y-m-d" }}</span>
+              </td>
+              <td>
+                <span class="status-badge {{ pass.status }}" id="fpStatusBadge-{{ pass.id }}">
+                  {{ pass.status }}
+                </span>
+              </td>
+              <td style="text-align:right;">
+                <div class="table-actions">
+                  <button class="btn-action view" onclick="inspectFamilyPass({{ pass.id }}, '{{ pass.owner.username|escapejs }}', '{{ pass.member.username|escapejs }}', '{{ pass.purpose_label|escapejs }}', '৳{{ pass.limit_amount|floatformat:2 }}', '৳{{ pass.used_amount|floatformat:2 }}', '৳{{ pass.remaining_limit|floatformat:2 }}', '{{ pass.status }}', '{{ pass.expiry_date|date:"Y-m-d" }}')" title="Inspect Circle Rules">
+                    <i data-lucide="eye"></i> Inspect
+                  </button>
+                  <button class="btn-action toggle" id="fpToggleBtn-{{ pass.id }}" onclick="adminToggleFamilyPass({{ pass.id }})" title="Toggle Active/Revoked status">
+                    {% if pass.status == 'ACTIVE' %}
+                    <i data-lucide="ban"></i> Revoke
+                    {% else %}
+                    <i data-lucide="check"></i> Activate
+                    {% endif %}
+                  </button>
+                  <button class="btn-action delete" onclick="adminDeleteFamilyPass({{ pass.id }})" title="Delete Circle Permanently">
+                    <i data-lucide="trash-2"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="8" style="text-align:center;padding:24px;color:var(--text-muted);">
+                No FamilyPass circles found on the platform.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 3: PURPOSE FUNDS & LOCKED SAVINGS INTELLIGENCE -->
+  <section class="admin-section" id="sectionPurposeFunds">
+    <div class="admin-section-header">
+      <div class="admin-section-title-wrap">
+        <span class="admin-section-icon">🎯</span>
+        <div>
+          <h2 class="admin-section-title">Purpose Funds &amp; Locked Savings Intelligence</h2>
+          <p class="admin-section-desc">Platform-wide earmarked deposit reserves, segregated funds, and customer target milestones</p>
+        </div>
+      </div>
+      <div class="admin-stat-pills">
+        <span class="stat-pill">Total Funds: <strong>{{ purpose_funds_platform.total_funds }}</strong></span>
+        <span class="stat-pill active">Locked Reserves: <strong>৳{{ purpose_funds_platform.total_locked|floatformat:2 }}</strong></span>
+        <span class="stat-pill">Allocations: <strong>৳{{ purpose_funds_platform.total_allocated|floatformat:2 }}</strong></span>
+      </div>
+    </div>
+
+    <!-- Category Distribution Chips -->
+    {% if purpose_funds_platform.categories %}
+    <div class="admin-card category-chips-card" style="margin-bottom:14px;padding:12px 16px;">
+      <div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;margin-bottom:8px;">
+        Locked Balances by Category:
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        {% for cat in purpose_funds_platform.categories %}
+        <div class="fund-cat-chip">
+          <span class="fund-cat-name">{{ cat.category }}</span>
+          <span class="fund-cat-count">{{ cat.count }} funds</span>
+          <strong class="fund-cat-bal">৳{{ cat.total_locked|floatformat:2 }}</strong>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Purpose Funds Table -->
+    <div class="admin-card table-card">
+      <div class="table-card-toolbar">
+        <div class="search-box">
+          <i data-lucide="search" class="search-icon"></i>
+          <input type="text" id="fundSearchInput" placeholder="Search purpose funds by name, owner, category..." oninput="filterPurposeFunds(this.value)">
+        </div>
+        <div class="filter-pills">
+          <button class="filter-btn active" onclick="filterFundStatus('ALL', this)">All Funds ({{ purpose_funds_platform.funds|length }})</button>
+          <button class="filter-btn" onclick="filterFundStatus('ACTIVE', this)">Active Only</button>
+          <button class="filter-btn" onclick="filterFundStatus('ARCHIVED', this)">Archived Only</button>
+        </div>
+      </div>
+
+      <div class="admin-table-container">
+        <table class="admin-table" id="purposeFundsTable">
+          <thead>
+            <tr>
+              <th>Fund ID</th>
+              <th>Fund Name</th>
+              <th>Owner</th>
+              <th>Category</th>
+              <th>Current Balance</th>
+              <th>Allocated Target</th>
+              <th>Monthly Budget</th>
+              <th>Status</th>
+              <th style="text-align:right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for fund in purpose_funds_platform.funds %}
+            <tr class="purpose-fund-row" id="fundRow-{{ fund.id }}" data-status="{{ fund.status }}" data-text="{{ fund.name }} {{ fund.owner.username }} {{ fund.owner.phone }} {{ fund.category }}">
+              <td><span class="cell-id">#{{ fund.id }}</span></td>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span class="fund-icon-circle" style="background:{{ fund.color|default:'#10B981' }}20;color:{{ fund.color|default:'#10B981' }};">
+                    🎯
+                  </span>
+                  <div>
+                    <div class="cell-primary">{{ fund.name }}</div>
+                    {% if fund.recipient %}
+                    <div class="cell-secondary">Assigned: {{ fund.recipient.username }}</div>
+                    {% endif %}
+                  </div>
+                </div>
+              </td>
+              <td>
+                <div class="cell-primary">{{ fund.owner.full_name|default:fund.owner.username }}</div>
+                <div class="cell-secondary">{{ fund.owner.phone|default:fund.owner.username }}</div>
+              </td>
+              <td>
+                <span class="category-badge">{{ fund.category }}</span>
+              </td>
+              <td>
+                <strong style="color:#059669;font-size:13px;">৳{{ fund.current_balance|floatformat:2 }}</strong>
+              </td>
+              <td>
+                <span class="cell-secondary">৳{{ fund.allocated_amount|floatformat:2 }}</span>
+              </td>
+              <td>
+                <span class="cell-secondary">৳{{ fund.monthly_budget|floatformat:2 }}</span>
+              </td>
+              <td>
+                <span class="status-badge {{ fund.status }}" id="fundStatusBadge-{{ fund.id }}">
+                  {{ fund.status }}
+                </span>
+              </td>
+              <td style="text-align:right;">
+                <div class="table-actions">
+                  <button class="btn-action toggle" id="fundToggleBtn-{{ fund.id }}" onclick="adminTogglePurposeFund({{ fund.id }})" title="Toggle Active/Archived">
+                    {% if fund.status == 'ACTIVE' %}
+                    <i data-lucide="archive"></i> Archive
+                    {% else %}
+                    <i data-lucide="check"></i> Activate
+                    {% endif %}
+                  </button>
+                  <button class="btn-action delete" onclick="adminDeletePurposeFund({{ fund.id }})" title="Delete Fund Permanently">
+                    <i data-lucide="trash-2"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="9" style="text-align:center;padding:24px;color:var(--text-muted);">
+                No Purpose Funds created yet.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 4: TRUST & RISK SURVEILLANCE & RECENT INCIDENTS -->
+  <section class="admin-section" id="sectionRiskSurveillance">
+    <div class="admin-section-header">
+      <div class="admin-section-title-wrap">
+        <span class="admin-section-icon">🛡️</span>
+        <div>
+          <h2 class="admin-section-title">Trust &amp; Risk Surveillance &amp; Flagged Incidents Queue</h2>
+          <p class="admin-section-desc">Machine Learning anomaly attribution, network fan-in mule ring detection, and instantaneous triage</p>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span class="badge-tier CRITICAL" id="dashRiskPendingPill" style="background:#FEF2F2;color:#DC2626;font-size:12px;font-weight:800;padding:4px 10px;border-radius:14px;border:1px solid #FECACA;">
+          {{ risk_kpis.pending_count|default:0 }} Pending Triage
+        </span>
+        <a href="{% url 'risk_console' %}" class="btn-admin-action danger sm">
+          <span>Open Full Console</span>
+          <i data-lucide="external-link" style="width:14px;height:14px;"></i>
+        </a>
+      </div>
+    </div>
+
+    <!-- Live KPI Bar -->
+    <div class="admin-kpi-grid risk-bar" style="margin-bottom:14px;">
+      <div class="risk-kpi-box red">
+        <div class="risk-kpi-lbl">Pending Review</div>
+        <div class="risk-kpi-val" id="dashKpiPending">{{ risk_kpis.pending_count|default:0 }}</div>
+      </div>
+      <div class="risk-kpi-box blue">
+        <div class="risk-kpi-lbl">Confirmed Fraud</div>
+        <div class="risk-kpi-val" id="dashKpiConfirmed">{{ risk_kpis.confirmed_fraud_count|default:0 }}</div>
+      </div>
+      <div class="risk-kpi-box amber">
+        <div class="risk-kpi-lbl">Wallets Frozen</div>
+        <div class="risk-kpi-val" id="dashKpiFrozen">{{ risk_kpis.frozen_wallets_count|default:0 }}</div>
+      </div>
+      <div class="risk-kpi-box purple">
+        <div class="risk-kpi-lbl">Mule Rings Flagged</div>
+        <div class="risk-kpi-val" id="dashKpiMule">{{ risk_kpis.mule_detections_count|default:0 }}</div>
+      </div>
+    </div>
+
+    <!-- Incident List Queue -->
+    <div class="admin-card" style="padding:16px;">
+      <div id="dashIncidentList" style="display:flex;flex-direction:column;gap:12px;">
+        {% if pending_incidents %}
+          {% for inc in pending_incidents %}
+          <div class="dash-incident-item" id="dashIncidentRow-{{ inc.id }}" style="background:#FFFFFF;border:1px solid #E5E7EB;border-left:4px solid #EF4444;border-radius:12px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,0.04);transition:all 0.3s ease;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px;">
+              <div>
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                  <span style="font-size:14px;font-weight:800;color:#1A1A2E;">Incident #{{ inc.id }}</span>
+                  <span class="badge-tier {{ inc.risk_tier }}" style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:6px;{% if inc.risk_tier == 'HIGH' or inc.risk_tier == 'CRITICAL' %}background:#FEF2F2;color:#DC2626;border:1px solid #FECACA;{% else %}background:#FFFBEB;color:#D97706;border:1px solid #FDE68A;{% endif %}">
+                    {{ inc.risk_tier }} ({{ inc.risk_score|floatformat:2 }})
+                  </span>
+                  <span style="font-size:11px;font-weight:700;background:#7F1D1D;color:#FFF;padding:2px 6px;border-radius:6px;">
+                    {{ inc.policy_action }}
+                  </span>
+                </div>
+                <div style="font-size:12px;color:#4B5563;margin-top:4px;">
+                  {% if inc.transaction %}
+                    Amount: <strong style="color:#DC2626;font-size:13px;">৳{{ inc.transaction.amount }}</strong> &bull; Sender: <strong>{{ inc.transaction.sender.username }}</strong> &rarr; Receiver: <strong>{{ inc.transaction.receiver.username }}</strong>
+                  {% else %}
+                    <span style="color:#9CA3AF;">Anomaly record without direct transaction</span>
+                  {% endif %}
+                </div>
+              </div>
+              <div style="font-size:11px;color:#9CA3AF;white-space:nowrap;">
+                {{ inc.created_at|date:"Y-m-d H:i:s" }} UTC
+              </div>
+            </div>
+
+            <!-- XAI Top Contributing Deviations -->
+            {% if inc.top_contributions %}
+            <div style="background:#F8FAFC;border:1px solid #EDF2F7;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:11px;">
+              <div style="font-size:10px;font-weight:700;color:#64748B;text-transform:uppercase;margin-bottom:4px;">
+                Top Explainable AI Contributing Deviations:
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                {% for item in inc.top_contributions %}
+                <span style="display:inline-flex;align-items:center;gap:4px;background:#FFF;border:1px solid #E2E8F0;border-radius:4px;padding:3px 8px;font-size:11px;">
+                  {% if 'mule' in item.feature|lower or 'networkx' in item.feature|lower %}
+                    <strong style="color:#7C3AED;">🕸️ {{ item.feature }}</strong>
+                  {% else %}
+                    <strong>{{ item.feature }}</strong>
+                  {% endif %}
+                  <span style="color:#64748B;font-family:monospace;">
+                    {% if item.contribution %}+{{ item.contribution|floatformat:2 }}{% elif item.contribution_score %}{{ item.contribution_score|floatformat:2 }}x{% endif %}
+                  </span>
+                </span>
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+
+            <!-- Trigger Reasons -->
+            {% if inc.reasons %}
+            <div style="margin-bottom:10px;font-size:12px;color:#DC2626;line-height:1.4;">
+              {% for r in inc.reasons %}
+                <div>&bull; {{ r }}</div>
+              {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Actions -->
+            <div style="display:flex;gap:10px;">
+              <button type="button" onclick="dashResolveIncident({{ inc.id }}, 'confirm_fraud')" style="flex:1;background:#DC2626;color:#FFF;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:background 0.2s;">
+                <i data-lucide="shield-alert" style="width:14px;height:14px;"></i>
+                <span>Confirm Fraud &amp; Instant Freeze</span>
+              </button>
+              <button type="button" onclick="dashResolveIncident({{ inc.id }}, 'approve')" style="flex:1;background:#059669;color:#FFF;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:background 0.2s;">
+                <i data-lucide="check-circle" style="width:14px;height:14px;"></i>
+                <span>Mark False Positive &amp; Restore</span>
+              </button>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div style="text-align:center;padding:28px 14px;color:#64748B;font-size:13px;">
+            <span style="font-size:32px;display:block;margin-bottom:6px;">✅</span>
+            <strong style="color:var(--text);font-size:15px;display:block;margin-bottom:2px;">All Systems Nominal</strong>
+            Zero suspicious transactions currently flagged for review hold.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 5: USER & WALLET DIRECTORY (CRUD) -->
+  <section class="admin-section" id="sectionWallets">
+    <div class="admin-section-header">
+      <div class="admin-section-title-wrap">
+        <span class="admin-section-icon">👥</span>
+        <div>
+          <h2 class="admin-section-title">Master User &amp; Wallet Registry (CRUD)</h2>
+          <p class="admin-section-desc">Search, inspect, and toggle freeze status for all customer wallets across the FundShare network</p>
+        </div>
+      </div>
+      <div class="admin-stat-pills">
+        <span class="stat-pill">Total Wallets: <strong id="regTotalWallets">{{ master_wallets|length }}</strong></span>
+        <span class="stat-pill active">Active: <strong id="regActiveWallets">{{ platform_aggregates.active_wallets }}</strong></span>
+        <span class="stat-pill danger">Frozen: <strong id="regFrozenWallets">{{ platform_aggregates.frozen_wallets }}</strong></span>
+      </div>
+    </div>
+
+    <div class="admin-card table-card">
+      <div class="table-card-toolbar">
+        <div class="search-box">
+          <i data-lucide="search" class="search-icon"></i>
+          <input type="text" id="walletSearchInput" placeholder="Search by username, phone number, role, or status..." oninput="filterWallets(this.value)">
+        </div>
+        <div class="filter-pills">
+          <button class="filter-btn active" onclick="filterWalletStatus('ALL', this)">All Wallets ({{ master_wallets|length }})</button>
+          <button class="filter-btn" onclick="filterWalletStatus('ACTIVE', this)">Active Only</button>
+          <button class="filter-btn" onclick="filterWalletStatus('FROZEN', this)">Frozen Only</button>
+        </div>
+      </div>
+
+      <div class="admin-table-container">
+        <table class="admin-table" id="masterWalletsTable">
+          <thead>
+            <tr>
+              <th>Wallet ID</th>
+              <th>Customer Account</th>
+              <th>Phone Number</th>
+              <th>System Role</th>
+              <th>Available Balance</th>
+              <th>Status</th>
+              <th>Last Updated</th>
+              <th style="text-align:right;">Administrative Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for w in master_wallets %}
+            <tr class="wallet-row" id="walletRow-{{ w.id }}" data-status="{% if w.is_frozen %}FROZEN{% else %}ACTIVE{% endif %}" data-text="{{ w.owner.username }} {{ w.owner.phone }} {{ w.owner.full_name }} {{ w.owner.role }} {% if w.is_frozen %}FROZEN{% else %}ACTIVE{% endif %}">
+              <td>
+                <span class="cell-id">W-{{ w.id }}</span>
+              </td>
+              <td>
+                <div class="user-cell">
+                  <div class="avatar-sm {% if w.is_frozen %}frozen-avatar{% endif %}">{{ w.owner.username|slice:":2"|upper }}</div>
+                  <div>
+                    <div class="cell-primary">{{ w.owner.full_name|default:w.owner.username }}</div>
+                    <div class="cell-secondary">@{{ w.owner.username }}</div>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <span class="cell-phone">{{ w.owner.phone|default:"Not specified" }}</span>
+              </td>
+              <td>
+                <span class="role-badge role-{{ w.owner.role }}">{{ w.owner.get_effective_role_display|default:w.owner.role }}</span>
+              </td>
+              <td>
+                <strong class="cell-balance">৳{{ w.balance|floatformat:2 }}</strong>
+              </td>
+              <td>
+                <span class="status-badge {% if w.is_frozen %}FROZEN{% else %}ACTIVE{% endif %}" id="walletStatusBadge-{{ w.id }}">
+                  {% if w.is_frozen %}FROZEN{% else %}ACTIVE{% endif %}
+                </span>
+              </td>
+              <td>
+                <span class="cell-date">{{ w.updated_at|date:"Y-m-d H:i" }}</span>
+              </td>
+              <td style="text-align:right;">
+                <button class="btn-action-freeze {% if w.is_frozen %}unfreeze{% else %}freeze{% endif %}" id="walletFreezeBtn-{{ w.id }}" onclick="adminToggleWalletFreeze({{ w.id }}, '{{ w.owner.username|escapejs }}')">
+                  {% if w.is_frozen %}
+                  <i data-lucide="unlock"></i> <span>Unfreeze Wallet</span>
+                  {% else %}
+                  <i data-lucide="lock"></i> <span>Freeze Wallet</span>
+                  {% endif %}
+                </button>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="8" style="text-align:center;padding:24px;color:var(--text-muted);">
+                No customer wallets found.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- INSPECT FAMILYPASS MODAL -->
+<div class="modal-overlay" id="inspectFpModal">
+  <div class="modal-sheet" style="max-width:540px;">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="inspectFpTitle">👨‍👩‍👧‍👦 FamilyPass Circle Details</div>
+    <div class="modal-subtitle" id="inspectFpSubtitle">Delegated spending permission telemetry</div>
+    <div class="inspect-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0;">
+      <div class="inspect-field">
+        <label>Primary Owner</label>
+        <div id="inspOwner" style="font-weight:700;">--</div>
+      </div>
+      <div class="inspect-field">
+        <label>Dependent Member</label>
+        <div id="inspMember" style="font-weight:700;">--</div>
+      </div>
+      <div class="inspect-field">
+        <label>Purpose Category</label>
+        <div id="inspPurpose" style="font-weight:700;color:var(--primary);">--</div>
+      </div>
+      <div class="inspect-field">
+        <label>Current Status</label>
+        <div id="inspStatus">--</div>
+      </div>
+      <div class="inspect-field">
+        <label>Limit Amount</label>
+        <div id="inspLimit" style="font-weight:700;">--</div>
+      </div>
+      <div class="inspect-field">
+        <label>Total Used</label>
+        <div id="inspUsed" style="font-weight:700;color:#DC2626;">--</div>
+      </div>
+      <div class="inspect-field">
+        <label>Remaining Balance</label>
+        <div id="inspRemaining" style="font-weight:700;color:#059669;">--</div>
+      </div>
+      <div class="inspect-field">
+        <label>Expiry Date</label>
+        <div id="inspExpiry">--</div>
+      </div>
+    </div>
+    <button class="btn-primary w-full" onclick="closeModal('inspectFpModal')">Close Details</button>
+  </div>
+</div>
+
+<!-- ADMIN INTERACTION STYLES -->
+<style>
+.admin-command-center {
+  padding: 16px 20px 40px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* BANNER */
+.admin-banner-card {
+  background: linear-gradient(135deg, #064E3B 0%, #065F46 45%, #0F172A 100%);
+  color: #fff;
+  border-radius: 16px;
+  padding: 24px 28px;
+  margin-bottom: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  box-shadow: 0 8px 24px rgba(6, 78, 59, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.admin-banner-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+.live-dot {
+  width: 8px;
+  height: 8px;
+  background: #10B981;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #10B981;
+  display: inline-block;
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+.admin-banner-title {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  margin-bottom: 6px;
+}
+.admin-banner-sub {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.82);
+  max-width: 650px;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+.admin-banner-meta {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.9);
+}
+.admin-banner-meta .meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.admin-banner-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 220px;
+}
+.btn-admin-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+.btn-admin-action.danger {
+  background: #EF4444;
+  color: #fff;
+  border-color: #DC2626;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+.btn-admin-action.danger:hover {
+  background: #DC2626;
+}
+.btn-admin-action.danger.sm {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+.btn-admin-action.secondary {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+.btn-admin-action.secondary:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+.admin-btn-pill {
+  background: #fff;
+  color: #DC2626;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+/* SECTIONS */
+.admin-section {
+  margin-bottom: 28px;
+}
+.admin-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.admin-section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.admin-section-icon {
+  font-size: 22px;
+}
+.admin-section-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: #1A1A2E;
+  letter-spacing: -0.3px;
+}
+.admin-section-desc {
+  font-size: 12px;
+  color: #6B7280;
+  margin-top: 2px;
+}
+.admin-stat-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.stat-pill {
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: #4B5563;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.stat-pill.active {
+  background: #ECFDF5;
+  border-color: #A7F3D0;
+  color: #065F46;
+}
+.stat-pill.danger {
+  background: #FEF2F2;
+  border-color: #FECACA;
+  color: #991B1B;
+}
+
+/* KPI GRID */
+.admin-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+.admin-kpi-card {
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.admin-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+}
+.admin-kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+}
+.admin-kpi-card.emerald-accent::before { background: #10B981; }
+.admin-kpi-card.amber-accent::before { background: #F59E0B; }
+.admin-kpi-card.blue-accent::before { background: #3B82F6; }
+.admin-kpi-card.purple-accent::before { background: #8B5CF6; }
+
+.kpi-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.kpi-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6B7280;
+  letter-spacing: 0.5px;
+}
+.kpi-icon-pill {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.kpi-icon-pill.emerald { background: #E8F5F0; color: #00875A; }
+.kpi-icon-pill.amber { background: #FFF8E1; color: #D97706; }
+.kpi-icon-pill.blue { background: #EFF6FF; color: #2563EB; }
+.kpi-icon-pill.purple { background: #F5F3FF; color: #7C3AED; }
+
+.kpi-value {
+  font-size: 26px;
+  font-weight: 800;
+  color: #1A1A2E;
+  letter-spacing: -0.5px;
+  margin-bottom: 4px;
+}
+.kpi-unit {
+  font-size: 14px;
+  font-weight: 600;
+  color: #059669;
+}
+.kpi-sub {
+  font-size: 12px;
+  color: #6B7280;
+  line-height: 1.4;
+}
+.badge-frozen-count {
+  background: #FEE2E2;
+  color: #DC2626;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+.kpi-footer-bar {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed #E5E7EB;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.kpi-trend {
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.kpi-trend.positive { color: #059669; }
+
+/* CATEGORY BREAKDOWN */
+.category-breakdown-card {
+  padding: 16px 20px;
+  margin-bottom: 14px;
+}
+.card-inner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.cat-stacked-bar {
+  height: 12px;
+  width: 100%;
+  background: #F3F4F6;
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  margin-bottom: 12px;
+}
+.cat-bar-segment {
+  height: 100%;
+  transition: width 0.4s ease;
+}
+.cat-color-1 { background: #10B981; }
+.cat-color-2 { background: #3B82F6; }
+.cat-color-3 { background: #EF4444; }
+.cat-color-4 { background: #F59E0B; }
+.cat-color-5 { background: #8B5CF6; }
+.cat-color-6 { background: #EC4899; }
+
+.cat-legend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+.cat-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.cat-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.cat-dot-1 { background: #10B981; }
+.cat-dot-2 { background: #3B82F6; }
+.cat-dot-3 { background: #EF4444; }
+.cat-dot-4 { background: #F59E0B; }
+.cat-dot-5 { background: #8B5CF6; }
+.cat-dot-6 { background: #EC4899; }
+.cat-legend-name { color: #4B5563; }
+.cat-legend-pct { color: #1A1A2E; }
+.cat-legend-vol { font-size: 11px; color: #9CA3AF; }
+
+/* FUND CHIPS */
+.fund-cat-chip {
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  padding: 6px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.fund-cat-name { font-weight: 700; color: #1A1A2E; }
+.fund-cat-count { font-size: 10px; background: #E5E7EB; padding: 1px 5px; border-radius: 4px; color: #4B5563; }
+.fund-cat-bal { color: #059669; }
+
+/* TABLE CARD */
+.admin-card {
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+.table-card-toolbar {
+  padding: 14px 18px;
+  border-bottom: 1px solid #E5E7EB;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.search-box {
+  position: relative;
+  flex: 1;
+  min-width: 260px;
+}
+.search-box input {
+  width: 100%;
+  padding: 8px 12px 8px 34px;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.search-box input:focus {
+  border-color: #00875A;
+}
+.search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: #9CA3AF;
+}
+.filter-pills {
+  display: flex;
+  gap: 6px;
+}
+.filter-btn {
+  background: #F3F4F6;
+  border: 1px solid #E5E7EB;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4B5563;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.filter-btn.active {
+  background: #00875A;
+  color: #fff;
+  border-color: #00875A;
+}
+
+/* TABLES */
+.admin-table-container {
+  overflow-x: auto;
+}
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+.admin-table th {
+  background: #F9FAFB;
+  padding: 10px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #6B7280;
+  border-bottom: 1px solid #E5E7EB;
+  letter-spacing: 0.5px;
+}
+.admin-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #F3F4F6;
+  color: #1A1A2E;
+  vertical-align: middle;
+}
+.admin-table tr:hover td {
+  background: #F8FAFC;
+}
+
+/* TABLE CELLS */
+.cell-id {
+  font-family: monospace;
+  font-weight: 700;
+  color: #6B7280;
+  font-size: 11px;
+}
+.user-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.avatar-sm {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #E8F5F0;
+  color: #00875A;
+  font-weight: 700;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.avatar-sm.member {
+  background: #EFF6FF;
+  color: #2563EB;
+}
+.avatar-sm.frozen-avatar {
+  background: #FEE2E2;
+  color: #DC2626;
+}
+.cell-primary {
+  font-weight: 700;
+  color: #1A1A2E;
+}
+.cell-secondary {
+  font-size: 11px;
+  color: #6B7280;
+}
+.cell-phone {
+  font-family: monospace;
+  font-size: 12px;
+}
+.cell-balance {
+  font-size: 14px;
+  color: #059669;
+}
+.cell-date {
+  font-size: 11px;
+  color: #6B7280;
+}
+
+/* BADGES */
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.status-badge.ACTIVE {
+  background: #ECFDF5;
+  color: #059669;
+  border: 1px solid #A7F3D0;
+}
+.status-badge.FROZEN,
+.status-badge.REVOKED {
+  background: #FEF2F2;
+  color: #DC2626;
+  border: 1px solid #FECACA;
+}
+.status-badge.ARCHIVED,
+.status-badge.EXPIRED {
+  background: #F3F4F6;
+  color: #6B7280;
+  border: 1px solid #E5E7EB;
+}
+
+.role-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  background: #EFF6FF;
+  color: #1D4ED8;
+  border: 1px solid #BFDBFE;
+}
+.role-badge.role-ADMIN {
+  background: #F5F3FF;
+  color: #7C3AED;
+  border-color: #DDD6FE;
+}
+.role-badge.role-MERCHANT {
+  background: #FFFBEB;
+  color: #D97706;
+  border-color: #FDE68A;
+}
+
+.category-badge,
+.purpose-badge {
+  background: #E8F5F0;
+  color: #00875A;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.cat-tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.cat-tag {
+  background: #F3F4F6;
+  color: #4B5563;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+.cat-tag.unrestricted {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.limit-cell {
+  min-width: 130px;
+}
+.limit-text {
+  font-size: 12px;
+  margin-bottom: 3px;
+}
+.limit-bar-wrap {
+  width: 100%;
+  height: 6px;
+  background: #E5E7EB;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 2px;
+}
+.limit-bar-fill {
+  height: 100%;
+  background: #10B981;
+}
+.limit-rem {
+  font-size: 10px;
+  color: #059669;
+}
+
+/* TABLE ACTIONS */
+.table-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.btn-action {
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s;
+}
+.btn-action.view {
+  background: #EFF6FF;
+  color: #1D4ED8;
+  border-color: #BFDBFE;
+}
+.btn-action.view:hover {
+  background: #DBEAFE;
+}
+.btn-action.toggle {
+  background: #FFFBEB;
+  color: #D97706;
+  border-color: #FDE68A;
+}
+.btn-action.toggle:hover {
+  background: #FEF3C7;
+}
+.btn-action.delete {
+  background: #FEF2F2;
+  color: #DC2626;
+  border-color: #FECACA;
+  padding: 5px 8px;
+}
+.btn-action.delete:hover {
+  background: #FEE2E2;
+}
+
+.btn-action-freeze {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+.btn-action-freeze.freeze {
+  background: #FEF2F2;
+  color: #DC2626;
+  border-color: #FECACA;
+}
+.btn-action-freeze.freeze:hover {
+  background: #DC2626;
+  color: #fff;
+}
+.btn-action-freeze.unfreeze {
+  background: #ECFDF5;
+  color: #059669;
+  border-color: #A7F3D0;
+}
+.btn-action-freeze.unfreeze:hover {
+  background: #059669;
+  color: #fff;
+}
+
+/* RISK SURVEILLANCE KPI BOXES */
+.risk-kpi-box {
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
+  padding: 10px 14px;
+  text-align: center;
+}
+.risk-kpi-box.red { border-color: #FECACA; }
+.risk-kpi-box.blue { border-color: #BFDBFE; }
+.risk-kpi-box.amber { border-color: #FDE68A; }
+.risk-kpi-box.purple { border-color: #E9D5FF; }
+
+.risk-kpi-lbl {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.risk-kpi-box.red .risk-kpi-lbl { color: #991B1B; }
+.risk-kpi-box.blue .risk-kpi-lbl { color: #1E40AF; }
+.risk-kpi-box.amber .risk-kpi-lbl { color: #92400E; }
+.risk-kpi-box.purple .risk-kpi-lbl { color: #6B21A8; }
+
+.risk-kpi-val {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.risk-kpi-box.red .risk-kpi-val { color: #DC2626; }
+.risk-kpi-box.blue .risk-kpi-val { color: #2563EB; }
+.risk-kpi-box.amber .risk-kpi-val { color: #D97706; }
+.risk-kpi-box.purple .risk-kpi-val { color: #9333EA; }
+
+.inspect-field {
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.inspect-field label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  color: #6B7280;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+</style>
+
+<!-- ADMIN INTERACTION JAVASCRIPT -->
+<script>
+// Helper to get CSRF
+function getAdminCsrfToken() {
+  const meta = document.querySelector('meta[name="csrf-token"]');
+  if (meta && meta.content) return meta.content;
+  const cookie = document.cookie.split('; ').find(row => row.startsWith('csrftoken='));
+  return cookie ? cookie.split('=')[1] : '';
+}
+
+// 1. FILTER FAMILYPASS CIRCLES TABLE
+function filterFpCircles(query) {
+  const q = query.toLowerCase().trim();
+  const rows = document.querySelectorAll('#fpCirclesTable .fp-circle-row');
+  rows.forEach(r => {
+    const text = (r.getAttribute('data-text') || '').toLowerCase();
+    const matchesQuery = !q || text.includes(q);
+    const filterStatus = r.getAttribute('data-filter-hidden') !== 'true';
+    r.style.display = matchesQuery && filterStatus ? '' : 'none';
+  });
+}
+
+function filterFpStatus(status, btn) {
+  const buttons = btn.parentElement.querySelectorAll('.filter-btn');
+  buttons.forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const rows = document.querySelectorAll('#fpCirclesTable .fp-circle-row');
+  rows.forEach(r => {
+    const rStatus = r.getAttribute('data-status');
+    let match = true;
+    if (status === 'ACTIVE') match = rStatus === 'ACTIVE';
+    else if (status === 'REVOKED') match = rStatus === 'REVOKED' || rStatus === 'EXPIRED';
+
+    r.setAttribute('data-filter-hidden', match ? 'false' : 'true');
+    const q = (document.getElementById('fpSearchInput').value || '').toLowerCase().trim();
+    const text = (r.getAttribute('data-text') || '').toLowerCase();
+    r.style.display = match && (!q || text.includes(q)) ? '' : 'none';
+  });
+}
+
+// INSPECT FAMILYPASS MODAL
+function inspectFamilyPass(id, owner, member, purpose, limit, used, rem, status, expiry) {
+  document.getElementById('inspectFpTitle').textContent = `👨‍👩‍👧‍👦 Circle #${id} Details`;
+  document.getElementById('inspOwner').textContent = owner;
+  document.getElementById('inspMember').textContent = member;
+  document.getElementById('inspPurpose').textContent = purpose;
+  document.getElementById('inspLimit').textContent = limit;
+  document.getElementById('inspUsed').textContent = used;
+  document.getElementById('inspRemaining').textContent = rem;
+  document.getElementById('inspExpiry').textContent = expiry;
+
+  const statusEl = document.getElementById('inspStatus');
+  statusEl.innerHTML = `<span class="status-badge ${status}">${status}</span>`;
+  openModal('inspectFpModal');
+}
+
+// 2. TOGGLE / DELETE FAMILYPASS CIRCLE
+async function adminToggleFamilyPass(passId) {
+  const csrf = getAdminCsrfToken();
+  const formData = new FormData();
+  formData.append('action', 'toggle');
+
+  try {
+    const res = await fetch(`/admin/family-pass/${passId}/toggle-status/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrf,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json'
+      },
+      body: formData
+    });
+    const data = await res.json();
+    if (data.success) {
+      if (typeof showToast === 'function') showToast('success', data.message);
+      else alert(data.message);
+
+      const row = document.getElementById(`fpRow-${passId}`);
+      const badge = document.getElementById(`fpStatusBadge-${passId}`);
+      const btn = document.getElementById(`fpToggleBtn-${passId}`);
+
+      if (row) row.setAttribute('data-status', data.status);
+      if (badge) {
+        badge.className = `status-badge ${data.status}`;
+        badge.textContent = data.status;
+      }
+      if (btn) {
+        if (data.status === 'ACTIVE') {
+          btn.innerHTML = `<i data-lucide="ban"></i> Revoke`;
+        } else {
+          btn.innerHTML = `<i data-lucide="check"></i> Activate`;
+        }
+        if (window.lucide) lucide.createIcons();
+      }
+    } else {
+      alert(data.error || 'Failed to update status');
+    }
+  } catch (err) {
+    alert('Request failed: ' + err.message);
+  }
+}
+
+async function adminDeleteFamilyPass(passId) {
+  if (!confirm(`Are you sure you want to permanently delete FamilyPass circle #${passId}?`)) return;
+
+  const csrf = getAdminCsrfToken();
+  const formData = new FormData();
+  formData.append('action', 'delete');
+
+  try {
+    const res = await fetch(`/admin/family-pass/${passId}/toggle-status/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrf,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json'
+      },
+      body: formData
+    });
+    const data = await res.json();
+    if (data.success) {
+      if (typeof showToast === 'function') showToast('success', data.message);
+      else alert(data.message);
+
+      const row = document.getElementById(`fpRow-${passId}`);
+      if (row) {
+        row.style.transition = 'all 0.3s ease';
+        row.style.opacity = '0';
+        setTimeout(() => row.remove(), 300);
+      }
+    } else {
+      alert(data.error || 'Failed to delete circle');
+    }
+  } catch (err) {
+    alert('Request failed: ' + err.message);
+  }
+}
+
+// 3. FILTER PURPOSE FUNDS
+function filterPurposeFunds(query) {
+  const q = query.toLowerCase().trim();
+  const rows = document.querySelectorAll('#purposeFundsTable .purpose-fund-row');
+  rows.forEach(r => {
+    const text = (r.getAttribute('data-text') || '').toLowerCase();
+    const matchesQuery = !q || text.includes(q);
+    const filterStatus = r.getAttribute('data-filter-hidden') !== 'true';
+    r.style.display = matchesQuery && filterStatus ? '' : 'none';
+  });
+}
+
+function filterFundStatus(status, btn) {
+  const buttons = btn.parentElement.querySelectorAll('.filter-btn');
+  buttons.forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const rows = document.querySelectorAll('#purposeFundsTable .purpose-fund-row');
+  rows.forEach(r => {
+    const rStatus = r.getAttribute('data-status');
+    const match = status === 'ALL' || rStatus === status;
+    r.setAttribute('data-filter-hidden', match ? 'false' : 'true');
+    const q = (document.getElementById('fundSearchInput').value || '').toLowerCase().trim();
+    const text = (r.getAttribute('data-text') || '').toLowerCase();
+    r.style.display = match && (!q || text.includes(q)) ? '' : 'none';
+  });
+}
+
+// TOGGLE / DELETE PURPOSE FUND
+async function adminTogglePurposeFund(fundId) {
+  const csrf = getAdminCsrfToken();
+  const formData = new FormData();
+  formData.append('action', 'toggle');
+
+  try {
+    const res = await fetch(`/admin/purpose-funds/${fundId}/toggle-status/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrf,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json'
+      },
+      body: formData
+    });
+    const data = await res.json();
+    if (data.success) {
+      if (typeof showToast === 'function') showToast('success', data.message);
+      else alert(data.message);
+
+      const row = document.getElementById(`fundRow-${fundId}`);
+      const badge = document.getElementById(`fundStatusBadge-${fundId}`);
+      const btn = document.getElementById(`fundToggleBtn-${fundId}`);
+
+      if (row) row.setAttribute('data-status', data.status);
+      if (badge) {
+        badge.className = `status-badge ${data.status}`;
+        badge.textContent = data.status;
+      }
+      if (btn) {
+        if (data.status === 'ACTIVE') {
+          btn.innerHTML = `<i data-lucide="archive"></i> Archive`;
+        } else {
+          btn.innerHTML = `<i data-lucide="check"></i> Activate`;
+        }
+        if (window.lucide) lucide.createIcons();
+      }
+    } else {
+      alert(data.error || 'Failed to update status');
+    }
+  } catch (err) {
+    alert('Request failed: ' + err.message);
+  }
+}
+
+async function adminDeletePurposeFund(fundId) {
+  if (!confirm(`Are you sure you want to permanently delete Purpose Fund #${fundId}?`)) return;
+
+  const csrf = getAdminCsrfToken();
+  const formData = new FormData();
+  formData.append('action', 'delete');
+
+  try {
+    const res = await fetch(`/admin/purpose-funds/${fundId}/toggle-status/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrf,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json'
+      },
+      body: formData
+    });
+    const data = await res.json();
+    if (data.success) {
+      if (typeof showToast === 'function') showToast('success', data.message);
+      else alert(data.message);
+
+      const row = document.getElementById(`fundRow-${fundId}`);
+      if (row) {
+        row.style.transition = 'all 0.3s ease';
+        row.style.opacity = '0';
+        setTimeout(() => row.remove(), 300);
+      }
+    } else {
+      alert(data.error || 'Failed to delete fund');
+    }
+  } catch (err) {
+    alert('Request failed: ' + err.message);
+  }
+}
+
+// 4. FILTER MASTER WALLETS DIRECTORY
+function filterWallets(query) {
+  const q = query.toLowerCase().trim();
+  const rows = document.querySelectorAll('#masterWalletsTable .wallet-row');
+  rows.forEach(r => {
+    const text = (r.getAttribute('data-text') || '').toLowerCase();
+    const matchesQuery = !q || text.includes(q);
+    const filterStatus = r.getAttribute('data-filter-hidden') !== 'true';
+    r.style.display = matchesQuery && filterStatus ? '' : 'none';
+  });
+}
+
+function filterWalletStatus(status, btn) {
+  const buttons = btn.parentElement.querySelectorAll('.filter-btn');
+  buttons.forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const rows = document.querySelectorAll('#masterWalletsTable .wallet-row');
+  rows.forEach(r => {
+    const rStatus = r.getAttribute('data-status');
+    const match = status === 'ALL' || rStatus === status;
+    r.setAttribute('data-filter-hidden', match ? 'false' : 'true');
+    const q = (document.getElementById('walletSearchInput').value || '').toLowerCase().trim();
+    const text = (r.getAttribute('data-text') || '').toLowerCase();
+    r.style.display = match && (!q || text.includes(q)) ? '' : 'none';
+  });
+}
+
+// 1-CLICK FREEZE / UNFREEZE WALLET ACTION
+async function adminToggleWalletFreeze(walletId, username) {
+  const btn = document.getElementById(`walletFreezeBtn-${walletId}`);
+  const row = document.getElementById(`walletRow-${walletId}`);
+  const badge = document.getElementById(`walletStatusBadge-${walletId}`);
+
+  if (btn) {
+    btn.disabled = true;
+    btn.style.opacity = '0.6';
+  }
+
+  const csrf = getAdminCsrfToken();
+  try {
+    const res = await fetch(`/admin/wallet/${walletId}/toggle-freeze/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrf,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    if (data.success) {
+      if (typeof showToast === 'function') {
+        showToast(data.is_frozen ? 'error' : 'success', data.message);
+      } else {
+        alert(data.message);
+      }
+
+      // Update row data & UI
+      const newStatus = data.is_frozen ? 'FROZEN' : 'ACTIVE';
+      if (row) row.setAttribute('data-status', newStatus);
+
+      if (badge) {
+        badge.className = `status-badge ${newStatus}`;
+        badge.textContent = newStatus;
+      }
+
+      if (btn) {
+        if (data.is_frozen) {
+          btn.className = 'btn-action-freeze unfreeze';
+          btn.innerHTML = `<i data-lucide="unlock"></i> <span>Unfreeze Wallet</span>`;
+        } else {
+          btn.className = 'btn-action-freeze freeze';
+          btn.innerHTML = `<i data-lucide="lock"></i> <span>Freeze Wallet</span>`;
+        }
+      }
+
+      // Update KPI counters
+      const kpiActive = document.getElementById('kpiActiveWallets');
+      const kpiFrozenBadge = document.getElementById('kpiFrozenBadge');
+      const regActive = document.getElementById('regActiveWallets');
+      const regFrozen = document.getElementById('regFrozenWallets');
+      const dashFrozen = document.getElementById('dashKpiFrozen');
+
+      if (kpiActive && data.active_count !== undefined) kpiActive.innerHTML = `${data.active_count} <span class="kpi-unit">Active</span>`;
+      if (kpiFrozenBadge && data.frozen_count !== undefined) kpiFrozenBadge.textContent = `${data.frozen_count} Frozen`;
+      if (regActive && data.active_count !== undefined) regActive.textContent = data.active_count;
+      if (regFrozen && data.frozen_count !== undefined) regFrozen.textContent = data.frozen_count;
+      if (dashFrozen && data.frozen_count !== undefined) dashFrozen.textContent = data.frozen_count;
+
+      if (window.lucide) lucide.createIcons();
+    } else {
+      alert(data.error || 'Failed to update wallet status');
+    }
+  } catch (err) {
+    console.error('Freeze toggle failed:', err);
+    alert('Action failed: ' + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+    }
+  }
+}
+
+// 5. INCIDENT RESOLUTION (Integrated with Trust & Risk Engine)
+async function dashResolveIncident(incidentId, action) {
+  const row = document.getElementById(`dashIncidentRow-${incidentId}`);
+  if (action === 'confirm_fraud') {
+    if (!confirm(`Confirm Fraud for Incident #${incidentId}?\nThis will freeze the sender's wallet immediately.`)) {
+      return;
+    }
+  }
+
+  if (row) {
+    row.style.opacity = '0.5';
+    row.style.pointerEvents = 'none';
+  }
+
+  try {
+    const csrf = getAdminCsrfToken();
+    const formData = new FormData();
+    formData.append('action', action);
+    formData.append('incident_id', incidentId);
+
+    const res = await fetch(`/risk-console/resolve/${incidentId}/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrf,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json'
+      },
+      body: formData
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    if (data.success) {
+      if (typeof showToast === 'function') {
+        showToast(action === 'confirm_fraud' ? 'error' : 'success', data.message);
+      } else {
+        alert(data.message);
+      }
+
+      if (data.kpis) {
+        const p1 = document.getElementById('dashKpiPending');
+        const p2 = document.getElementById('dashRiskPendingPill');
+        const p3 = document.getElementById('dashKpiConfirmed');
+        const p4 = document.getElementById('dashKpiFrozen');
+
+        if (p1) p1.textContent = data.kpis.pending_count;
+        if (p2) p2.textContent = `${data.kpis.pending_count} Pending Triage`;
+        if (p3) p3.textContent = data.kpis.confirmed_fraud_count;
+        if (p4) p4.textContent = data.kpis.frozen_wallets_count;
+      }
+
+      if (row) {
+        row.style.transition = 'all 0.4s ease';
+        row.style.transform = 'scale(0.96)';
+        row.style.opacity = '0';
+        setTimeout(() => {
+          row.remove();
+          const list = document.getElementById('dashIncidentList');
+          if (list && list.querySelectorAll('.dash-incident-item').length === 0) {
+            list.innerHTML = `<div style="text-align:center;padding:28px 14px;color:#64748B;font-size:13px;"><span style="font-size:32px;display:block;margin-bottom:6px;">✅</span><strong style="color:var(--text);font-size:15px;display:block;margin-bottom:2px;">All Systems Nominal</strong>Zero suspicious transactions currently flagged for review hold.</div>`;
+          }
+        }, 400);
+      }
+    } else {
+      alert(data.error || 'Failed to update incident');
+      if (row) {
+        row.style.opacity = '1';
+        row.style.pointerEvents = 'auto';
+      }
+    }
+  } catch (err) {
+    console.error('Resolution failed:', err);
+    alert('Failed to resolve incident: ' + err.message);
+    if (row) {
+      row.style.opacity = '1';
+      row.style.pointerEvents = 'auto';
+    }
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.lucide) {
+    lucide.createIcons();
+  }
+});
+</script>

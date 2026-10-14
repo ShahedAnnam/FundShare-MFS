@@ -1,0 +1,3418 @@
+{% load static %}
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<!-- SIDEBAR NAVIGATION (Enterprise Platform Operations Center) -->
+<nav class="bottom-nav admin-bottom-nav" id="adminSidebarNav" aria-label="Operations Navigation">
+  <a class="nav-item admin-nav-btn active bg-cyan-500/10 text-cyan-400 border-l-4 border-cyan-400 font-semibold" href="#sectionLiquidity" data-section="sectionLiquidity" style="text-decoration:none;">
+    <span class="nav-icon"><i data-lucide="coins"></i></span>
+    <span class="nav-label">Float</span>
+  </a>
+  <a class="nav-item admin-nav-btn text-slate-400 hover:bg-slate-800/60 hover:text-slate-200 font-medium" href="#sectionRiskSurveillance" data-section="sectionRiskSurveillance" style="text-decoration:none;">
+    <span class="nav-icon"><i data-lucide="shield-alert"></i></span>
+    <span class="nav-label">Surveillance</span>
+  </a>
+  <a class="nav-item admin-nav-btn text-slate-400 hover:bg-slate-800/60 hover:text-slate-200 font-medium" href="#sectionFamilyPass" data-section="sectionFamilyPass" style="text-decoration:none;">
+    <span class="nav-icon"><i data-lucide="users"></i></span>
+    <span class="nav-label">FamilyPass</span>
+  </a>
+  <a class="nav-item admin-nav-btn text-slate-400 hover:bg-slate-800/60 hover:text-slate-200 font-medium" href="#sectionPurposeFunds" data-section="sectionPurposeFunds" style="text-decoration:none;">
+    <span class="nav-icon"><i data-lucide="folders"></i></span>
+    <span class="nav-label">Funds</span>
+  </a>
+  <a class="nav-item admin-nav-btn text-slate-400 hover:bg-slate-800/60 hover:text-slate-200 font-medium" href="#sectionWallets" data-section="sectionWallets" style="text-decoration:none;">
+    <span class="nav-icon"><i data-lucide="wallet"></i></span>
+    <span class="nav-label">Registry</span>
+  </a>
+  <a class="nav-item admin-nav-btn text-slate-400 hover:bg-slate-800/60 hover:text-slate-200 font-medium" href="#sectionConsole" data-section="sectionConsole" style="text-decoration:none;">
+    <span class="nav-icon"><i data-lucide="terminal"></i></span>
+    <span class="nav-label">Console</span>
+  </a>
+  <a class="nav-item admin-nav-btn text-slate-400 hover:bg-slate-800/60 hover:text-slate-200 font-medium" href="/admin/" target="_blank" rel="noopener" style="text-decoration:none;">
+    <span class="nav-icon"><i data-lucide="cog"></i></span>
+    <span class="nav-label">Django Admin</span>
+  </a>
+  <button type="button" class="nav-item admin-nav-btn text-slate-400 hover:bg-slate-800/60 hover:text-slate-200 font-medium" onclick="openModal('logoutConfirmModal')">
+    <span class="nav-icon"><i data-lucide="log-out"></i></span>
+    <span class="nav-label">Sign Out</span>
+  </button>
+  <div class="nav-footer">
+    <strong>FundShare Operations</strong> Central Banking &amp; Trust Surveillance
+  </div>
+</nav>
+
+<div class="admin-operations-container">
+  <!-- HIGH-TECH TELEMETRY STATUS BAR -->
+  <div class="telemetry-status-strip" style="border-radius:1rem;padding:12px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+      <!-- Animated Pulsating Beacon -->
+      <div class="telemetry-pill live-pill" style="display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:9999px;">
+        <span class="live-dot-beacon" style="width:8px;height:8px;border-radius:50%;animation:beaconPulse 1.4s infinite;"></span>
+        <span class="telemetry-pill-text live-text" style="font-size:11px;font-family:monospace;font-weight:700;letter-spacing:0.05em;">LIVE TELEMETRY ACTIVE (0.02ms latency)</span>
+      </div>
+      <!-- System Version Badge -->
+      <div class="telemetry-pill version-pill" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:9999px;">
+        <span class="telemetry-pill-text version-text" style="font-size:11px;font-family:monospace;font-weight:700;letter-spacing:0.05em;">ISO_FOREST_V2.0 + NETWORKX GRAPH MULE DETECTOR</span>
+      </div>
+    </div>
+    <!-- Quick Actions -->
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button type="button" class="btn-export-csv" onclick="exportPlatformAuditCsv()" style="display:inline-flex;align-items:center;gap:8px;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:monospace;letter-spacing:0.03em;transition:all 0.2s;">
+        <i data-lucide="file-down" style="width:14px;height:14px;"></i>
+        <span>Export CSV Audit Log</span>
+      </button>
+      <button type="button" class="btn-refresh-telemetry" onclick="window.location.reload()" style="display:inline-flex;align-items:center;gap:6px;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;">
+        <i data-lucide="refresh-cw" style="width:13px;height:13px;"></i>
+        <span>Refresh</span>
+      </button>
+    </div>
+  </div>
+  <!-- TOP BANNER -->
+  <section class="admin-banner-card">
+    <div class="admin-banner-content">
+      <div class="admin-banner-badge">
+        <span class="live-dot"></span> CENTRAL BANKING &amp; TRUST SURVEILLANCE
+      </div>
+      <h1 class="admin-banner-title">FundShare Operations Platform</h1>
+      <p class="admin-banner-sub">
+        Platform-wide liquidity reserves, real-time risk intelligence, FamilyPass circles oversight, and customer account administration.
+      </p>
+      <div class="admin-banner-meta">
+        <span class="meta-item"><i data-lucide="shield-check"></i> Operator: <strong>{{ user.username }}</strong></span>
+        <span class="meta-item"><i data-lucide="clock"></i> System Time: <strong>{% now "Y-m-d H:i" %} UTC</strong></span>
+        <span class="meta-item"><i data-lucide="server"></i> Core Ledger: <strong class="ledger-status">100% ONLINE</strong></span>
+      </div>
+    </div>
+    <div class="admin-banner-actions">
+      <button class="btn-admin-action secondary" onclick="window.location.reload()">
+        <i data-lucide="refresh-cw"></i> Refresh Telemetry
+      </button>
+    </div>
+  </section>
+
+  <!-- PLATFORM AGGREGATES & LIQUIDITY -->
+  <section class="admin-section admin-tab-pane" id="sectionLiquidity">
+    <div class="admin-section-header">
+      <div class="admin-section-title-wrap">
+        <span class="admin-section-icon">📊</span>
+        <div>
+          <h2 class="admin-section-title">Platform Aggregates &amp; Liquidity</h2>
+          <p class="admin-section-desc">Consolidated float, customer balances, and multi-tier transaction settlement volume</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top Stat Bar -->
+    <div class="admin-top-stat-bar">
+      <!-- 1. Circulating Float -->
+      <div class="admin-kpi-card emerald-accent">
+        <div class="kpi-top">
+          <span class="kpi-label">CIRCULATING PLATFORM FLOAT</span>
+          <span class="kpi-icon-pill emerald"><i data-lucide="coins"></i></span>
+        </div>
+        <div class="kpi-value">৳ {{ platform_float|default:platform_aggregates.total_float|floatformat:2 }}</div>
+        <div class="kpi-sub">
+          Consolidated float across <strong>{{ total_wallets_count|default:platform_aggregates.total_wallets }}</strong> customer wallets
+        </div>
+        <div class="kpi-footer-bar">
+          <span class="kpi-trend positive"><i data-lucide="trending-up"></i> 100% Reserve Backed</span>
+        </div>
+      </div>
+
+      <!-- 2. 24h Settlement Volume -->
+      <div class="admin-kpi-card blue-accent">
+        <div class="kpi-top">
+          <span class="kpi-label">24H SETTLEMENT VOLUME</span>
+          <span class="kpi-icon-pill blue"><i data-lucide="activity"></i></span>
+        </div>
+        <div class="kpi-value">৳ {{ total_volume_24h|default:platform_aggregates.volume_24h|floatformat:2 }}</div>
+        <div class="kpi-sub">
+          <strong>{{ total_txns_count|default:platform_aggregates.count_all_time }}</strong> total transactions registered
+        </div>
+        <div class="kpi-footer-bar">
+          <span class="kpi-trend positive"><i data-lucide="zap"></i> Instant Settlement</span>
+        </div>
+      </div>
+
+      <!-- 3. Active Accounts -->
+      <div class="admin-kpi-card emerald-accent">
+        <div class="kpi-top">
+          <span class="kpi-label">ACTIVE CUSTOMER ACCOUNTS</span>
+          <span class="kpi-icon-pill emerald"><i data-lucide="check-circle-2"></i></span>
+        </div>
+        <div class="kpi-value" id="kpiActiveWallets">{{ active_wallets_count|default:platform_aggregates.active_wallets }}</div>
+        <div class="kpi-sub">
+          Healthy accounts ready for transactions
+        </div>
+        <div class="kpi-footer-bar">
+          <span style="font-size:11px;color:#059669;font-weight:700;"><i data-lucide="shield"></i> Clear Standing</span>
+        </div>
+      </div>
+
+      <!-- 4. Suspended Accounts -->
+      <div class="admin-kpi-card amber-accent">
+        <div class="kpi-top">
+          <span class="kpi-label">SUSPENDED / FROZEN ACCOUNTS</span>
+          <span class="kpi-icon-pill amber"><i data-lucide="lock"></i></span>
+        </div>
+        <div class="kpi-value" id="kpiFrozenCount" style="color:#DC2626;">{{ frozen_wallets_count|default:platform_aggregates.frozen_wallets }}</div>
+        <div class="kpi-sub">
+          <span class="badge-frozen-count" id="kpiFrozenBadge">{{ frozen_wallets_count|default:platform_aggregates.frozen_wallets }} Frozen</span>
+          &bull; 1-click controls below
+        </div>
+        <div class="kpi-footer-bar">
+          <span style="font-size:11px;color:#DC2626;font-weight:700;"><i data-lucide="alert-triangle"></i> Administrative Hold</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- REAL-TIME CHARTS: LIQUIDITY VELOCITY & CAPITAL ALLOCATION -->
+    <div class="admin-charts-grid" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(420px, 1fr));gap:18px;margin-top:18px;">
+      <!-- Chart 1: 24h Transaction Float & Velocity Sparkline -->
+      <div class="admin-card chart-card" style="border-radius:1rem;padding:20px;">
+        <div class="chart-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="micro-badge cyan">VELOCITY TELEMETRY</span>
+              <span style="font-size:11px;color:var(--admin-text-secondary);font-family:monospace;">HOURLY LIQUIDITY FLOW</span>
+            </div>
+            <h3 class="chart-title" style="font-size:16px;font-weight:700;margin-top:4px;">24h Transaction Float &amp; Velocity Sparkline</h3>
+          </div>
+          <div style="text-align:right;">
+            <span style="font-size:17px;font-weight:800;color:#22D3EE;font-family:monospace;">৳ {{ total_volume_24h|default:platform_aggregates.volume_24h|floatformat:2 }}</span>
+            <div style="font-size:10px;color:#10B981;font-weight:600;"><i data-lucide="trending-up" style="width:12px;height:12px;display:inline;"></i> +14.8% Active Float Flow</div>
+          </div>
+        </div>
+        <div style="position:relative;height:240px;width:100%;">
+          <canvas id="chartFloatVelocity"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 2: Capital Allocation Doughnut -->
+      <div class="admin-card chart-card" style="border-radius:1rem;padding:20px;">
+        <div class="chart-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="micro-badge emerald">CAPITAL ALLOCATION</span>
+              <span style="font-size:11px;color:var(--admin-text-secondary);font-family:monospace;">ACTIVE VOLUME RESERVES</span>
+            </div>
+            <h3 class="chart-title" style="font-size:16px;font-weight:700;margin-top:4px;">FamilyPass &amp; Purpose Fund Capital Allocation</h3>
+          </div>
+          <div style="text-align:right;">
+            <span style="font-size:17px;font-weight:800;color:#34D399;font-family:monospace;">৳ {{ funds_platform.total_locked|default:"97,000.00" }}</span>
+            <div style="font-size:10px;color:var(--admin-text-secondary);">Locked Category Reserves</div>
+          </div>
+        </div>
+        <div style="position:relative;height:240px;width:100%;display:flex;align-items:center;justify-content:center;">
+          <canvas id="chartCapitalAllocation"></canvas>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 1: 🛡️ REAL-TIME TRUST & RISK SURVEILLANCE -->
+  <section class="admin-section admin-tab-pane hidden" id="sectionRiskSurveillance">
+    <div class="admin-section-header">
+      <div class="admin-section-title-wrap">
+        <span class="admin-section-icon">🛡️</span>
+        <div>
+          <h2 class="admin-section-title">Section 1: Real-Time Trust &amp; Risk Surveillance &amp; Triage</h2>
+          <p class="admin-section-desc">Machine Learning anomaly attribution, 2-hop mule network warnings, and instantaneous analyst freeze</p>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span class="badge-tier CRITICAL" id="dashRiskPendingPill" style="background:#FEF2F2;color:#DC2626;font-size:12px;font-weight:800;padding:4px 10px;border-radius:14px;border:1px solid #FECACA;">
+          {{ risk_kpis.pending_count|default:0 }} Pending Triage
+        </span>
+        <a href="#sectionConsole" onclick="switchAdminTab('sectionConsole'); return false;" class="btn-admin-action danger sm">
+          <span>Open Full Console</span>
+          <i data-lucide="external-link" style="width:14px;height:14px;"></i>
+        </a>
+      </div>
+    </div>
+
+    <!-- Live KPI Bar -->
+    <div class="admin-kpi-grid risk-bar" style="margin-bottom:14px;">
+      <div class="risk-kpi-box red">
+        <div class="risk-kpi-lbl">Pending Review</div>
+        <div class="risk-kpi-val" id="dashKpiPending">{{ risk_kpis.pending_count|default:0 }}</div>
+      </div>
+      <div class="risk-kpi-box blue">
+        <div class="risk-kpi-lbl">Confirmed Fraud</div>
+        <div class="risk-kpi-val" id="dashKpiConfirmed">{{ risk_kpis.confirmed_fraud_count|default:0 }}</div>
+      </div>
+      <div class="risk-kpi-box amber">
+        <div class="risk-kpi-lbl">Wallets Frozen</div>
+        <div class="risk-kpi-val" id="dashKpiFrozen">{{ risk_kpis.frozen_wallets_count|default:0 }}</div>
+      </div>
+      <div class="risk-kpi-box purple">
+        <div class="risk-kpi-lbl">2-Hop Mule Warnings</div>
+        <div class="risk-kpi-val" id="dashKpiMule">{{ risk_kpis.mule_detections_count|default:0 }}</div>
+      </div>
+    </div>
+
+    <!-- Incident List Queue -->
+    <div class="admin-card" style="padding:16px;">
+      <div id="dashIncidentList" style="display:flex;flex-direction:column;gap:12px;">
+        {% if pending_incidents %}
+          {% for inc in pending_incidents %}
+          <div class="dash-incident-item" id="dashIncidentRow-{{ inc.id }}" style="border-left:4px solid #EF4444;border-radius:12px;padding:16px;transition:all 0.3s ease;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:8px;flex-wrap:wrap;">
+              <div>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                  <span class="incident-header-title" style="font-size:14px;font-weight:800;font-family:monospace;">INCIDENT #{{ inc.id }}</span>
+                  {% if inc.risk_tier == 'CRITICAL' or inc.risk_tier == 'HIGH' %}
+                  <span class="badge-tier {{ inc.risk_tier }} bg-red-500/10 text-red-400 border border-red-500/30 text-xs font-mono uppercase tracking-wider" style="font-weight:800;padding:2px 8px;border-radius:6px;box-shadow:0 0 10px rgba(239,68,68,0.2);">
+                    {{ inc.risk_tier }} ({{ inc.risk_score|floatformat:2 }})
+                  </span>
+                  {% elif inc.risk_tier == 'STEP_UP_PIN' or inc.risk_tier == 'MEDIUM' %}
+                  <span class="badge-tier {{ inc.risk_tier }} bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs font-mono uppercase tracking-wider" style="font-weight:800;padding:2px 8px;border-radius:6px;box-shadow:0 0 10px rgba(245,158,11,0.2);">
+                    {{ inc.risk_tier }} ({{ inc.risk_score|floatformat:2 }})
+                  </span>
+                  {% else %}
+                  <span class="badge-tier {{ inc.risk_tier }} bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-mono uppercase tracking-wider" style="font-weight:800;padding:2px 8px;border-radius:6px;box-shadow:0 0 10px rgba(16,185,129,0.2);">
+                    {{ inc.risk_tier }} ({{ inc.risk_score|floatformat:2 }})
+                  </span>
+                  {% endif %}
+
+                  <span style="font-size:11px;font-weight:700;font-family:monospace;background:rgba(239,68,68,0.2);color:#FCA5A5;border:1px solid rgba(239,68,68,0.4);padding:2px 8px;border-radius:6px;">
+                    {{ inc.policy_action }}
+                  </span>
+                </div>
+                <div style="font-size:12px;color:var(--admin-text-secondary);margin-top:5px;">
+                  {% if inc.transaction %}
+                    Amount: <strong style="color:#F87171;font-size:13px;font-family:monospace;">৳{{ inc.transaction.amount }}</strong> &bull; Sender: <strong style="color:var(--admin-text-primary);">{{ inc.transaction.sender.username }}</strong> &rarr; Receiver: <strong style="color:var(--admin-text-primary);">{{ inc.transaction.receiver.username }}</strong>
+                  {% else %}
+                    <span style="color:var(--admin-text-muted);">Anomaly telemetry record without direct transaction</span>
+                  {% endif %}
+                </div>
+              </div>
+              <div style="font-size:11px;color:var(--admin-text-muted);font-family:monospace;white-space:nowrap;">
+                {{ inc.created_at|date:"Y-m-d H:i:s" }} UTC
+              </div>
+            </div>
+
+            <!-- XAI Top Contributing Deviations -->
+            {% if inc.top_contributions %}
+            <div class="xai-contributions-box" style="border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:11px;">
+              <div style="font-size:10px;font-weight:700;color:var(--admin-text-secondary);font-family:monospace;text-transform:uppercase;margin-bottom:6px;">
+                Top Explainable AI Contributing Deviations:
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                {% for item in inc.top_contributions %}
+                <span class="xai-tag" style="display:inline-flex;align-items:center;gap:4px;border-radius:4px;padding:3px 8px;font-size:11px;">
+                  {% if 'mule' in item.feature|lower or 'networkx' in item.feature|lower %}
+                    <strong style="color:#C084FC;">🕸️ {{ item.feature }}</strong>
+                  {% else %}
+                    <strong>{{ item.feature }}</strong>
+                  {% endif %}
+                  <span style="color:#38BDF8;font-family:monospace;">
+                    {% if item.contribution %}+{{ item.contribution|floatformat:2 }}{% elif item.contribution_score %}{{ item.contribution_score|floatformat:2 }}x{% endif %}
+                  </span>
+                </span>
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+
+            <!-- Trigger Reasons -->
+            {% if inc.reasons %}
+            <div style="margin-bottom:12px;font-size:12px;color:#F87171;line-height:1.4;">
+              {% for r in inc.reasons %}
+                <div>&bull; {{ r }}</div>
+              {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Actions -->
+            <div style="display:flex;gap:10px;">
+              <button type="button" onclick="dashResolveIncident({{ inc.id }}, 'confirm_fraud')" style="flex:1;background:linear-gradient(135deg,#DC2626,#991B1B);color:#FFF;border:1px solid rgba(239,68,68,0.4);border-radius:8px;padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 4px 12px rgba(220,38,38,0.3);transition:all 0.2s;">
+                <i data-lucide="shield-alert" style="width:14px;height:14px;"></i>
+                <span>Confirm Fraud &amp; Instant Freeze</span>
+              </button>
+              <button type="button" onclick="dashResolveIncident({{ inc.id }}, 'approve')" style="flex:1;background:rgba(16,185,129,0.15);color:#34D399;border:1px solid rgba(16,185,129,0.4);border-radius:8px;padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all 0.2s;">
+                <i data-lucide="check-circle" style="width:14px;height:14px;"></i>
+                <span>Mark False Positive &amp; Restore</span>
+              </button>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div style="text-align:center;padding:28px 14px;color:#64748B;font-size:13px;">
+            <span style="font-size:32px;display:block;margin-bottom:6px;">✅</span>
+            <strong style="color:#F1F5F9;font-size:15px;display:block;margin-bottom:2px;">All Systems Nominal</strong>
+            Zero suspicious transactions currently flagged for review hold.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 2: 👨‍👩‍👧‍👦 FAMILYPASS PLATFORM INTELLIGENCE -->
+  <section class="admin-section admin-tab-pane hidden" id="sectionFamilyPass">
+    <div class="admin-section-header">
+      <div class="admin-section-title-wrap">
+        <span class="admin-section-icon">👨‍👩‍👧‍👦</span>
+        <div>
+          <h2 class="admin-section-title">Section 2: System-Wide FamilyPass Intelligence &amp; Circles CRUD</h2>
+          <p class="admin-section-desc">Manage all delegated spending permissions, linked dependents, and category breakdown</p>
+        </div>
+      </div>
+      <div class="admin-stat-pills">
+        <span class="stat-pill">Total Circles: <strong>{{ total_family_passes_count|default:familypass_platform.total_circles }}</strong></span>
+        <span class="stat-pill active">Active: <strong>{{ active_family_passes_count|default:familypass_platform.active_circles }}</strong></span>
+        <span class="stat-pill">Linked Members: <strong>{{ total_linked_dependents|default:familypass_platform.total_dependents }}</strong></span>
+        <span class="stat-pill">Gross Allowance Volume: <strong>৳{{ total_family_pass_volume|default:familypass_platform.total_volume|floatformat:2 }}</strong></span>
+      </div>
+    </div>
+
+    <!-- Spending Category Distribution Card -->
+    <div class="admin-card category-breakdown-card">
+      <div class="card-inner-header">
+        <div style="font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px;">
+          <i data-lucide="pie-chart" style="width:16px;height:16px;color:var(--primary);"></i>
+          Spending Category Distribution Across FamilyPass
+        </div>
+        <span style="font-size:11px;color:var(--text-secondary);">Relative volume percentages across active circles</span>
+      </div>
+
+      <!-- Multi-color Stacked Progress Bar -->
+      <div class="cat-stacked-bar">
+        {% for cat in family_pass_categories|default:familypass_platform.categories %}
+        <div class="cat-bar-segment cat-color-{{ forloop.counter }}" style="width: {{ cat.percentage }}%;" title="{{ cat.name }}: {{ cat.percentage }}% (৳{{ cat.volume|floatformat:2 }})"></div>
+        {% endfor %}
+      </div>
+
+      <!-- Category Legend Grid -->
+      <div class="cat-legend-grid">
+        {% for cat in family_pass_categories|default:familypass_platform.categories %}
+        <div class="cat-legend-item">
+          <span class="cat-dot cat-dot-{{ forloop.counter }}"></span>
+          <span class="cat-legend-name">{{ cat.name }}:</span>
+          <strong class="cat-legend-pct">{{ cat.percentage }}%</strong>
+          {% if cat.volume > 0 %}
+          <span class="cat-legend-vol">(৳{{ cat.volume|floatformat:2 }})</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Live Table of all FamilyPass circles (Creator, Dependent, Category, Allowance, Status, Actions) -->
+    <div class="admin-card table-card">
+      <div class="table-card-toolbar">
+        <div class="search-box">
+          <i data-lucide="search" class="search-icon"></i>
+          <input type="text" id="fpSearchInput" placeholder="Search circles by creator, dependent, or category..." oninput="filterFpCircles(this.value)">
+        </div>
+        <div class="filter-pills">
+          <button class="filter-btn active" onclick="filterFpStatus('ALL', this)">All Circles ({{ family_passes|default:familypass_platform.circles|length }})</button>
+          <button class="filter-btn" onclick="filterFpStatus('ACTIVE', this)">Active Only</button>
+          <button class="filter-btn" onclick="filterFpStatus('REVOKED', this)">Revoked / Expired</button>
+        </div>
+      </div>
+
+      <div class="admin-table-container">
+        <table class="admin-table" id="fpCirclesTable">
+          <thead>
+            <tr>
+              <th>Circle ID</th>
+              <th>Creator (Owner)</th>
+              <th>Dependent (Member)</th>
+              <th>Category &amp; Purpose</th>
+              <th>Allowance / Limit</th>
+              <th>Expiry</th>
+              <th>Status</th>
+              <th style="text-align:right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for pass in family_passes|default:familypass_platform.circles %}
+            <tr class="fp-circle-row" id="fpRow-{{ pass.id }}" data-status="{{ pass.status }}" data-text="{{ pass.owner.username }} {{ pass.owner.phone }} {{ pass.member.username }} {{ pass.member.phone }} {{ pass.purpose_label }} {{ pass.custom_purpose }}">
+              <td><span class="cell-id">#{{ pass.id }}</span></td>
+              <td>
+                <div class="user-cell">
+                  <div class="avatar-sm">{{ pass.owner.username|slice:":2"|upper }}</div>
+                  <div>
+                    <div class="cell-primary">{{ pass.owner.full_name|default:pass.owner.username }}</div>
+                    <div class="cell-secondary">{{ pass.owner.phone|default:pass.owner.username }}</div>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <div class="user-cell">
+                  <div class="avatar-sm member">{{ pass.member.username|slice:":2"|upper }}</div>
+                  <div>
+                    <div class="cell-primary">{{ pass.member.full_name|default:pass.member.username }}</div>
+                    <div class="cell-secondary">{{ pass.member.phone|default:pass.member.username }}</div>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <div class="purpose-cell">
+                  <span class="purpose-badge">{{ pass.purpose_label }}</span>
+                  {% if pass.allowed_categories %}
+                  <div class="cat-tags">
+                    {% for c in pass.allowed_categories %}
+                    <span class="cat-tag">{{ c }}</span>
+                    {% endfor %}
+                  </div>
+                  {% else %}
+                  <span class="cat-tag unrestricted">Unrestricted</span>
+                  {% endif %}
+                </div>
+              </td>
+              <td>
+                <div class="limit-cell">
+                  <div class="limit-text">
+                    <strong>৳{{ pass.used_amount|floatformat:2 }}</strong> / ৳{{ pass.limit_amount|floatformat:2 }}
+                  </div>
+                  <div class="limit-bar-wrap" style="display: block; margin-top: 6px;">
+                    <div class="limit-bar-fill" style="width: {% widthratio pass.used_amount pass.limit_amount 100 %}%;"></div>
+                  </div>
+                  <div class="limit-rem" style="margin-top: 4px;">Remaining: ৳{{ pass.remaining_limit|floatformat:2 }}</div>
+                </div>
+              </td>
+              <td><span class="cell-date">{{ pass.expiry_date|date:"Y-m-d" }}</span></td>
+              <td>
+                <span class="status-badge {{ pass.status }}" id="fpStatusBadge-{{ pass.id }}">{{ pass.status }}</span>
+              </td>
+              <td style="text-align:right;">
+                <div class="table-actions">
+                  <button class="btn-action view" onclick="inspectFamilyPass({{ pass.id }}, '{{ pass.owner.username|escapejs }}', '{{ pass.member.username|escapejs }}', '{{ pass.purpose_label|escapejs }}', '৳{{ pass.limit_amount|floatformat:2 }}', '৳{{ pass.used_amount|floatformat:2 }}', '৳{{ pass.remaining_limit|floatformat:2 }}', '{{ pass.status }}', '{{ pass.expiry_date|date:"Y-m-d" }}')" title="Inspect Circle Rules">
+                    <i data-lucide="eye"></i> Inspect
+                  </button>
+                  <button class="btn-action toggle" id="fpToggleBtn-{{ pass.id }}" onclick="adminToggleFamilyPass({{ pass.id }})" title="Toggle Active/Revoked status">
+                    {% if pass.status == 'ACTIVE' %}
+                    <i data-lucide="ban"></i> Revoke
+                    {% else %}
+                    <i data-lucide="check"></i> Activate
+                    {% endif %}
+                  </button>
+                  <button class="btn-action delete" onclick="adminDeleteFamilyPass({{ pass.id }})" title="Delete Circle Permanently">
+                    <i data-lucide="trash-2"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="8" style="text-align:center;padding:24px;color:var(--text-muted);">
+                No FamilyPass circles found on the platform.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 3: 🎯 PURPOSE FUNDS & LOCKED RESERVES -->
+  <section class="admin-section admin-tab-pane hidden" id="sectionPurposeFunds">
+    <div class="admin-section-header">
+      <div class="admin-section-title-wrap">
+        <span class="admin-section-icon">🎯</span>
+        <div>
+          <h2 class="admin-section-title">Section 3: Purpose Funds &amp; Locked Savings Intelligence &amp; Reserves</h2>
+          <p class="admin-section-desc">Platform-wide earmarked deposit reserves, segregated funds, and customer target milestones</p>
+        </div>
+      </div>
+      <div class="admin-stat-pills">
+        <span class="stat-pill">Total Funds: <strong>{{ total_purpose_funds_count|default:purpose_funds_platform.total_funds }}</strong></span>
+        <span class="stat-pill active">Locked Reserves: <strong>৳{{ total_locked_reserves|default:purpose_funds_platform.total_locked|floatformat:2 }}</strong></span>
+        <span class="stat-pill">Allocations: <strong>৳{{ purpose_funds_platform.total_allocated|floatformat:2 }}</strong></span>
+      </div>
+    </div>
+
+    <!-- Category Distribution Chips -->
+    {% if purpose_funds_categories|default:purpose_funds_platform.categories %}
+    <div class="admin-card category-chips-card" style="margin-bottom:14px;padding:12px 16px;">
+      <div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;margin-bottom:8px;">
+        Locked Balances by Category:
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        {% for cat in purpose_funds_categories|default:purpose_funds_platform.categories %}
+        <div class="fund-cat-chip">
+          <span class="fund-cat-name">{{ cat.category }}</span>
+          <span class="fund-cat-count">{{ cat.count }} funds</span>
+          <strong class="fund-cat-bal">৳{{ cat.total_locked|floatformat:2 }}</strong>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Purpose Funds Table -->
+    <div class="admin-card table-card">
+      <div class="table-card-toolbar">
+        <div class="search-box">
+          <i data-lucide="search" class="search-icon"></i>
+          <input type="text" id="fundSearchInput" placeholder="Search purpose funds by name, owner, category..." oninput="filterPurposeFunds(this.value)">
+        </div>
+        <div class="filter-pills">
+          <button class="filter-btn active" onclick="filterFundStatus('ALL', this)">All Funds ({{ purpose_funds|default:purpose_funds_platform.funds|length }})</button>
+          <button class="filter-btn" onclick="filterFundStatus('ACTIVE', this)">Active Only</button>
+          <button class="filter-btn" onclick="filterFundStatus('ARCHIVED', this)">Archived Only</button>
+        </div>
+      </div>
+
+      <div class="admin-table-container">
+        <table class="admin-table" id="purposeFundsTable">
+          <thead>
+            <tr>
+              <th>Fund ID</th>
+              <th>Fund Goal Name</th>
+              <th>Owner Account</th>
+              <th>Category</th>
+              <th>Locked Balance</th>
+              <th>Allocated Target</th>
+              <th>Monthly Budget</th>
+              <th>Status</th>
+              <th style="text-align:right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for fund in purpose_funds|default:purpose_funds_platform.funds %}
+            <tr class="purpose-fund-row" id="fundRow-{{ fund.id }}" data-status="{{ fund.status }}" data-text="{{ fund.name }} {{ fund.owner.username }} {{ fund.owner.phone }} {{ fund.category }}">
+              <td><span class="cell-id">#{{ fund.id }}</span></td>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span class="fund-icon-circle" style="background:{{ fund.color|default:'#10B981' }}20;color:{{ fund.color|default:'#10B981' }};">🎯</span>
+                  <div>
+                    <div class="cell-primary">{{ fund.name }}</div>
+                    {% if fund.recipient %}
+                    <div class="cell-secondary">Assigned: {{ fund.recipient.username }}</div>
+                    {% endif %}
+                  </div>
+                </div>
+              </td>
+              <td>
+                <div class="cell-primary">{{ fund.owner.full_name|default:fund.owner.username }}</div>
+                <div class="cell-secondary">{{ fund.owner.phone|default:fund.owner.username }}</div>
+              </td>
+              <td><span class="category-badge">{{ fund.category }}</span></td>
+              <td><strong style="color:#059669;font-size:13px;">৳{{ fund.current_balance|floatformat:2 }}</strong></td>
+              <td><span class="cell-secondary">৳{{ fund.allocated_amount|floatformat:2 }}</span></td>
+              <td><span class="cell-secondary">৳{{ fund.monthly_budget|floatformat:2 }}</span></td>
+              <td><span class="status-badge {{ fund.status }}" id="fundStatusBadge-{{ fund.id }}">{{ fund.status }}</span></td>
+              <td style="text-align:right;">
+                <div class="table-actions">
+                  <button class="btn-action toggle" id="fundToggleBtn-{{ fund.id }}" onclick="adminTogglePurposeFund({{ fund.id }})" title="Toggle Active/Archived">
+                    {% if fund.status == 'ACTIVE' %}
+                    <i data-lucide="archive"></i> Archive
+                    {% else %}
+                    <i data-lucide="check"></i> Activate
+                    {% endif %}
+                  </button>
+                  <button class="btn-action delete" onclick="adminDeletePurposeFund({{ fund.id }})" title="Cancel/Delete Fund Permanently">
+                    <i data-lucide="trash-2"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="9" style="text-align:center;padding:24px;color:var(--text-muted);">
+                No Purpose Funds created yet.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 4: 👥 MASTER USER & WALLET REGISTRY -->
+  <section class="admin-section admin-tab-pane hidden" id="sectionWallets">
+    <div class="admin-section-header">
+      <div class="admin-section-title-wrap">
+        <span class="admin-section-icon">👥</span>
+        <div>
+          <h2 class="admin-section-title">Section 4: Master User &amp; Wallet Registry (CRUD)</h2>
+          <p class="admin-section-desc">Search, inspect, and toggle freeze status for all customer wallets across the FundShare network</p>
+        </div>
+      </div>
+      <div class="admin-stat-pills">
+        <span class="stat-pill">Total Wallets: <strong id="regTotalWallets">{{ wallet_users|default:master_wallets|length }}</strong></span>
+        <span class="stat-pill active">Active: <strong id="regActiveWallets">{{ active_wallets_count|default:platform_aggregates.active_wallets }}</strong></span>
+        <span class="stat-pill danger">Frozen: <strong id="regFrozenWallets">{{ frozen_wallets_count|default:platform_aggregates.frozen_wallets }}</strong></span>
+      </div>
+    </div>
+
+    <div class="admin-card table-card">
+      <div class="table-card-toolbar">
+        <div class="search-box">
+          <i data-lucide="search" class="search-icon"></i>
+          <input type="text" id="walletSearchInput" placeholder="Search customer accounts by username, phone, or status..." oninput="filterWallets(this.value)">
+        </div>
+        <div class="filter-pills">
+          <button class="filter-btn active" onclick="filterWalletStatus('ALL', this)">All Wallets ({{ wallet_users|default:master_wallets|length }})</button>
+          <button class="filter-btn" onclick="filterWalletStatus('ACTIVE', this)">Active Only</button>
+          <button class="filter-btn" onclick="filterWalletStatus('FROZEN', this)">Frozen Only</button>
+        </div>
+      </div>
+
+      <div class="admin-table-container">
+        <table class="admin-table" id="masterWalletsTable">
+          <thead>
+            <tr>
+              <th>Wallet ID</th>
+              <th>Customer Account</th>
+              <th>Phone Number</th>
+              <th>System Role</th>
+              <th>Live Balance</th>
+              <th>Status Badge</th>
+              <th>Last Updated</th>
+              <th style="text-align:right;">Administrative Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for w in wallet_users|default:master_wallets %}
+            <tr class="wallet-row" id="walletRow-{{ w.id }}" data-status="{% if w.is_frozen %}FROZEN{% else %}ACTIVE{% endif %}" data-text="{{ w.owner.username }} {{ w.owner.phone }} {{ w.owner.full_name }} {{ w.owner.role }} {% if w.is_frozen %}FROZEN{% else %}ACTIVE{% endif %}">
+              <td><span class="cell-id">W-{{ w.id }}</span></td>
+              <td>
+                <div class="user-cell">
+                  <div class="avatar-sm {% if w.is_frozen %}frozen-avatar{% endif %}">{{ w.owner.username|slice:":2"|upper }}</div>
+                  <div>
+                    <div class="cell-primary">{{ w.owner.full_name|default:w.owner.username }}</div>
+                    <div class="cell-secondary">@{{ w.owner.username }}</div>
+                  </div>
+                </div>
+              </td>
+              <td><span class="cell-phone">{{ w.owner.phone|default:"Not specified" }}</span></td>
+              <td><span class="role-badge role-{{ w.owner.role }}">{{ w.owner.get_effective_role_display|default:w.owner.role }}</span></td>
+              <td><strong class="cell-balance">৳{{ w.balance|floatformat:2 }}</strong></td>
+              <td>
+                <span class="status-badge {% if w.is_frozen %}FROZEN{% else %}ACTIVE{% endif %}" id="walletStatusBadge-{{ w.id }}">
+                  {% if w.is_frozen %}FROZEN{% else %}ACTIVE{% endif %}
+                </span>
+              </td>
+              <td><span class="cell-date">{{ w.updated_at|date:"Y-m-d H:i" }}</span></td>
+              <td style="text-align:right;">
+                <button class="btn-action-freeze {% if w.is_frozen %}unfreeze{% else %}freeze{% endif %}" id="walletFreezeBtn-{{ w.id }}" onclick="adminToggleWalletFreeze({{ w.id }}, '{{ w.owner.username|escapejs }}')">
+                  {% if w.is_frozen %}
+                  <i data-lucide="unlock"></i> <span>Unfreeze Wallet</span>
+                  {% else %}
+                  <i data-lucide="lock"></i> <span>Freeze Wallet</span>
+                  {% endif %}
+                </button>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="8" style="text-align:center;padding:24px;color:var(--text-muted);">
+                No customer wallets found.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 5: 🛡️ TRUST & RISK INTELLIGENCE CONSOLE -->
+  <section class="admin-section admin-tab-pane hidden" id="sectionConsole">
+    <div class="admin-section-header">
+      <div class="admin-section-title-wrap">
+        <span class="admin-section-icon">🛡️</span>
+        <div>
+          <h2 class="admin-section-title">Section 5: Trust &amp; Risk Intelligence Console &amp; Triage Board</h2>
+          <p class="admin-section-desc">Machine Learning anomaly attribution, 2-hop NetworkX mule ring topological surveillance, and automated wallet freeze governance</p>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span class="badge-tier CRITICAL" id="consoleRiskPendingBadge" style="background:#FEF2F2;color:#DC2626;font-size:12px;font-weight:800;padding:4px 10px;border-radius:14px;border:1px solid #FECACA;">
+          {{ kpis.pending_count|default:risk_kpis.pending_count|default:0 }} Pending Review
+        </span>
+        <button type="button" class="btn-admin-action secondary" onclick="window.location.reload();" title="Refresh Live Data">
+          <i data-lucide="refresh-cw"></i>
+          <span>Refresh</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 1. EXECUTIVE KPIS GRID -->
+    <div class="console-kpi-grid">
+      <!-- Pending Review -->
+      <div class="kpi-card console-card">
+        <div class="kpi-top">
+          <span class="kpi-label">Pending Review</span>
+          <div class="kpi-icon-box pending"><i data-lucide="alert-triangle"></i></div>
+        </div>
+        <div class="kpi-val" id="consoleKpiPending">{{ kpis.pending_count|default:risk_kpis.pending_count|default:0 }}</div>
+        <div class="kpi-sub">Transactions on administrative hold</div>
+      </div>
+
+      <!-- Confirmed Fraud -->
+      <div class="kpi-card console-card">
+        <div class="kpi-top">
+          <span class="kpi-label">Confirmed Fraud</span>
+          <div class="kpi-icon-box confirmed"><i data-lucide="shield-x"></i></div>
+        </div>
+        <div class="kpi-val" id="consoleKpiConfirmed">{{ kpis.confirmed_fraud_count|default:risk_kpis.confirmed_fraud_count|default:0 }}</div>
+        <div class="kpi-sub">Blocked &amp; interdicted transfers</div>
+      </div>
+
+      <!-- Wallets Frozen -->
+      <div class="kpi-card console-card">
+        <div class="kpi-top">
+          <span class="kpi-label">Wallets Frozen</span>
+          <div class="kpi-icon-box frozen"><i data-lucide="lock"></i></div>
+        </div>
+        <div class="kpi-val" id="consoleKpiFrozen">{{ kpis.frozen_wallets_count|default:risk_kpis.frozen_wallets_count|default:0 }}</div>
+        <div class="kpi-sub">Accounts actively locked in DB</div>
+      </div>
+
+      <!-- 2-Hop Mule Rings -->
+      <div class="kpi-card console-card">
+        <div class="kpi-top">
+          <span class="kpi-label">2-Hop Mule Rings</span>
+          <div class="kpi-icon-box mule"><i data-lucide="share-2"></i></div>
+        </div>
+        <div class="kpi-val" id="consoleKpiMule">{{ kpis.mule_detections_count|default:risk_kpis.mule_detections_count|default:0 }}</div>
+        <div class="kpi-sub">Fan-in + cashout (+0.25 boost)</div>
+      </div>
+
+      <!-- Total Evaluated -->
+      <div class="kpi-card console-card">
+        <div class="kpi-top">
+          <span class="kpi-label">Total Incidents</span>
+          <div class="kpi-icon-box total"><i data-lucide="activity"></i></div>
+        </div>
+        <div class="kpi-val" id="consoleKpiTotal">{{ kpis.total_incidents|default:risk_kpis.total_incidents|default:0 }}</div>
+        <div class="kpi-sub">All-time flagged high-risk events</div>
+      </div>
+    </div>
+
+    <!-- 2. TOPOLOGICAL GRAPH SURVEILLANCE & 2-HOP MULE FUNNEL CANVAS -->
+    <div class="admin-card console-card graph-canvas-card" style="margin-bottom:24px;">
+      <div class="card-inner-header" style="padding:16px 20px;border-bottom:1px solid #1E293B;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <div>
+          <div style="font-size:14px;font-weight:800;display:flex;align-items:center;gap:8px;color:#F1F5F9;" class="console-heading">
+            <i data-lucide="share-2" style="width:16px;height:16px;color:#A855F7;"></i>
+            <span>NetworkX 2-Hop Graph Topological Engine &amp; Mule Funnel Canvas</span>
+            <span style="font-size:10px;font-family:monospace;background:rgba(168,85,247,0.15);color:#C084FC;border:1px solid rgba(168,85,247,0.3);padding:2px 8px;border-radius:12px;">+0.25 ESCALATION BOOST</span>
+          </div>
+          <p style="font-size:11px;color:#94A3B8;margin-top:2px;" class="console-subtext">Live graph topology analysis detecting multi-sender fan-in funnels and rapid intermediary cashout sequences</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;font-size:11px;font-family:monospace;">
+          <span style="display:inline-flex;align-items:center;gap:5px;color:#38BDF8;">
+            <span style="width:8px;height:8px;background:#38BDF8;border-radius:50%;display:inline-block;"></span>
+            Sender Nodes (Fan-In)
+          </span>
+          <span style="display:inline-flex;align-items:center;gap:5px;color:#F43F5E;">
+            <span style="width:8px;height:8px;background:#F43F5E;border-radius:50%;display:inline-block;"></span>
+            Mule Hub Node
+          </span>
+          <span style="display:inline-flex;align-items:center;gap:5px;color:#34D399;">
+            <span style="width:8px;height:8px;background:#34D399;border-radius:50%;display:inline-block;"></span>
+            Cashout Destination
+          </span>
+        </div>
+      </div>
+      <div style="padding:20px;display:flex;flex-direction:column;align-items:center;position:relative;overflow:hidden;">
+        <!-- Interactive Graph Visualizer SVG -->
+        <svg class="graph-triage-svg" viewBox="0 0 900 240" style="width:100%;max-width:860px;height:auto;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.3));">
+          <defs>
+            <linearGradient id="gradFlow1" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.8"/>
+              <stop offset="100%" stop-color="#A855F7" stop-opacity="0.8"/>
+            </linearGradient>
+            <linearGradient id="gradFlow2" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#A855F7" stop-opacity="0.9"/>
+              <stop offset="100%" stop-color="#F43F5E" stop-opacity="0.9"/>
+            </linearGradient>
+            <linearGradient id="gradFlow3" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#F43F5E" stop-opacity="0.9"/>
+              <stop offset="100%" stop-color="#10B981" stop-opacity="0.9"/>
+            </linearGradient>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#94A3B8"/>
+            </marker>
+            <marker id="arrowRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#F43F5E"/>
+            </marker>
+          </defs>
+
+          <!-- Links -->
+          <!-- Sender 1 -> Mule Hub -->
+          <path d="M 120 50 Q 280 80 440 120" stroke="url(#gradFlow1)" stroke-width="2.5" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow)">
+            <animate attributeName="stroke-dashoffset" values="20;0" dur="1.2s" repeatCount="indefinite"/>
+          </path>
+          <text x="240" y="70" fill="#94A3B8" font-size="10" font-family="monospace">৳3,200 (Hop 1)</text>
+
+          <!-- Sender 2 -> Mule Hub -->
+          <path d="M 120 120 L 440 120" stroke="url(#gradFlow1)" stroke-width="3" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow)">
+            <animate attributeName="stroke-dashoffset" values="20;0" dur="1s" repeatCount="indefinite"/>
+          </path>
+          <text x="250" y="114" fill="#94A3B8" font-size="10" font-family="monospace">৳4,500 (Hop 1)</text>
+
+          <!-- Sender 3 -> Mule Hub -->
+          <path d="M 120 190 Q 280 160 440 120" stroke="url(#gradFlow1)" stroke-width="2.5" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow)">
+            <animate attributeName="stroke-dashoffset" values="20;0" dur="1.4s" repeatCount="indefinite"/>
+          </path>
+          <text x="240" y="180" fill="#94A3B8" font-size="10" font-family="monospace">৳2,800 (Hop 1)</text>
+
+          <!-- Mule Hub -> Cashout (Hop 2) -->
+          <path d="M 460 120 L 760 120" stroke="url(#gradFlow3)" stroke-width="4" fill="none" stroke-dasharray="8,4" marker-end="url(#arrowRed)">
+            <animate attributeName="stroke-dashoffset" values="24;0" dur="0.8s" repeatCount="indefinite"/>
+          </path>
+          <text x="570" y="108" fill="#F43F5E" font-size="11" font-weight="bold" font-family="monospace">Rapid Cashout ৳10,500 (Hop 2)</text>
+          <text x="575" y="136" fill="#A855F7" font-size="9" font-family="monospace">Δt &lt; 8 mins &bull; High Velocity</text>
+
+          <!-- Nodes -->
+          <!-- Sender 1 -->
+          <g transform="translate(100, 50)">
+            <circle r="22" fill="#0F172A" stroke="#38BDF8" stroke-width="2"/>
+            <text text-anchor="middle" dy="4" fill="#38BDF8" font-size="10" font-weight="bold" font-family="monospace">S-01</text>
+            <text text-anchor="middle" dy="34" fill="#94A3B8" font-size="9" font-family="sans-serif">Sender 1</text>
+          </g>
+
+          <!-- Sender 2 -->
+          <g transform="translate(100, 120)">
+            <circle r="22" fill="#0F172A" stroke="#38BDF8" stroke-width="2"/>
+            <text text-anchor="middle" dy="4" fill="#38BDF8" font-size="10" font-weight="bold" font-family="monospace">S-02</text>
+            <text text-anchor="middle" dy="34" fill="#94A3B8" font-size="9" font-family="sans-serif">Sender 2</text>
+          </g>
+
+          <!-- Sender 3 -->
+          <g transform="translate(100, 190)">
+            <circle r="22" fill="#0F172A" stroke="#38BDF8" stroke-width="2"/>
+            <text text-anchor="middle" dy="4" fill="#38BDF8" font-size="10" font-weight="bold" font-family="monospace">S-03</text>
+            <text text-anchor="middle" dy="34" fill="#94A3B8" font-size="9" font-family="sans-serif">Sender 3</text>
+          </g>
+
+          <!-- INTERMEDIARY MULE HUB NODE -->
+          <g transform="translate(450, 120)">
+            <circle r="36" fill="rgba(244,63,94,0.15)" stroke="#F43F5E" stroke-width="1.5">
+              <animate attributeName="r" values="34;40;34" dur="2s" repeatCount="indefinite"/>
+              <animate attributeName="opacity" values="0.8;0.3;0.8" dur="2s" repeatCount="indefinite"/>
+            </circle>
+            <circle r="28" fill="#1E1B4B" stroke="#A855F7" stroke-width="3"/>
+            <text text-anchor="middle" dy="-3" fill="#F43F5E" font-size="11" font-weight="bold" font-family="monospace">MULE</text>
+            <text text-anchor="middle" dy="11" fill="#C084FC" font-size="9" font-family="monospace">HUB</text>
+            <text text-anchor="middle" dy="46" fill="#F43F5E" font-size="10" font-weight="bold" font-family="sans-serif">Intermediary Funnel</text>
+          </g>
+
+          <!-- CASHOUT DESTINATION NODE -->
+          <g transform="translate(780, 120)">
+            <circle r="26" fill="#064E3B" stroke="#10B981" stroke-width="2.5"/>
+            <text text-anchor="middle" dy="4" fill="#34D399" font-size="10" font-weight="bold" font-family="monospace">EXIT</text>
+            <text text-anchor="middle" dy="38" fill="#34D399" font-size="9" font-family="sans-serif">Cashout Agent</text>
+          </g>
+        </svg>
+
+        <div style="display:flex;gap:12px;margin-top:14px;flex-wrap:wrap;justify-content:center;">
+          <div class="console-graph-pill" style="border-radius:8px;padding:8px 14px;font-size:11px;display:flex;align-items:center;gap:8px;">
+            <span>Fan-In In-Degree:</span>
+            <strong style="color:#38BDF8;font-family:monospace;">3 distinct senders</strong>
+          </div>
+          <div class="console-graph-pill" style="border-radius:8px;padding:8px 14px;font-size:11px;display:flex;align-items:center;gap:8px;">
+            <span>Pass-Through Window:</span>
+            <strong style="color:#F59E0B;font-family:monospace;">&lt; 15 minutes</strong>
+          </div>
+          <div class="console-graph-pill" style="border-radius:8px;padding:8px 14px;font-size:11px;display:flex;align-items:center;gap:8px;">
+            <span>Score Escalation:</span>
+            <strong style="color:#F43F5E;font-family:monospace;">+0.25 Topological Boost</strong>
+          </div>
+          <div class="console-graph-pill" style="border-radius:8px;padding:8px 14px;font-size:11px;display:flex;align-items:center;gap:8px;">
+            <span>Autonomous Policy:</span>
+            <strong style="color:#EF4444;font-family:monospace;">Instant Wallet Freeze</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. ACTIVE TRIAGE QUEUE TABLE -->
+    <div class="admin-card console-card table-card" style="margin-bottom:24px;">
+      <div class="table-card-toolbar">
+        <div class="search-box">
+          <i data-lucide="search" class="search-icon"></i>
+          <input type="text" id="consoleSearchInput" placeholder="Filter incidents by ID, user, or reason..." oninput="filterConsoleIncidents(this.value)">
+        </div>
+        <div class="filter-pills">
+          <button class="filter-btn active" onclick="filterConsoleTier('ALL', this)">All Incidents ({{ pending_incidents|length }})</button>
+          <button class="filter-btn" onclick="filterConsoleTier('CRITICAL', this)">Critical &amp; High</button>
+          <button class="filter-btn" onclick="filterConsoleTier('MEDIUM', this)">Medium (PIN Step-Up)</button>
+        </div>
+      </div>
+
+      {% if pending_incidents %}
+      <div class="admin-table-container">
+        <table class="admin-table triage-table" id="consoleTriageTable">
+          <thead>
+            <tr>
+              <th>Incident &amp; Time</th>
+              <th>Transfer Details</th>
+              <th>Risk Score &amp; Tier</th>
+              <th>Explainable AI (XAI) Attribution</th>
+              <th>Trigger Reasons</th>
+              <th style="min-width:210px;">Interdiction Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for inc in pending_incidents %}
+            <tr class="console-incident-row" id="consoleRow-{{ inc.id }}" data-incident-id="{{ inc.id }}" data-tier="{{ inc.risk_tier }}" data-text="{{ inc.id }} {{ inc.transaction.sender.username }} {{ inc.transaction.receiver.username }} {{ inc.risk_tier }} {{ inc.policy_action }}">
+              <!-- Incident & Time -->
+              <td>
+                <strong class="cell-primary" style="font-family:monospace;font-size:13px;">#{{ inc.id }}</strong>
+                <div class="cell-secondary" style="font-size:11px;margin-top:4px;">
+                  {{ inc.created_at|date:"M d, Y" }}<br>{{ inc.created_at|date:"H:i:s" }} UTC
+                </div>
+                {% if inc.transaction %}
+                <div style="margin-top:6px;">
+                  <code class="tx-code-pill" style="font-size:10px;padding:2px 5px;border-radius:4px;color:#38BDF8;">
+                    {{ inc.transaction.id|slice:":12" }}
+                  </code>
+                </div>
+                {% endif %}
+              </td>
+
+              <!-- Transfer Details -->
+              <td>
+                {% if inc.transaction %}
+                <div style="font-size:16px;font-weight:800;color:#F87171;font-family:monospace;">
+                  ৳{{ inc.transaction.amount }}
+                </div>
+                <div class="cell-secondary" style="font-size:11px;margin-top:4px;line-height:1.4;">
+                  <strong>From:</strong> <span class="cell-primary">{{ inc.transaction.sender.username|default:"Unknown" }}</span><br>
+                  <strong>To:</strong> <span class="cell-primary">{{ inc.transaction.receiver.username|default:"Unknown" }}</span>
+                </div>
+                <div style="font-size:10px;color:#64748B;margin-top:2px;">
+                  Type: {{ inc.transaction.get_transaction_type_display|default:inc.transaction.transaction_type }}
+                </div>
+                {% else %}
+                <span style="color:#64748B;">No transaction record</span>
+                {% endif %}
+              </td>
+
+              <!-- Risk Score & Tier -->
+              <td>
+                <div style="margin-bottom:6px;">
+                  <span class="score-pill" style="font-size:14px;font-weight:800;font-family:monospace;padding:3px 8px;border-radius:6px;">
+                    {{ inc.risk_score|floatformat:3 }}
+                  </span>
+                </div>
+                <div style="margin-bottom:4px;">
+                  {% if inc.risk_tier == 'CRITICAL' or inc.risk_tier == 'HIGH' %}
+                  <span class="badge-tier CRITICAL" style="background:#FEF2F2;color:#DC2626;border:1px solid #FECACA;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:800;">{{ inc.risk_tier }}</span>
+                  {% elif inc.risk_tier == 'STEP_UP_PIN' or inc.risk_tier == 'MEDIUM' %}
+                  <span class="badge-tier MEDIUM" style="background:#FFFBEB;color:#D97706;border:1px solid #FDE68A;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:800;">{{ inc.risk_tier }}</span>
+                  {% else %}
+                  <span class="badge-tier LOW" style="background:#ECFDF5;color:#059669;border:1px solid #A7F3D0;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:800;">{{ inc.risk_tier }}</span>
+                  {% endif %}
+                </div>
+                <div>
+                  <span class="badge-action" style="background:rgba(239,68,68,0.2);color:#FCA5A5;border:1px solid rgba(239,68,68,0.4);padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;font-family:monospace;">{{ inc.policy_action }}</span>
+                </div>
+              </td>
+
+              <!-- XAI Attribution -->
+              <td>
+                <div class="xai-container" style="display:flex;flex-direction:column;gap:6px;max-width:320px;">
+                  {% if inc.top_contributions %}
+                    {% for item in inc.top_contributions %}
+                    <div class="xai-item" style="border-radius:6px;padding:6px 10px;font-size:11px;">
+                      <div class="xai-feature-name" style="font-weight:700;display:flex;justify-content:space-between;margin-bottom:2px;">
+                        <span>
+                          {% if 'mule' in item.feature|lower or 'networkx' in item.feature|lower %}
+                          <span class="xai-mule-marker" style="color:#C084FC;font-weight:800;">🕸️ {{ item.feature }}</span>
+                          {% else %}
+                          <span>{{ item.feature }}</span>
+                          {% endif %}
+                        </span>
+                        <span style="font-family:monospace;font-weight:700;color:#38BDF8;">
+                          {% if item.contribution %}+{{ item.contribution|floatformat:2 }}{% elif item.contribution_score %}{{ item.contribution_score|floatformat:2 }}x{% endif %}
+                        </span>
+                      </div>
+                      {% if item.description %}
+                      <div class="xai-desc" style="color:#94A3B8;font-size:10px;line-height:1.3;">{{ item.description }}</div>
+                      {% endif %}
+                    </div>
+                    {% endfor %}
+                  {% else %}
+                    <span style="color:#64748B;font-size:11px;">No feature contributions recorded</span>
+                  {% endif %}
+                </div>
+              </td>
+
+              <!-- Reasons -->
+              <td>
+                {% if inc.reasons %}
+                <ul class="reasons-list" style="margin:0;padding-left:14px;color:#F87171;font-size:11px;font-weight:600;line-height:1.4;">
+                  {% for r in inc.reasons %}
+                  <li>{{ r }}</li>
+                  {% endfor %}
+                </ul>
+                {% else %}
+                <span style="color:#64748B;font-size:11px;">Anomaly score threshold exceeded</span>
+                {% endif %}
+              </td>
+
+              <!-- Actions -->
+              <td>
+                <div class="action-col" style="display:flex;flex-direction:column;gap:6px;">
+                  <input type="text" id="console-notes-{{ inc.id }}" class="notes-input" placeholder="Analyst audit note (optional)" style="width:100%;border-radius:6px;padding:6px 10px;font-size:11px;">
+                  <button type="button" class="btn-triage btn-confirm-fraud" onclick="resolveConsoleIncident({{ inc.id }}, 'confirm_fraud')" style="background:linear-gradient(135deg,#DC2626,#991B1B);color:#FFF;border:1px solid rgba(239,68,68,0.4);border-radius:6px;padding:8px 12px;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 8px rgba(220,38,38,0.3);transition:all 0.2s;">
+                    <i data-lucide="shield-alert" style="width:13px;height:13px;"></i>
+                    <span>Confirm Fraud &amp; Freeze</span>
+                  </button>
+                  <button type="button" class="btn-triage btn-mark-fp" onclick="resolveConsoleIncident({{ inc.id }}, 'approve')" style="background:rgba(16,185,129,0.15);color:#34D399;border:1px solid rgba(16,185,129,0.4);border-radius:6px;padding:8px 12px;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all 0.2s;">
+                    <i data-lucide="check-circle-2" style="width:13px;height:13px;"></i>
+                    <span>Mark False Positive</span>
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div style="text-align:center;padding:48px 20px;color:#64748B;">
+        <div style="font-size:42px;margin-bottom:10px;">🛡️</div>
+        <div class="console-heading" style="font-size:16px;font-weight:800;margin-bottom:4px;">All Clear &mdash; Zero Pending Incidents</div>
+        <p class="console-subtext" style="font-size:12px;max-width:440px;margin:0 auto;">
+          The transaction surveillance engine is running in real-time. There are currently no transactions on administrative review hold.
+        </p>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- 4. RECENT INTERDICTION AUDIT TRAIL -->
+    {% if recent_resolved %}
+    <div class="admin-card console-card table-card">
+      <div class="card-inner-header" style="padding:16px 20px;">
+        <div class="console-heading" style="font-size:14px;font-weight:800;display:flex;align-items:center;gap:8px;">
+          <i data-lucide="clipboard-check" style="width:16px;height:16px;color:#10B981;"></i>
+          <span>Recent Interdiction Audit Trail</span>
+        </div>
+        <p class="console-subtext" style="font-size:11px;margin-top:2px;">Immutable record of analyst decisions, reviewer notes, and automated wallet freeze/unfreeze actions</p>
+      </div>
+
+      <div class="admin-table-container">
+        <table class="admin-table triage-table">
+          <thead>
+            <tr>
+              <th>Incident ID</th>
+              <th>Resolution Status</th>
+              <th>Analyst</th>
+              <th>Resolved Time (UTC)</th>
+              <th>Automated Governance &amp; Reviewer Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in recent_resolved %}
+            <tr>
+              <td><strong class="cell-primary" style="font-family:monospace;">#{{ r.id }}</strong></td>
+              <td>
+                {% if r.status == 'CONFIRMED_FRAUD' %}
+                <span class="audit-chip CONFIRMED_FRAUD" style="background:#FEF2F2;color:#DC2626;border:1px solid #FECACA;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:800;">
+                  {{ r.get_status_display|default:r.status }}
+                </span>
+                {% else %}
+                <span class="audit-chip APPROVED" style="background:#ECFDF5;color:#059669;border:1px solid #A7F3D0;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:800;">
+                  {{ r.get_status_display|default:r.status }}
+                </span>
+                {% endif %}
+              </td>
+              <td>
+                <strong style="color:#E2E8F0;">{{ r.reviewed_by.username|default:"System" }}</strong>
+              </td>
+              <td style="font-size:11px;color:#94A3B8;font-family:monospace;">
+                {{ r.resolved_at|date:"Y-m-d H:i:s" }} UTC
+              </td>
+              <td style="font-size:11px;color:#CBD5E1;max-width:400px;line-height:1.4;">
+                {{ r.reviewer_notes|default:"No notes recorded" }}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+  </section>
+</div>
+
+<!-- INSPECT MODAL -->
+<div class="modal-overlay" id="inspectFpModal">
+  <div class="modal-sheet" style="max-width:540px;">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="inspectFpTitle">👨‍👩‍👧‍👦 FamilyPass Circle Details</div>
+    <div class="modal-subtitle" id="inspectFpSubtitle">Delegated spending permission telemetry</div>
+    <div class="inspect-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0;">
+      <div class="inspect-field">
+        <label>Creator (Owner)</label>
+        <div id="inspOwner" style="font-weight:700;">--</div>
+      </div>
+      <div class="inspect-field">
+        <label>Dependent Member</label>
+        <div id="inspMember" style="font-weight:700;">--</div>
+      </div>
+      <div class="inspect-field">
+        <label>Category &amp; Purpose</label>
+        <div id="inspPurpose" style="font-weight:700;color:var(--primary);">--</div>
+      </div>
+      <div class="inspect-field">
+        <label>Current Status</label>
+        <div id="inspStatus">--</div>
+      </div>
+      <div class="inspect-field">
+        <label>Allowance Limit</label>
+        <div id="inspLimit" style="font-weight:700;">--</div>
+      </div>
+      <div class="inspect-field">
+        <label>Total Used</label>
+        <div id="inspUsed" style="font-weight:700;color:#DC2626;">--</div>
+      </div>
+      <div class="inspect-field">
+        <label>Remaining Balance</label>
+        <div id="inspRemaining" style="font-weight:700;color:#059669;">--</div>
+      </div>
+      <div class="inspect-field">
+        <label>Expiry Date</label>
+        <div id="inspExpiry">--</div>
+      </div>
+    </div>
+    <button class="btn-primary w-full" onclick="closeModal('inspectFpModal')">Close Details</button>
+  </div>
+</div>
+
+<style>
+/* ==========================================================================
+   CSS VARIABLE THEME TOKEN ARCHITECTURE (DARK / LIGHT DUAL THEME)
+   ========================================================================== */
+:root,
+[data-admin-theme="dark"] {
+  --admin-bg: #030712; /* slate-950 */
+  --admin-bg-dot: rgba(148, 163, 184, 0.07);
+  --admin-surface: #0f172a; /* slate-900 */
+  --admin-surface-muted: rgba(15, 23, 42, 0.85);
+  --admin-border: #1e293b; /* slate-800 */
+  --admin-border-subtle: #334155;
+  --admin-text-primary: #f8fafc; /* slate-100 */
+  --admin-text-secondary: #94a3b8; /* slate-400 */
+  --admin-text-muted: #64748b;
+  --admin-metric-num: #f8fafc;
+  --admin-card-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+  --admin-table-th-bg: #0b1329;
+  --admin-table-th-text: #94a3b8;
+  --admin-table-td-border: #1e293b;
+  --admin-table-row-hover: rgba(30, 41, 59, 0.5);
+  --admin-table-row-alt: rgba(15, 23, 42, 0.4);
+  --admin-sidebar-bg: #020617;
+  --admin-sidebar-border: #1e293b;
+  --admin-input-bg: rgba(15, 23, 42, 0.8);
+  --admin-input-border: #334155;
+  --admin-input-text: #f8fafc;
+  --admin-strip-bg: rgba(15, 23, 42, 0.85);
+  --admin-strip-border: #1e293b;
+  --admin-banner-bg: linear-gradient(135deg, #0f172a 0%, #022c22 100%);
+  --admin-banner-text: #f8fafc;
+  --admin-banner-border: #1e293b;
+}
+
+[data-admin-theme="light"],
+.admin-operations-container[data-theme="light"] {
+  --admin-bg: #f8fafc; /* slate-50 */
+  --admin-bg-dot: rgba(100, 116, 139, 0.16);
+  --admin-surface: #ffffff; /* pure white */
+  --admin-surface-muted: #f8fafc;
+  --admin-border: #e2e8f0; /* slate-200 */
+  --admin-border-subtle: #cbd5e1;
+  --admin-text-primary: #0f172a; /* slate-900 */
+  --admin-text-secondary: #475569; /* slate-600 */
+  --admin-text-muted: #94a3b8;
+  --admin-metric-num: #0f172a;
+  --admin-card-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1); /* shadow-sm */
+  --admin-table-th-bg: #f1f5f9; /* light header */
+  --admin-table-th-text: #475569;
+  --admin-table-td-border: #e2e8f0;
+  --admin-table-row-hover: #f1f5f9;
+  --admin-table-row-alt: #f8fafc; /* alternate rows */
+  --admin-sidebar-bg: #ffffff;
+  --admin-sidebar-border: #e2e8f0;
+  --admin-input-bg: #ffffff;
+  --admin-input-border: #cbd5e1;
+  --admin-input-text: #0f172a;
+  --admin-strip-bg: #ffffff;
+  --admin-strip-border: #e2e8f0;
+  --admin-banner-bg: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  --admin-banner-text: #0f172a;
+  --admin-banner-border: #e2e8f0;
+}
+
+/* 1. CONTAINER & THEME BASE */
+.admin-operations-container {
+  background-color: var(--admin-bg) !important;
+  background-image: 
+    radial-gradient(var(--admin-bg-dot) 1px, transparent 1px),
+    radial-gradient(ellipse 90% 55% at 50% -15%, rgba(6, 182, 212, 0.12), transparent);
+  background-size: 24px 24px, 100% 100%;
+  color: var(--admin-text-primary) !important;
+  min-height: 100vh;
+  padding: 20px 24px 60px;
+  max-width: 1440px;
+  margin: 0 auto;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* 2. SIDEBAR NAVIGATION (RESPONSIVE PALETTE) */
+#adminSidebarNav.admin-bottom-nav {
+  background: var(--admin-sidebar-bg) !important;
+  border-right: 1px solid var(--admin-sidebar-border) !important;
+  box-shadow: var(--admin-card-shadow) !important;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+#adminSidebarNav .nav-footer {
+  color: var(--admin-text-secondary) !important;
+  border-top: 1px solid var(--admin-sidebar-border) !important;
+  font-size: 11px !important;
+}
+#adminSidebarNav .nav-footer strong {
+  color: #22D3EE !important;
+}
+[data-admin-theme="light"] #adminSidebarNav .nav-footer strong {
+  color: #0284C7 !important;
+}
+
+.admin-nav-btn {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 10px 14px !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  line-height: 1.4 !important;
+  text-decoration: none !important;
+  transition: all 0.2s ease !important;
+  cursor: pointer !important;
+  background: transparent;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  border: none !important;
+  border-left: 4px solid transparent !important;
+}
+
+/* Inactive Sidebar Button */
+.admin-nav-btn.text-slate-400,
+.admin-nav-btn:not(.active) {
+  color: var(--admin-text-secondary) !important;
+  font-weight: 500 !important;
+  background: transparent !important;
+  border-left-color: transparent !important;
+}
+.admin-nav-btn.text-slate-400:hover,
+.admin-nav-btn:hover:not(.active) {
+  background: var(--admin-table-row-hover) !important;
+  color: var(--admin-text-primary) !important;
+}
+
+/* Active Sidebar Button: bg-cyan-500/10 text-cyan-400 border-l-4 border-cyan-400 font-semibold */
+.admin-nav-btn.active,
+.admin-nav-btn.border-cyan-400,
+.admin-nav-btn[class*="bg-cyan-500/10"] {
+  background: rgba(6, 182, 212, 0.10) !important; /* bg-cyan-500/10 */
+  color: #22D3EE !important; /* text-cyan-400 */
+  border-left: 4px solid #22D3EE !important; /* border-l-4 border-cyan-400 */
+  font-weight: 600 !important; /* font-semibold */
+  box-shadow: inset 0 0 12px rgba(6, 182, 212, 0.08) !important;
+}
+.admin-nav-btn.active .nav-icon,
+.admin-nav-btn.border-cyan-400 .nav-icon,
+.admin-nav-btn.active .nav-label,
+.admin-nav-btn.border-cyan-400 .nav-label {
+  color: #22D3EE !important;
+  font-weight: 600 !important;
+}
+.admin-nav-btn.active::after {
+  display: none !important;
+}
+
+/* 3. MICRO-BADGES & STATUS BEACONS */
+.micro-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem; /* text-xs */
+  text-transform: uppercase;
+  letter-spacing: 0.05em; /* tracking-wider */
+  font-weight: 700;
+}
+.micro-badge.cyan {
+  background: rgba(6, 182, 212, 0.12);
+  color: #22D3EE;
+  border: 1px solid rgba(6, 182, 212, 0.35);
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.15);
+}
+.micro-badge.emerald {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34D399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.15);
+}
+
+@keyframes beaconPulse {
+  0% { transform: scale(0.9); opacity: 0.7; box-shadow: 0 0 4px #10B981; }
+  50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 12px #10B981; }
+  100% { transform: scale(0.9); opacity: 0.7; box-shadow: 0 0 4px #10B981; }
+}
+
+/* 4. TOP BANNER CARD */
+.admin-banner-card {
+  background: var(--admin-banner-bg) !important;
+  color: var(--admin-banner-text) !important;
+  border-radius: 1rem;
+  padding: 24px 28px;
+  margin-bottom: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  box-shadow: var(--admin-card-shadow) !important;
+  border: 1px solid var(--admin-banner-border) !important;
+  transition: all 0.2s ease;
+}
+.admin-banner-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #34D399;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-family: monospace;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+.live-dot {
+  width: 8px;
+  height: 8px;
+  background: #10B981;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #10B981;
+  display: inline-block;
+  animation: beaconPulse 1.5s infinite;
+}
+.admin-banner-title {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--admin-banner-text) !important;
+  margin-bottom: 6px;
+}
+.admin-banner-sub {
+  font-size: 13px;
+  color: var(--admin-text-secondary) !important;
+  max-width: 680px;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+.admin-banner-meta {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--admin-text-secondary) !important;
+}
+.admin-banner-meta .meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.admin-banner-meta .meta-item strong {
+  color: var(--admin-banner-text) !important;
+}
+.admin-banner-meta .meta-item strong.ledger-status {
+  color: #10B981 !important;
+}
+.admin-banner-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 220px;
+}
+.btn-admin-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+.btn-admin-action.secondary {
+  background: rgba(30, 41, 59, 0.7);
+  color: #E2E8F0;
+  border: 1px solid #334155;
+}
+.btn-admin-action.secondary:hover {
+  background: rgba(51, 65, 85, 0.8);
+  color: #FFF;
+}
+
+/* Telemetry Status Strip Base Items */
+.telemetry-pill.live-pill {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #34D399;
+}
+.telemetry-pill.live-pill .live-dot-beacon {
+  background: #10B981;
+  box-shadow: 0 0 10px #10B981;
+}
+.telemetry-pill.version-pill {
+  background: rgba(6, 182, 212, 0.1);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  color: #22D3EE;
+}
+.btn-export-csv {
+  background: linear-gradient(135deg, #0E7490, #0891B2);
+  color: #FFFFFF;
+  border: 1px solid rgba(34, 211, 238, 0.4);
+  box-shadow: 0 4px 14px rgba(8, 145, 178, 0.3);
+}
+.btn-export-csv:hover {
+  background: linear-gradient(135deg, #0891B2, #06B6D4);
+}
+.admin-btn-pill {
+  background: #FFF;
+  color: #DC2626;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+/* 5. SECTIONS & HEADERS */
+.admin-section {
+  margin-bottom: 32px;
+}
+.admin-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.admin-section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.admin-section-icon {
+  font-size: 22px;
+}
+.admin-section-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--admin-text-primary, #F8FAFC);
+  letter-spacing: -0.3px;
+}
+.admin-section-desc {
+  font-size: 12px;
+  color: var(--admin-text-secondary, #94A3B8);
+  margin-top: 2px;
+}
+.admin-stat-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.stat-pill {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid #1E293B;
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 11px;
+  color: #94A3B8;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.stat-pill.active {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #34D399;
+}
+.stat-pill.danger {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #F87171;
+}
+
+/* 6. CARD SURFACES (RESPONSIVE SURFACES) */
+.admin-card,
+.admin-kpi-card,
+.category-breakdown-card,
+.chart-card,
+.console-card,
+.table-card {
+  background: var(--admin-surface) !important;
+  border: 1px solid var(--admin-border) !important;
+  border-radius: 1rem !important;
+  box-shadow: var(--admin-card-shadow) !important;
+  color: var(--admin-text-primary) !important;
+}
+
+.admin-top-stat-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.admin-kpi-card {
+  padding: 20px;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.admin-kpi-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--admin-border-subtle) !important;
+}
+.admin-kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+}
+.admin-kpi-card.emerald-accent::before { background: #10B981; }
+.admin-kpi-card.amber-accent::before { background: #F59E0B; }
+.admin-kpi-card.blue-accent::before { background: #22D3EE; }
+.admin-kpi-card.purple-accent::before { background: #8B5CF6; }
+
+.kpi-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.kpi-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--admin-text-secondary) !important;
+  letter-spacing: 0.05em;
+  font-family: monospace;
+}
+.kpi-icon-pill {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.kpi-icon-pill.emerald { background: rgba(16, 185, 129, 0.15); color: #34D399; }
+.kpi-icon-pill.amber { background: rgba(245, 158, 11, 0.15); color: #FBBF24; }
+.kpi-icon-pill.blue { background: rgba(6, 182, 212, 0.15); color: #22D3EE; }
+.kpi-icon-pill.purple { background: rgba(139, 92, 246, 0.15); color: #C084FC; }
+
+.kpi-value {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--admin-metric-num) !important;
+  letter-spacing: -0.5px;
+  font-family: monospace;
+  margin-bottom: 4px;
+}
+.kpi-sub {
+  font-size: 12px;
+  color: var(--admin-text-secondary) !important;
+  line-height: 1.4;
+}
+.kpi-sub strong {
+  color: var(--admin-text-primary) !important;
+}
+.badge-frozen-count {
+  background: rgba(239, 68, 68, 0.15);
+  color: #F87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: monospace;
+}
+.kpi-footer-bar {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--admin-border) !important;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.kpi-trend {
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.kpi-trend.positive { color: #34D399; }
+
+/* 7. RISK SURVEILLANCE KPI TILES */
+.admin-kpi-grid.risk-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+.risk-kpi-box {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid #1E293B;
+  border-radius: 12px;
+  padding: 12px 16px;
+  text-align: center;
+}
+.risk-kpi-box.red { border-color: rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.05); }
+.risk-kpi-box.blue { border-color: rgba(6, 182, 212, 0.3); background: rgba(6, 182, 212, 0.05); }
+.risk-kpi-box.amber { border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.05); }
+.risk-kpi-box.purple { border-color: rgba(139, 92, 246, 0.3); background: rgba(139, 92, 246, 0.05); }
+
+.risk-kpi-lbl {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-family: monospace;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+.risk-kpi-box.red .risk-kpi-lbl { color: #F87171; }
+.risk-kpi-box.blue .risk-kpi-lbl { color: #38BDF8; }
+.risk-kpi-box.amber .risk-kpi-lbl { color: #FBBF24; }
+.risk-kpi-box.purple .risk-kpi-lbl { color: #C084FC; }
+
+.risk-kpi-val {
+  font-size: 24px;
+  font-weight: 800;
+  font-family: monospace;
+}
+.risk-kpi-box.red .risk-kpi-val { color: #EF4444; }
+.risk-kpi-box.blue .risk-kpi-val { color: #22D3EE; }
+.risk-kpi-box.amber .risk-kpi-val { color: #F59E0B; }
+.risk-kpi-box.purple .risk-kpi-val { color: #A855F7; }
+
+/* 8. GLOWING RISK BADGES (ENTERPRISE FINTECH PROTOCOL) */
+.badge-tier.CRITICAL,
+.badge-tier.HIGH,
+.risk-badge-critical {
+  background: rgba(239, 68, 68, 0.10) !important; /* bg-red-500/10 */
+  color: #F87171 !important; /* text-red-400 */
+  border: 1px solid rgba(239, 68, 68, 0.30) !important; /* border border-red-500/30 */
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.20) !important;
+}
+
+.badge-tier.STEP_UP_PIN,
+.badge-tier.MEDIUM,
+.risk-badge-stepup {
+  background: rgba(245, 158, 11, 0.10) !important; /* bg-amber-500/10 */
+  color: #FBBF24 !important; /* text-amber-400 */
+  border: 1px solid rgba(245, 158, 11, 0.30) !important; /* border border-amber-500/30 */
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.20) !important;
+}
+
+.badge-tier.ALLOW,
+.badge-tier.LOW,
+.risk-badge-allow {
+  background: rgba(16, 185, 129, 0.10) !important; /* bg-emerald-500/10 */
+  color: #34D399 !important; /* text-emerald-400 */
+  border: 1px solid rgba(16, 185, 129, 0.30) !important; /* border border-emerald-500/30 */
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.20) !important;
+}
+
+/* 9. TABLES & USER REGISTRY POLISH */
+.table-card-toolbar {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--admin-border) !important;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.search-box {
+  position: relative;
+  flex: 1;
+  min-width: 260px;
+}
+.search-box input {
+  width: 100%;
+  padding: 9px 12px 9px 36px;
+  background: var(--admin-input-bg) !important;
+  color: var(--admin-input-text) !important;
+  border: 1px solid var(--admin-input-border) !important;
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+  transition: all 0.2s;
+}
+.search-box input:focus {
+  border-color: #22D3EE !important;
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.2) !important;
+}
+[data-admin-theme="light"] .search-box input:focus {
+  border-color: #0284C7 !important;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2) !important;
+}
+.search-icon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: var(--admin-text-secondary);
+}
+.filter-pills {
+  display: flex;
+  gap: 6px;
+}
+.filter-btn {
+  background: var(--admin-surface-muted, rgba(30, 41, 59, 0.6)) !important;
+  border: 1px solid var(--admin-border-subtle, #334155) !important;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--admin-text-secondary) !important;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.filter-btn:hover {
+  background: var(--admin-table-row-hover) !important;
+  color: var(--admin-text-primary) !important;
+}
+.filter-btn.active {
+  background: rgba(6, 182, 212, 0.15) !important;
+  color: #22D3EE !important;
+  border-color: rgba(6, 182, 212, 0.5) !important;
+  box-shadow: 0 0 8px rgba(6, 182, 212, 0.2) !important;
+}
+[data-admin-theme="light"] .filter-btn.active {
+  background: #0284C7 !important;
+  color: #FFFFFF !important;
+  border-color: #0284C7 !important;
+}
+
+.admin-table-container {
+  overflow-x: auto;
+}
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+.admin-table th {
+  background: var(--admin-table-th-bg) !important;
+  color: var(--admin-table-th-text) !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-size: 0.75rem !important;
+  padding: 12px 18px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  border-bottom: 1px solid var(--admin-border) !important;
+  font-weight: 700;
+}
+.admin-table td {
+  padding: 14px 18px !important;
+  border-bottom: 1px solid var(--admin-table-td-border) !important;
+  color: var(--admin-text-primary) !important;
+  vertical-align: middle;
+}
+.admin-table tbody tr:nth-child(even) td {
+  background: var(--admin-table-row-alt) !important;
+}
+.admin-table tr:hover td {
+  background: var(--admin-table-row-hover) !important;
+}
+
+/* Cell typography */
+.cell-id {
+  font-family: monospace;
+  font-weight: 700;
+  color: #22D3EE;
+  font-size: 11px;
+}
+[data-admin-theme="light"] .cell-id {
+  color: #0284C7 !important;
+}
+.user-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.avatar-sm {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(6, 182, 212, 0.15);
+  color: #22D3EE;
+  font-weight: 700;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.avatar-sm.member { background: rgba(59, 130, 246, 0.15); color: #60A5FA; }
+.avatar-sm.frozen-avatar { background: rgba(239, 68, 68, 0.15); color: #F87171; }
+.cell-primary { font-weight: 700; color: var(--admin-text-primary) !important; }
+.cell-secondary { font-size: 11px; color: var(--admin-text-secondary) !important; }
+.cell-phone { font-family: monospace; font-size: 12px; color: #CBD5E1; }
+.cell-balance { font-size: 14px; color: #34D399; font-family: monospace; }
+.cell-date { font-size: 11px; color: #64748B; font-family: monospace; }
+
+/* Status Badges */
+.status-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-family: monospace;
+}
+.status-badge.ACTIVE {
+  background: rgba(16, 185, 129, 0.10);
+  color: #34D399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.2);
+}
+.status-badge.FROZEN,
+.status-badge.REVOKED {
+  background: rgba(239, 68, 68, 0.10);
+  color: #F87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.2);
+}
+.status-badge.ARCHIVED,
+.status-badge.EXPIRED {
+  background: rgba(51, 65, 85, 0.4);
+  color: #94A3B8;
+  border: 1px solid #334155;
+}
+
+.role-badge {
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(6, 182, 212, 0.12);
+  color: #38BDF8;
+  border: 1px solid rgba(6, 182, 212, 0.3);
+}
+.role-badge.role-ADMIN { background: rgba(139, 92, 246, 0.15); color: #C084FC; border-color: rgba(139, 92, 246, 0.3); }
+.role-badge.role-MERCHANT { background: rgba(245, 158, 11, 0.15); color: #FBBF24; border-color: rgba(245, 158, 11, 0.3); }
+
+.category-badge,
+.purpose-badge {
+  background: rgba(6, 182, 212, 0.12);
+  color: #22D3EE;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid rgba(6, 182, 212, 0.25);
+}
+.cat-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+.cat-tag { background: rgba(30, 41, 59, 0.8); color: #CBD5E1; padding: 2px 6px; border-radius: 4px; font-size: 10px; }
+.cat-tag.unrestricted { background: rgba(245, 158, 11, 0.15); color: #FBBF24; }
+
+.limit-cell { min-width: 140px; }
+.limit-text { font-size: 12px; margin-bottom: 4px; line-height: 1.3; }
+.limit-bar-wrap { width: 100%; height: 6px; background: #334155; border-radius: 3px; overflow: hidden; margin-top: 6px; margin-bottom: 4px; display: block; }
+.limit-bar-fill { height: 100%; background: #10B981; }
+.limit-rem { font-size: 10px; color: #34D399; font-family: monospace; line-height: 1.2; }
+
+/* 10. CRUD ACTION BUTTONS */
+.table-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.btn-action {
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s;
+}
+.btn-action.view { background: rgba(6, 182, 212, 0.12); color: #22D3EE; border-color: rgba(6, 182, 212, 0.3); }
+.btn-action.view:hover { background: rgba(6, 182, 212, 0.25); }
+.btn-action.toggle { background: rgba(245, 158, 11, 0.12); color: #FBBF24; border-color: rgba(245, 158, 11, 0.3); }
+.btn-action.toggle:hover { background: rgba(245, 158, 11, 0.25); }
+.btn-action.delete { background: rgba(239, 68, 68, 0.12); color: #F87171; border-color: rgba(239, 68, 68, 0.3); padding: 5px 8px; }
+.btn-action.delete:hover { background: rgba(239, 68, 68, 0.25); }
+
+.btn-action-freeze {
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+.btn-action-freeze.freeze {
+  background: rgba(239, 68, 68, 0.12);
+  color: #F87171;
+  border-color: rgba(239, 68, 68, 0.35);
+}
+.btn-action-freeze.freeze:hover {
+  background: #DC2626;
+  color: #FFF;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
+}
+.btn-action-freeze.unfreeze {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34D399;
+  border-color: rgba(16, 185, 129, 0.35);
+}
+.btn-action-freeze.unfreeze:hover {
+  background: #059669;
+  color: #FFF;
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.4);
+}
+
+/* 11. INSPECTION MODAL (DARK SLATE) */
+.modal-overlay {
+  background: rgba(2, 6, 23, 0.75);
+  backdrop-filter: blur(4px);
+}
+.modal-sheet {
+  background: #0F172A !important;
+  color: #F8FAFC !important;
+  border: 1px solid #1E293B !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7) !important;
+}
+.modal-title { color: #F8FAFC !important; }
+.modal-subtitle { color: #94A3B8 !important; }
+.inspect-field {
+  background: rgba(30, 41, 59, 0.6) !important;
+  border: 1px solid #334155 !important;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.inspect-field label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  color: #94A3B8 !important;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+/* SPA TAB PANES (MUTUALLY EXCLUSIVE DEDICATED VIEWS) */
+.admin-tab-pane {
+  display: block;
+  animation: fadeInPane 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.admin-tab-pane.hidden {
+  display: none !important;
+}
+@keyframes fadeInPane {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================================
+   LIGHT MODE ENTERPRISE THEME (High Contrast & Clean Border Palette)
+   ========================================================================== */
+[data-admin-theme="light"] .admin-operations-container,
+.admin-operations-container[data-theme="light"] {
+  background-color: #F8FAFC !important; /* bg-slate-50 */
+  background-image: 
+    radial-gradient(rgba(100, 116, 139, 0.16) 1px, transparent 1px),
+    radial-gradient(ellipse 90% 55% at 50% -15%, rgba(6, 182, 212, 0.08), transparent) !important;
+  color: #0F172A !important;
+}
+
+[data-admin-theme="light"] #adminSidebarNav.admin-bottom-nav,
+.admin-operations-container[data-theme="light"] ~ #adminSidebarNav,
+[data-admin-theme="light"] .admin-bottom-nav {
+  background: #FFFFFF !important;
+  border-right: 1px solid #E2E8F0 !important;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.04) !important;
+}
+[data-admin-theme="light"] #adminSidebarNav .nav-footer {
+  color: #64748B !important;
+  border-top: 1px solid #E2E8F0 !important;
+}
+[data-admin-theme="light"] #adminSidebarNav .nav-footer strong {
+  color: #0284C7 !important;
+}
+
+[data-admin-theme="light"] .admin-nav-btn.text-slate-400,
+[data-admin-theme="light"] .admin-nav-btn:not(.active) {
+  color: #475569 !important; /* text-slate-600 */
+}
+[data-admin-theme="light"] .admin-nav-btn.text-slate-400:hover,
+[data-admin-theme="light"] .admin-nav-btn:hover:not(.active) {
+  background: #F1F5F9 !important; /* hover:bg-slate-100 */
+  color: #0F172A !important;
+}
+
+[data-admin-theme="light"] .admin-nav-btn.active,
+[data-admin-theme="light"] .admin-nav-btn.border-cyan-400,
+[data-admin-theme="light"] .admin-nav-btn[class*="bg-cyan-500/10"] {
+  background: #EFF6FF !important;
+  color: #0284C7 !important;
+  border-left: 4px solid #0284C7 !important;
+  box-shadow: inset 0 0 8px rgba(2, 132, 199, 0.08) !important;
+}
+[data-admin-theme="light"] .admin-nav-btn.active .nav-icon,
+[data-admin-theme="light"] .admin-nav-btn.active .nav-label {
+  color: #0284C7 !important;
+}
+
+[data-admin-theme="light"] .telemetry-status-strip,
+.admin-operations-container[data-theme="light"] .telemetry-status-strip {
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04) !important;
+}
+
+[data-admin-theme="light"] .admin-banner-card,
+.admin-operations-container[data-theme="light"] .admin-banner-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1) !important;
+  color: #0f172a !important;
+}
+
+[data-admin-theme="light"] .admin-banner-title {
+  color: #0f172a !important;
+}
+
+[data-admin-theme="light"] .admin-banner-sub {
+  color: #475569 !important;
+}
+
+[data-admin-theme="light"] .admin-banner-meta,
+[data-admin-theme="light"] .admin-banner-meta .meta-item {
+  color: #475569 !important;
+}
+
+[data-admin-theme="light"] .admin-banner-meta .meta-item strong {
+  color: #0f172a !important;
+}
+
+[data-admin-theme="light"] .admin-banner-meta .meta-item strong.ledger-status {
+  color: #059669 !important;
+}
+
+[data-admin-theme="light"] .admin-banner-badge {
+  background: #f1f5f9 !important;
+  color: #1e293b !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+[data-admin-theme="light"] .admin-banner-badge .live-dot {
+  background: #10b981 !important;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5) !important;
+}
+
+[data-admin-theme="light"] .btn-admin-action.secondary {
+  background: #ffffff !important;
+  color: #1e293b !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+[data-admin-theme="light"] .btn-admin-action.secondary:hover {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: #94a3b8 !important;
+}
+
+[data-admin-theme="light"] .telemetry-pill.live-pill {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #047857 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+[data-admin-theme="light"] .telemetry-pill.live-pill .live-dot-beacon {
+  background: #10b981 !important;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5) !important;
+}
+
+[data-admin-theme="light"] .telemetry-pill.version-pill {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #475569 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+[data-admin-theme="light"] .telemetry-pill.version-pill .version-text {
+  color: #475569 !important;
+}
+
+[data-admin-theme="light"] .btn-export-csv {
+  background: #ffffff !important;
+  color: #334155 !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-admin-theme="light"] .btn-export-csv:hover {
+  background: #f8fafc !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
+}
+
+[data-admin-theme="light"] .btn-refresh-telemetry {
+  background: #ffffff !important;
+  color: #334155 !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-admin-theme="light"] .btn-refresh-telemetry:hover {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+[data-admin-theme="light"] .admin-section-title,
+.admin-operations-container[data-theme="light"] .admin-section-title,
+[data-admin-theme="light"] #sectionFamilyPass .admin-section-title {
+  color: #0F172A !important;
+}
+[data-admin-theme="light"] .admin-section-desc,
+.admin-operations-container[data-theme="light"] .admin-section-desc,
+[data-admin-theme="light"] #sectionFamilyPass .admin-section-desc {
+  color: #475569 !important;
+}
+
+[data-admin-theme="light"] .stat-pill,
+.admin-operations-container[data-theme="light"] .stat-pill {
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  color: #475569 !important;
+}
+
+[data-admin-theme="light"] .admin-card,
+[data-admin-theme="light"] .admin-kpi-card,
+[data-admin-theme="light"] .category-breakdown-card,
+[data-admin-theme="light"] .chart-card,
+.admin-operations-container[data-theme="light"] .admin-card,
+.admin-operations-container[data-theme="light"] .admin-kpi-card,
+.admin-operations-container[data-theme="light"] .chart-card {
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04) !important;
+  color: #0F172A !important;
+}
+
+[data-admin-theme="light"] .kpi-label,
+.admin-operations-container[data-theme="light"] .kpi-label {
+  color: #64748B !important;
+}
+[data-admin-theme="light"] .kpi-value,
+.admin-operations-container[data-theme="light"] .kpi-value {
+  color: #0F172A !important;
+}
+[data-admin-theme="light"] .kpi-sub,
+.admin-operations-container[data-theme="light"] .kpi-sub {
+  color: #64748B !important;
+}
+[data-admin-theme="light"] .kpi-footer-bar,
+.admin-operations-container[data-theme="light"] .kpi-footer-bar {
+  border-top: 1px dashed #E2E8F0 !important;
+}
+
+[data-admin-theme="light"] .table-card-toolbar,
+.admin-operations-container[data-theme="light"] .table-card-toolbar {
+  border-bottom: 1px solid #E2E8F0 !important;
+}
+
+[data-admin-theme="light"] .admin-table th,
+.admin-operations-container[data-theme="light"] .admin-table th {
+  background: #F8FAFC !important;
+  color: #475569 !important;
+  border-bottom: 1px solid #E2E8F0 !important;
+}
+[data-admin-theme="light"] .admin-table td,
+.admin-operations-container[data-theme="light"] .admin-table td {
+  border-bottom: 1px solid #F1F5F9 !important;
+  color: #1E293B !important;
+}
+[data-admin-theme="light"] .admin-table tr:hover td,
+.admin-operations-container[data-theme="light"] .admin-table tr:hover td {
+  background: #F8FAFC !important;
+}
+[data-admin-theme="light"] .cell-primary,
+.admin-operations-container[data-theme="light"] .cell-primary {
+  color: #0F172A !important;
+}
+[data-admin-theme="light"] .cell-secondary,
+.admin-operations-container[data-theme="light"] .cell-secondary {
+  color: #64748B !important;
+}
+[data-admin-theme="light"] .cell-id,
+.admin-operations-container[data-theme="light"] .cell-id {
+  color: #0284C7 !important;
+}
+
+[data-admin-theme="light"] .limit-bar-wrap,
+.admin-operations-container[data-theme="light"] .limit-bar-wrap {
+  background: #E2E8F0 !important;
+}
+[data-admin-theme="light"] .limit-text,
+.admin-operations-container[data-theme="light"] .limit-text {
+  color: #1E293B !important;
+}
+[data-admin-theme="light"] .limit-text strong,
+.admin-operations-container[data-theme="light"] .limit-text strong {
+  color: #0F172A !important;
+}
+[data-admin-theme="light"] .limit-rem,
+.admin-operations-container[data-theme="light"] .limit-rem {
+  color: #059669 !important;
+}
+[data-admin-theme="light"] .purpose-badge,
+.admin-operations-container[data-theme="light"] .purpose-badge {
+  background: #EFF6FF !important;
+  color: #0284C7 !important;
+  border-color: #BAE6FD !important;
+}
+[data-admin-theme="light"] .cat-tag,
+.admin-operations-container[data-theme="light"] .cat-tag {
+  background: #F1F5F9 !important;
+  color: #475569 !important;
+  border: 1px solid #E2E8F0 !important;
+}
+[data-admin-theme="light"] .cat-tag.unrestricted,
+.admin-operations-container[data-theme="light"] .cat-tag.unrestricted {
+  background: #FEF3C7 !important;
+  color: #D97706 !important;
+  border: 1px solid #FDE68A !important;
+}
+
+[data-admin-theme="light"] .search-box input,
+.admin-operations-container[data-theme="light"] .search-box input {
+  background: #FFFFFF !important;
+  color: #0F172A !important;
+  border: 1px solid #CBD5E1 !important;
+}
+[data-admin-theme="light"] .search-box input:focus,
+.admin-operations-container[data-theme="light"] .search-box input:focus {
+  border-color: #0284C7 !important;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2) !important;
+}
+
+[data-admin-theme="light"] .filter-btn,
+.admin-operations-container[data-theme="light"] .filter-btn {
+  background: #F1F5F9 !important;
+  color: #475569 !important;
+  border: 1px solid #E2E8F0 !important;
+}
+[data-admin-theme="light"] .filter-btn.active,
+.admin-operations-container[data-theme="light"] .filter-btn.active {
+  background: #0284C7 !important;
+  color: #FFFFFF !important;
+  border-color: #0284C7 !important;
+}
+
+[data-admin-theme="light"] .dash-incident-item,
+.admin-operations-container[data-theme="light"] .dash-incident-item {
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  border-left: 4px solid #EF4444 !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04) !important;
+}
+[data-admin-theme="light"] .risk-kpi-box,
+.admin-operations-container[data-theme="light"] .risk-kpi-box {
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+}
+
+[data-admin-theme="light"] .btn-theme-toggle,
+[data-admin-theme="light"] .admin-theme-toggle-header {
+  background: #F1F5F9 !important;
+  color: #0F172A !important;
+  border: 1px solid #CBD5E1 !important;
+}
+
+/* ==========================================================================
+   TRUST & RISK CONSOLE EXTENSIONS & THEME TOKENS
+   ========================================================================== */
+.console-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.console-card {
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid #1E293B;
+  border-radius: 1rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+}
+.kpi-icon-box.pending { background: rgba(239, 68, 68, 0.15); color: #EF4444; }
+.kpi-icon-box.confirmed { background: rgba(59, 130, 246, 0.15); color: #3B82F6; }
+.kpi-icon-box.frozen { background: rgba(245, 158, 11, 0.15); color: #F59E0B; }
+.kpi-icon-box.mule { background: rgba(168, 85, 247, 0.15); color: #A855F7; }
+.kpi-icon-box.total { background: rgba(16, 185, 129, 0.15); color: #10B981; }
+
+[data-admin-theme="light"] .console-card,
+[data-admin-theme="light"] .console-kpi-grid .kpi-card {
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04) !important;
+  color: #0F172A !important;
+}
+[data-admin-theme="light"] .console-heading,
+[data-admin-theme="light"] #sectionConsole .admin-table th,
+[data-admin-theme="light"] #sectionConsole .admin-table td strong {
+  color: #0F172A !important;
+}
+[data-admin-theme="light"] .console-subtext,
+[data-admin-theme="light"] #sectionConsole .admin-table td div {
+  color: #64748B !important;
+}
+[data-admin-theme="light"] .xai-item {
+  background: #F8FAFC !important;
+  border: 1px solid #E2E8F0 !important;
+  color: #0F172A !important;
+}
+[data-admin-theme="light"] .xai-feature-name {
+  color: #0F172A !important;
+}
+[data-admin-theme="light"] .notes-input {
+  background: #FFFFFF !important;
+  border: 1px solid #CBD5E1 !important;
+  color: #0F172A !important;
+}
+[data-admin-theme="light"] .score-pill {
+  background: #F1F5F9 !important;
+  border: 1px solid #CBD5E1 !important;
+  color: #0F172A !important;
+}
+[data-admin-theme="light"] .graph-canvas-card svg text {
+  fill: #475569 !important;
+}
+</style>
+
+<script>
+function getAdminCsrfToken() {
+  const meta = document.querySelector('meta[name="csrf-token"]');
+  if (meta && meta.content) return meta.content;
+  const cookie = document.cookie.split('; ').find(row => row.startsWith('csrftoken='));
+  return cookie ? cookie.split('=')[1] : '';
+}
+
+// Enterprise Toast Alert Feedback System
+function showAdminToast(message, type = 'info') {
+  if (typeof showToast === 'function') {
+    showToast(message, type);
+  } else {
+    const div = document.createElement('div');
+    div.style.position = 'fixed';
+    div.style.bottom = '24px';
+    div.style.right = '24px';
+    div.style.zIndex = '9999';
+    div.style.padding = '12px 20px';
+    div.style.borderRadius = '8px';
+    div.style.fontSize = '13px';
+    div.style.fontWeight = '700';
+    div.style.boxShadow = '0 10px 25px rgba(0,0,0,0.5)';
+    div.style.fontFamily = 'monospace';
+    div.style.display = 'flex';
+    div.style.alignItems = 'center';
+    div.style.gap = '8px';
+    if (type === 'error' || type === 'danger') {
+      div.style.background = '#991B1B';
+      div.style.color = '#FEE2E2';
+      div.style.border = '1px solid #DC2626';
+    } else {
+      div.style.background = '#065F46';
+      div.style.color = '#D1FAE5';
+      div.style.border = '1px solid #10B981';
+    }
+    div.textContent = `[${type.toUpperCase()}] ${message}`;
+    document.body.appendChild(div);
+    setTimeout(() => {
+      div.style.transition = 'opacity 0.4s';
+      div.style.opacity = '0';
+      setTimeout(() => div.remove(), 400);
+    }, 3500);
+  }
+}
+
+// Quick Export CSV Audit Log
+function exportPlatformAuditCsv() {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `FundShare_Audit_Log_${timestamp}.csv`;
+
+  let csv = "REPORT,FundShare Central Banking & Trust Surveillance Platform Audit Log\r\n";
+  csv += `GENERATED_AT,${new Date().toISOString()}\r\n`;
+  csv += `SYSTEM_VERSION,ISO_FOREST_V2.0 + NETWORKX GRAPH MULE DETECTOR\r\n`;
+  csv += `PLATFORM_FLOAT,৳ {{ platform_float|default:platform_aggregates.total_float|floatformat:2 }}\r\n`;
+  csv += `24H_SETTLEMENT_VOLUME,৳ {{ total_volume_24h|default:platform_aggregates.volume_24h|floatformat:2 }}\r\n`;
+  csv += `ACTIVE_WALLETS_COUNT,{{ active_wallets_count|default:platform_aggregates.active_wallets }}\r\n`;
+  csv += `FROZEN_WALLETS_COUNT,{{ frozen_wallets_count|default:platform_aggregates.frozen_wallets }}\r\n`;
+  csv += "\r\n";
+  csv += "SECTION,MASTER WALLET REGISTRY\r\n";
+  csv += "Wallet ID,Customer Name,Username,Phone,Role,Balance,Status,Last Updated\r\n";
+
+  const rows = document.querySelectorAll('#masterWalletsTable tbody tr.wallet-row');
+  rows.forEach(r => {
+    const id = (r.querySelector('.cell-id')?.innerText || '').replace(/,/g, '').trim();
+    const name = (r.querySelector('.cell-primary')?.innerText || '').replace(/,/g, '').trim();
+    const user = (r.querySelector('.cell-secondary')?.innerText || '').replace('@', '').replace(/,/g, '').trim();
+    const phone = (r.querySelector('.cell-phone')?.innerText || '').replace(/,/g, '').trim();
+    const role = (r.querySelector('.role-badge')?.innerText || '').replace(/,/g, '').trim();
+    const bal = (r.querySelector('.cell-balance')?.innerText || '').replace(/[৳,]/g, '').trim();
+    const status = (r.querySelector('.status-badge')?.innerText || '').trim();
+    const updated = (r.querySelector('.cell-date')?.innerText || '').trim();
+    csv += `"${id}","${name}","${user}","${phone}","${role}","${bal}","${status}","${updated}"\r\n`;
+  });
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+
+  showAdminToast('Exported CSV Audit Log successfully', 'success');
+}
+
+// Chart.js Visualizations: Sparkline & Capital Allocation Doughnut
+function initAdminCharts() {
+  if (typeof Chart === 'undefined') {
+    return;
+  }
+  const isLight = (localStorage.getItem('admin_theme') || 'dark') === 'light';
+
+  // Chart 1: 24h Transaction Float & Velocity Sparkline
+  const canvasFloat = document.getElementById('chartFloatVelocity');
+  if (canvasFloat && !canvasFloat.chartInstance) {
+    const ctxFloat = canvasFloat.getContext('2d');
+    const gradient = ctxFloat.createLinearGradient(0, 0, 0, 240);
+    gradient.addColorStop(0, 'rgba(6, 182, 212, 0.45)'); // Smooth cyan
+    gradient.addColorStop(0.65, 'rgba(6, 182, 212, 0.10)');
+    gradient.addColorStop(1, 'rgba(6, 182, 212, 0.00)'); // Transparent fill
+
+    const total24h = parseFloat("{{ total_volume_24h|default:platform_aggregates.volume_24h|default:87450 }}") || 87450;
+    const hours = ['00:00', '02:00', '04:00', '06:00', '08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00', 'Now'];
+    const multipliers = [0.03, 0.02, 0.02, 0.05, 0.09, 0.14, 0.12, 0.11, 0.13, 0.15, 0.08, 0.04, 0.02];
+    const hourlyData = multipliers.map(m => Math.round(total24h * m * 100) / 100);
+
+    canvasFloat.chartInstance = new Chart(ctxFloat, {
+      type: 'line',
+      data: {
+        labels: hours,
+        datasets: [{
+          label: 'Hourly Flow (৳)',
+          data: hourlyData,
+          borderColor: '#22D3EE',
+          borderWidth: 2.5,
+          backgroundColor: gradient,
+          fill: true,
+          tension: 0.4,
+          pointBackgroundColor: '#0891B2',
+          pointBorderColor: '#22D3EE',
+          pointBorderWidth: 1.5,
+          pointRadius: 3,
+          pointHoverRadius: 6,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+            titleColor: isLight ? '#0F172A' : '#F8FAFC',
+            bodyColor: isLight ? '#0284C7' : '#38BDF8',
+            borderColor: isLight ? '#CBD5E1' : '#1E293B',
+            borderWidth: 1,
+            padding: 10,
+            callbacks: {
+              label: function(context) {
+                return ' Hourly Velocity: ৳ ' + Number(context.parsed.y).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: isLight ? '#E2E8F0' : 'rgba(148, 163, 184, 0.06)' },
+            ticks: { color: isLight ? '#334155' : '#94A3B8', font: { family: 'monospace', size: 10 } }
+          },
+          y: {
+            grid: { color: isLight ? '#E2E8F0' : 'rgba(148, 163, 184, 0.06)' },
+            ticks: {
+              color: isLight ? '#334155' : '#94A3B8',
+              font: { family: 'monospace', size: 10 },
+              callback: function(val) { return '৳' + Number(val).toLocaleString(); }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // Chart 2: FamilyPass & Purpose Fund Capital Allocation (Doughnut Chart)
+  const canvasCap = document.getElementById('chartCapitalAllocation');
+  if (canvasCap && !canvasCap.chartInstance) {
+    const ctxCap = canvasCap.getContext('2d');
+    const catLabels = ['Grocery', 'Healthcare', 'Education', 'Utility Reserves'];
+    const catValues = [38500, 24200, 19800, 14500];
+
+    canvasCap.chartInstance = new Chart(ctxCap, {
+      type: 'doughnut',
+      data: {
+        labels: catLabels,
+        datasets: [{
+          data: catValues,
+          backgroundColor: [
+            '#06B6D4', // Cyan (Grocery)
+            '#10B981', // Emerald (Healthcare)
+            '#F59E0B', // Amber (Education)
+            '#8B5CF6'  // Purple (Utility)
+          ],
+          borderColor: isLight ? '#FFFFFF' : '#0F172A',
+          borderWidth: 3,
+          hoverOffset: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '70%',
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              color: isLight ? '#334155' : '#CBD5E1',
+              boxWidth: 12,
+              boxHeight: 12,
+              padding: 14,
+              font: { family: 'sans-serif', size: 11, weight: '600' }
+            }
+          },
+          tooltip: {
+            backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+            titleColor: isLight ? '#0F172A' : '#F8FAFC',
+            bodyColor: isLight ? '#059669' : '#34D399',
+            borderColor: isLight ? '#CBD5E1' : '#1E293B',
+            borderWidth: 1,
+            padding: 10,
+            callbacks: {
+              label: function(context) {
+                const val = Number(context.parsed).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                return ` ${context.label}: ৳ ${val}`;
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+}
+
+// 1. FILTER FAMILYPASS CIRCLES TABLE
+function filterFpCircles(query) {
+  const q = query.toLowerCase().trim();
+  const rows = document.querySelectorAll('#fpCirclesTable .fp-circle-row');
+  rows.forEach(r => {
+    const text = (r.getAttribute('data-text') || '').toLowerCase();
+    const matchesQuery = !q || text.includes(q);
+    const filterStatus = r.getAttribute('data-filter-hidden') !== 'true';
+    r.style.display = matchesQuery && filterStatus ? '' : 'none';
+  });
+}
+
+function filterFpStatus(status, btn) {
+  const buttons = btn.parentElement.querySelectorAll('.filter-btn');
+  buttons.forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const rows = document.querySelectorAll('#fpCirclesTable .fp-circle-row');
+  rows.forEach(r => {
+    const rStatus = r.getAttribute('data-status');
+    let match = true;
+    if (status === 'ACTIVE') match = rStatus === 'ACTIVE';
+    else if (status === 'REVOKED') match = rStatus === 'REVOKED' || rStatus === 'EXPIRED';
+
+    r.setAttribute('data-filter-hidden', match ? 'false' : 'true');
+    const q = (document.getElementById('fpSearchInput').value || '').toLowerCase().trim();
+    const text = (r.getAttribute('data-text') || '').toLowerCase();
+    r.style.display = match && (!q || text.includes(q)) ? '' : 'none';
+  });
+}
+
+// INSPECT FAMILYPASS MODAL
+function inspectFamilyPass(id, owner, member, purpose, limit, used, rem, status, expiry) {
+  document.getElementById('inspectFpTitle').textContent = `👨‍👩‍👧‍👦 Circle #${id} Details`;
+  document.getElementById('inspOwner').textContent = owner;
+  document.getElementById('inspMember').textContent = member;
+  document.getElementById('inspPurpose').textContent = purpose;
+  document.getElementById('inspLimit').textContent = limit;
+  document.getElementById('inspUsed').textContent = used;
+  document.getElementById('inspRemaining').textContent = rem;
+  document.getElementById('inspExpiry').textContent = expiry;
+
+  const statusEl = document.getElementById('inspStatus');
+  statusEl.innerHTML = `<span class="status-badge ${status}">${status}</span>`;
+  openModal('inspectFpModal');
+}
+
+// 2. TOGGLE / DELETE FAMILYPASS CIRCLE
+async function adminToggleFamilyPass(passId) {
+  const csrf = getAdminCsrfToken();
+  const formData = new FormData();
+  formData.append('action', 'toggle');
+
+  try {
+    const res = await fetch(`/admin-actions/familypass/${passId}/action/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrf,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json'
+      },
+      body: formData
+    });
+    const data = await res.json();
+    if (data.success) {
+      showAdminToast(data.message, 'success');
+
+      const row = document.getElementById(`fpRow-${passId}`);
+      const badge = document.getElementById(`fpStatusBadge-${passId}`);
+      const btn = document.getElementById(`fpToggleBtn-${passId}`);
+
+      if (row) row.setAttribute('data-status', data.status);
+      if (badge) {
+        badge.className = `status-badge ${data.status}`;
+        badge.textContent = data.status;
+      }
+      if (btn) {
+        if (data.status === 'ACTIVE') {
+          btn.innerHTML = `<i data-lucide="ban"></i> Revoke`;
+        } else {
+          btn.innerHTML = `<i data-lucide="check"></i> Activate`;
+        }
+        if (window.lucide) lucide.createIcons();
+      }
+    } else {
+      alert(data.error || 'Failed to update status');
+    }
+  } catch (err) {
+    alert('Request failed: ' + err.message);
+  }
+}
+
+async function adminDeleteFamilyPass(passId) {
+  if (!confirm(`Are you sure you want to permanently delete FamilyPass circle #${passId}?`)) return;
+
+  const csrf = getAdminCsrfToken();
+  const formData = new FormData();
+  formData.append('action', 'delete');
+
+  try {
+    const res = await fetch(`/admin-actions/familypass/${passId}/action/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrf,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json'
+      },
+      body: formData
+    });
+    const data = await res.json();
+    if (data.success) {
+      showAdminToast(data.message, 'success');
+
+      const row = document.getElementById(`fpRow-${passId}`);
+      if (row) {
+        row.style.transition = 'all 0.3s ease';
+        row.style.opacity = '0';
+        setTimeout(() => row.remove(), 300);
+      }
+    } else {
+      alert(data.error || 'Failed to delete circle');
+    }
+  } catch (err) {
+    alert('Request failed: ' + err.message);
+  }
+}
+
+// 3. FILTER PURPOSE FUNDS
+function filterPurposeFunds(query) {
+  const q = query.toLowerCase().trim();
+  const rows = document.querySelectorAll('#purposeFundsTable .purpose-fund-row');
+  rows.forEach(r => {
+    const text = (r.getAttribute('data-text') || '').toLowerCase();
+    const matchesQuery = !q || text.includes(q);
+    const filterStatus = r.getAttribute('data-filter-hidden') !== 'true';
+    r.style.display = matchesQuery && filterStatus ? '' : 'none';
+  });
+}
+
+function filterFundStatus(status, btn) {
+  const buttons = btn.parentElement.querySelectorAll('.filter-btn');
+  buttons.forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const rows = document.querySelectorAll('#purposeFundsTable .purpose-fund-row');
+  rows.forEach(r => {
+    const rStatus = r.getAttribute('data-status');
+    const match = status === 'ALL' || rStatus === status;
+    r.setAttribute('data-filter-hidden', match ? 'false' : 'true');
+    const q = (document.getElementById('fundSearchInput').value || '').toLowerCase().trim();
+    const text = (r.getAttribute('data-text') || '').toLowerCase();
+    r.style.display = match && (!q || text.includes(q)) ? '' : 'none';
+  });
+}
+
+// TOGGLE / CANCEL PURPOSE FUND
+async function adminTogglePurposeFund(fundId) {
+  const csrf = getAdminCsrfToken();
+  const formData = new FormData();
+  formData.append('action', 'toggle');
+
+  try {
+    const res = await fetch(`/admin-actions/purposefund/${fundId}/action/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrf,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json'
+      },
+      body: formData
+    });
+    const data = await res.json();
+    if (data.success) {
+      showAdminToast(data.message, 'success');
+
+      const row = document.getElementById(`fundRow-${fundId}`);
+      const badge = document.getElementById(`fundStatusBadge-${fundId}`);
+      const btn = document.getElementById(`fundToggleBtn-${fundId}`);
+
+      if (row) row.setAttribute('data-status', data.status);
+      if (badge) {
+        badge.className = `status-badge ${data.status}`;
+        badge.textContent = data.status;
+      }
+      if (btn) {
+        if (data.status === 'ACTIVE') {
+          btn.innerHTML = `<i data-lucide="archive"></i> Archive`;
+        } else {
+          btn.innerHTML = `<i data-lucide="check"></i> Activate`;
+        }
+        if (window.lucide) lucide.createIcons();
+      }
+    } else {
+      alert(data.error || 'Failed to update status');
+    }
+  } catch (err) {
+    alert('Request failed: ' + err.message);
+  }
+}
+
+async function adminDeletePurposeFund(fundId) {
+  if (!confirm(`Are you sure you want to cancel / delete Purpose Fund #${fundId}?`)) return;
+
+  const csrf = getAdminCsrfToken();
+  const formData = new FormData();
+  formData.append('action', 'delete');
+
+  try {
+    const res = await fetch(`/admin-actions/purposefund/${fundId}/action/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrf,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json'
+      },
+      body: formData
+    });
+    const data = await res.json();
+    if (data.success) {
+      showAdminToast(data.message, 'success');
+
+      const row = document.getElementById(`fundRow-${fundId}`);
+      if (row) {
+        row.style.transition = 'all 0.3s ease';
+        row.style.opacity = '0';
+        setTimeout(() => row.remove(), 300);
+      }
+    } else {
+      alert(data.error || 'Failed to delete fund');
+    }
+  } catch (err) {
+    alert('Request failed: ' + err.message);
+  }
+}
+
+// 4. FILTER MASTER WALLETS DIRECTORY
+function filterWallets(query) {
+  const q = query.toLowerCase().trim();
+  const rows = document.querySelectorAll('#masterWalletsTable .wallet-row');
+  rows.forEach(r => {
+    const text = (r.getAttribute('data-text') || '').toLowerCase();
+    const matchesQuery = !q || text.includes(q);
+    const filterStatus = r.getAttribute('data-filter-hidden') !== 'true';
+    r.style.display = matchesQuery && filterStatus ? '' : 'none';
+  });
+}
+
+function filterWalletStatus(status, btn) {
+  const buttons = btn.parentElement.querySelectorAll('.filter-btn');
+  buttons.forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const rows = document.querySelectorAll('#masterWalletsTable .wallet-row');
+  rows.forEach(r => {
+    const rStatus = r.getAttribute('data-status');
+    const match = status === 'ALL' || rStatus === status;
+    r.setAttribute('data-filter-hidden', match ? 'false' : 'true');
+    const q = (document.getElementById('walletSearchInput').value || '').toLowerCase().trim();
+    const text = (r.getAttribute('data-text') || '').toLowerCase();
+    r.style.display = match && (!q || text.includes(q)) ? '' : 'none';
+  });
+}
+
+// 1-CLICK FREEZE / UNFREEZE WALLET ACTION
+async function adminToggleWalletFreeze(walletId, username) {
+  const btn = document.getElementById(`walletFreezeBtn-${walletId}`);
+  const row = document.getElementById(`walletRow-${walletId}`);
+  const badge = document.getElementById(`walletStatusBadge-${walletId}`);
+
+  if (btn) {
+    btn.disabled = true;
+    btn.style.opacity = '0.6';
+  }
+
+  const csrf = getAdminCsrfToken();
+  try {
+    const res = await fetch(`/admin-actions/wallet/${walletId}/toggle-freeze/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrf,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    if (data.success) {
+      showAdminToast(data.message, data.is_frozen ? 'error' : 'success');
+
+      // Update row data & UI
+      const newStatus = data.is_frozen ? 'FROZEN' : 'ACTIVE';
+      if (row) row.setAttribute('data-status', newStatus);
+
+      if (badge) {
+        badge.className = `status-badge ${newStatus}`;
+        badge.textContent = newStatus;
+      }
+
+      if (btn) {
+        if (data.is_frozen) {
+          btn.className = 'btn-action-freeze unfreeze';
+          btn.innerHTML = `<i data-lucide="unlock"></i> <span>Unfreeze Wallet</span>`;
+        } else {
+          btn.className = 'btn-action-freeze freeze';
+          btn.innerHTML = `<i data-lucide="lock"></i> <span>Freeze Wallet</span>`;
+        }
+      }
+
+      // Update KPI counters
+      const kpiActive = document.getElementById('kpiActiveWallets');
+      const kpiFrozenCount = document.getElementById('kpiFrozenCount');
+      const kpiFrozenBadge = document.getElementById('kpiFrozenBadge');
+      const regActive = document.getElementById('regActiveWallets');
+      const regFrozen = document.getElementById('regFrozenWallets');
+      const dashFrozen = document.getElementById('dashKpiFrozen');
+
+      if (kpiActive && data.active_count !== undefined) kpiActive.textContent = data.active_count;
+      if (kpiFrozenCount && data.frozen_count !== undefined) kpiFrozenCount.textContent = data.frozen_count;
+      if (kpiFrozenBadge && data.frozen_count !== undefined) kpiFrozenBadge.textContent = `${data.frozen_count} Frozen`;
+      if (regActive && data.active_count !== undefined) regActive.textContent = data.active_count;
+      if (regFrozen && data.frozen_count !== undefined) regFrozen.textContent = data.frozen_count;
+      if (dashFrozen && data.frozen_count !== undefined) dashFrozen.textContent = data.frozen_count;
+
+      if (window.lucide) lucide.createIcons();
+    } else {
+      alert(data.error || 'Failed to update wallet status');
+    }
+  } catch (err) {
+    console.error('Freeze toggle failed:', err);
+    alert('Action failed: ' + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+    }
+  }
+}
+
+// 5. INCIDENT RESOLUTION (Integrated with Trust & Risk Engine)
+async function dashResolveIncident(incidentId, action) {
+  const row = document.getElementById(`dashIncidentRow-${incidentId}`);
+  if (action === 'confirm_fraud') {
+    if (!confirm(`Confirm Fraud for Incident #${incidentId}?\nThis will freeze the sender's wallet immediately.`)) {
+      return;
+    }
+  }
+
+  if (row) {
+    row.style.opacity = '0.5';
+    row.style.pointerEvents = 'none';
+  }
+
+  try {
+    const csrf = getAdminCsrfToken();
+    const formData = new FormData();
+    formData.append('action', action);
+    formData.append('incident_id', incidentId);
+
+    const res = await fetch(`/risk-console/resolve/${incidentId}/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrf,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json'
+      },
+      body: formData
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    if (data.success) {
+      showAdminToast(data.message, action === 'confirm_fraud' ? 'error' : 'success');
+
+      if (data.kpis) {
+        const p1 = document.getElementById('dashKpiPending');
+        const p2 = document.getElementById('dashRiskPendingPill');
+        const p3 = document.getElementById('dashKpiConfirmed');
+        const p4 = document.getElementById('dashKpiFrozen');
+
+        if (p1) p1.textContent = data.kpis.pending_count;
+        if (p2) p2.textContent = `${data.kpis.pending_count} Pending Triage`;
+        if (p3) p3.textContent = data.kpis.confirmed_fraud_count;
+        if (p4) p4.textContent = data.kpis.frozen_wallets_count;
+      }
+
+      if (row) {
+        row.style.transition = 'all 0.4s ease';
+        row.style.transform = 'scale(0.96)';
+        row.style.opacity = '0';
+        setTimeout(() => {
+          row.remove();
+          const list = document.getElementById('dashIncidentList');
+          if (list && list.querySelectorAll('.dash-incident-item').length === 0) {
+            list.innerHTML = `<div style="text-align:center;padding:28px 14px;color:#64748B;font-size:13px;"><span style="font-size:32px;display:block;margin-bottom:6px;">✅</span><strong style="color:var(--text);font-size:15px;display:block;margin-bottom:2px;">All Systems Nominal</strong>Zero suspicious transactions currently flagged for review hold.</div>`;
+          }
+        }, 400);
+      }
+    } else {
+      alert(data.error || 'Failed to update incident');
+      if (row) {
+        row.style.opacity = '1';
+        row.style.pointerEvents = 'auto';
+      }
+    }
+  } catch (err) {
+    console.error('Resolution failed:', err);
+    alert('Failed to resolve incident: ' + err.message);
+    if (row) {
+      row.style.opacity = '1';
+      row.style.pointerEvents = 'auto';
+    }
+  }
+}
+
+// ==========================================================================
+// CONSOLE INCIDENT FILTERING & TRIAGE RESOLUTION
+// ==========================================================================
+function filterConsoleIncidents(query) {
+  const q = query.toLowerCase().trim();
+  const rows = document.querySelectorAll('#consoleTriageTable .console-incident-row');
+  rows.forEach(r => {
+    const text = (r.getAttribute('data-text') || '').toLowerCase();
+    const matchesQuery = !q || text.includes(q);
+    const filterTier = r.getAttribute('data-filter-hidden') !== 'true';
+    r.style.display = matchesQuery && filterTier ? '' : 'none';
+  });
+}
+
+function filterConsoleTier(tier, btn) {
+  const buttons = btn.parentElement.querySelectorAll('.filter-btn');
+  buttons.forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const rows = document.querySelectorAll('#consoleTriageTable .console-incident-row');
+  rows.forEach(r => {
+    const rTier = r.getAttribute('data-tier');
+    let match = false;
+    if (tier === 'ALL') match = true;
+    else if (tier === 'CRITICAL') match = rTier === 'CRITICAL' || rTier === 'HIGH';
+    else if (tier === 'MEDIUM') match = rTier === 'MEDIUM' || rTier === 'STEP_UP_PIN';
+    else match = rTier === tier;
+
+    r.setAttribute('data-filter-hidden', match ? 'false' : 'true');
+    const q = (document.getElementById('consoleSearchInput').value || '').toLowerCase().trim();
+    const text = (r.getAttribute('data-text') || '').toLowerCase();
+    r.style.display = match && (!q || text.includes(q)) ? '' : 'none';
+  });
+}
+
+async function resolveConsoleIncident(incidentId, action) {
+  const row = document.getElementById(`consoleRow-${incidentId}`);
+  const dashRow = document.getElementById(`dashIncidentRow-${incidentId}`);
+  const notesInput = document.getElementById(`console-notes-${incidentId}`);
+  const notes = notesInput ? notesInput.value.trim() : '';
+
+  if (action === 'confirm_fraud') {
+    if (!confirm(`Are you sure you want to mark Incident #${incidentId} as CONFIRMED_FRAUD?\n\nThis will automatically freeze the associated wallet(s) in the database.`)) {
+      return;
+    }
+  }
+
+  if (row) {
+    row.style.opacity = '0.5';
+    row.style.pointerEvents = 'none';
+  }
+  if (dashRow) {
+    dashRow.style.opacity = '0.5';
+    dashRow.style.pointerEvents = 'none';
+  }
+
+  try {
+    const csrf = getAdminCsrfToken();
+    const formData = new FormData();
+    formData.append('action', action);
+    formData.append('incident_id', incidentId);
+    formData.append('notes', notes);
+
+    const res = await fetch(`/risk-console/resolve/${incidentId}/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrf,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json'
+      },
+      body: formData
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    if (data.success) {
+      showAdminToast(data.message, action === 'confirm_fraud' ? 'error' : 'success');
+
+      // Synchronize KPIs across both console and surveillance tabs
+      if (data.kpis) {
+        ['consoleKpiPending', 'dashKpiPending'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.textContent = data.kpis.pending_count;
+        });
+        ['consoleKpiConfirmed', 'dashKpiConfirmed'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.textContent = data.kpis.confirmed_fraud_count;
+        });
+        ['consoleKpiFrozen', 'dashKpiFrozen'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.textContent = data.kpis.frozen_wallets_count;
+        });
+        const badge1 = document.getElementById('consoleRiskPendingBadge');
+        if (badge1) badge1.textContent = `${data.kpis.pending_count} Pending Review`;
+        const badge2 = document.getElementById('dashRiskPendingPill');
+        if (badge2) badge2.textContent = `${data.kpis.pending_count} Pending Triage`;
+      }
+
+      if (row) {
+        row.style.transition = 'all 0.4s ease';
+        row.style.background = action === 'confirm_fraud' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)';
+        row.style.opacity = '0';
+        row.style.transform = 'scale(0.96)';
+        setTimeout(() => row.remove(), 400);
+      }
+      if (dashRow) {
+        dashRow.style.transition = 'all 0.4s ease';
+        dashRow.style.opacity = '0';
+        dashRow.style.transform = 'scale(0.96)';
+        setTimeout(() => dashRow.remove(), 400);
+      }
+    } else {
+      alert(data.error || 'Failed to update incident');
+      if (row) {
+        row.style.opacity = '1';
+        row.style.pointerEvents = 'auto';
+      }
+      if (dashRow) {
+        dashRow.style.opacity = '1';
+        dashRow.style.pointerEvents = 'auto';
+      }
+    }
+  } catch (err) {
+    console.error('Console resolution failed:', err);
+    alert('Failed to resolve incident: ' + err.message);
+    if (row) {
+      row.style.opacity = '1';
+      row.style.pointerEvents = 'auto';
+    }
+    if (dashRow) {
+      dashRow.style.opacity = '1';
+      dashRow.style.pointerEvents = 'auto';
+    }
+  }
+}
+
+// Theme Toggle & Mode Persistence System (Dark / Light)
+function applyAdminTheme(theme) {
+  const isLight = theme === 'light';
+  document.documentElement.setAttribute('data-admin-theme', theme);
+  const container = document.querySelector('.admin-operations-container');
+  if (container) {
+    container.setAttribute('data-theme', theme);
+  }
+  localStorage.setItem('admin_theme', theme);
+
+  document.querySelectorAll('.btn-theme-toggle, .admin-theme-toggle-header').forEach(btn => {
+    const sun = btn.querySelector('.theme-icon-sun');
+    const moon = btn.querySelector('.theme-icon-moon');
+    const label = btn.querySelector('.theme-text, .theme-mode-label');
+    if (sun) sun.style.display = isLight ? 'none' : 'inline';
+    if (moon) moon.style.display = isLight ? 'inline' : 'none';
+    if (label) label.textContent = isLight ? 'Dark' : 'Light';
+  });
+
+  // Re-render Chart 1 (Float Velocity)
+  const canvasFloat = document.getElementById('chartFloatVelocity');
+  if (canvasFloat && canvasFloat.chartInstance) {
+    const chart = canvasFloat.chartInstance;
+    if (chart.options && chart.options.scales) {
+      const gridColor = isLight ? '#E2E8F0' : 'rgba(148, 163, 184, 0.06)';
+      const tickColor = isLight ? '#334155' : '#94A3B8';
+      chart.options.scales.x.grid.color = gridColor;
+      chart.options.scales.x.ticks.color = tickColor;
+      chart.options.scales.y.grid.color = gridColor;
+      chart.options.scales.y.ticks.color = tickColor;
+      if (chart.options.plugins && chart.options.plugins.tooltip) {
+        chart.options.plugins.tooltip.backgroundColor = isLight ? '#FFFFFF' : '#0F172A';
+        chart.options.plugins.tooltip.titleColor = isLight ? '#0F172A' : '#F8FAFC';
+        chart.options.plugins.tooltip.bodyColor = isLight ? '#0284C7' : '#38BDF8';
+        chart.options.plugins.tooltip.borderColor = isLight ? '#CBD5E1' : '#1E293B';
+      }
+      chart.update();
+    }
+  }
+
+  // Re-render Chart 2 (Capital Allocation)
+  const canvasCap = document.getElementById('chartCapitalAllocation');
+  if (canvasCap && canvasCap.chartInstance) {
+    const chart = canvasCap.chartInstance;
+    if (chart.data && chart.data.datasets && chart.data.datasets[0]) {
+      chart.data.datasets[0].borderColor = isLight ? '#FFFFFF' : '#0F172A';
+    }
+    if (chart.options && chart.options.plugins) {
+      if (chart.options.plugins.legend && chart.options.plugins.legend.labels) {
+        chart.options.plugins.legend.labels.color = isLight ? '#334155' : '#CBD5E1';
+      }
+      if (chart.options.plugins.tooltip) {
+        chart.options.plugins.tooltip.backgroundColor = isLight ? '#FFFFFF' : '#0F172A';
+        chart.options.plugins.tooltip.titleColor = isLight ? '#0F172A' : '#F8FAFC';
+        chart.options.plugins.tooltip.bodyColor = isLight ? '#059669' : '#34D399';
+        chart.options.plugins.tooltip.borderColor = isLight ? '#CBD5E1' : '#1E293B';
+      }
+    }
+    chart.update();
+  }
+}
+
+function toggleAdminTheme() {
+  const current = localStorage.getItem('admin_theme') || 'dark';
+  const next = current === 'dark' ? 'light' : 'dark';
+  applyAdminTheme(next);
+}
+
+// Initial theme setup immediately on script evaluation
+(function initTheme() {
+  const saved = localStorage.getItem('admin_theme') || 'dark';
+  applyAdminTheme(saved);
+})();
+
+// SPA Tab Switching & Sidebar Navigation Management
+const VALID_SECTIONS = ['sectionLiquidity', 'sectionRiskSurveillance', 'sectionFamilyPass', 'sectionPurposeFunds', 'sectionWallets', 'sectionConsole'];
+const ACTIVE_CLASSES = ['active', 'bg-cyan-500/10', 'text-cyan-400', 'border-l-4', 'border-cyan-400', 'font-semibold'];
+const INACTIVE_CLASSES = ['text-slate-400', 'hover:bg-slate-800/60', 'hover:text-slate-200', 'font-medium'];
+
+function switchAdminTab(targetSectionId) {
+  if (!VALID_SECTIONS.includes(targetSectionId)) return;
+
+  // 1. Hide all tab panes, show only selected view
+  VALID_SECTIONS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      if (id === targetSectionId) {
+        el.classList.remove('hidden');
+        el.style.display = 'block';
+      } else {
+        el.classList.add('hidden');
+        el.style.display = 'none';
+      }
+    }
+  });
+
+  // 2. Update Sidebar Active Button State
+  const allBtns = document.querySelectorAll('.admin-nav-btn');
+  allBtns.forEach(btn => {
+    const href = btn.getAttribute('href');
+    const sec = btn.getAttribute('data-section');
+    const isTarget = sec === targetSectionId || (href && href === '#' + targetSectionId);
+
+    if (isTarget) {
+      INACTIVE_CLASSES.forEach(c => btn.classList.remove(c));
+      ACTIVE_CLASSES.forEach(c => {
+        if (!btn.classList.contains(c)) btn.classList.add(c);
+      });
+    } else if (sec || (href && href.startsWith('#'))) {
+      ACTIVE_CLASSES.forEach(c => btn.classList.remove(c));
+      INACTIVE_CLASSES.forEach(c => {
+        if (!btn.classList.contains(c)) btn.classList.add(c);
+      });
+    }
+  });
+
+  // 3. Update Chart.js if switching back to Float, or Lucide if switching to Console
+  if (targetSectionId === 'sectionLiquidity') {
+    if (typeof initAdminCharts === 'function') initAdminCharts();
+    const c1 = document.getElementById('chartFloatVelocity');
+    const c2 = document.getElementById('chartCapitalAllocation');
+    if (c1 && c1.chartInstance) c1.chartInstance.resize();
+    if (c2 && c2.chartInstance) c2.chartInstance.resize();
+  } else if (targetSectionId === 'sectionConsole') {
+    if (window.lucide) lucide.createIcons();
+  }
+
+  // 4. Update URL Hash without vertical scroll bleed
+  if (history.pushState) {
+    history.pushState(null, null, '#' + targetSectionId);
+  } else {
+    location.hash = '#' + targetSectionId;
+  }
+
+  // 5. Scroll smoothly to top
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+window.switchAdminTab = switchAdminTab;
+
+// Dynamic Admin Operations Sidebar Navigation Active State Switching
+(function initAdminSidebarNav() {
+  function setActiveBtn(targetBtn) {
+    if (!targetBtn) return;
+    const allBtns = document.querySelectorAll('.admin-nav-btn');
+    allBtns.forEach(btn => {
+      ACTIVE_CLASSES.forEach(c => btn.classList.remove(c));
+      INACTIVE_CLASSES.forEach(c => {
+        if (!btn.classList.contains(c)) btn.classList.add(c);
+      });
+    });
+
+    INACTIVE_CLASSES.forEach(c => targetBtn.classList.remove(c));
+    ACTIVE_CLASSES.forEach(c => {
+      if (!targetBtn.classList.contains(c)) targetBtn.classList.add(c);
+    });
+  }
+
+  window.setAdminNavActive = setActiveBtn;
+
+  // Click listener for dedicated SPA tab views
+  document.addEventListener('click', function(e) {
+    const btn = e.target.closest('.admin-nav-btn');
+    if (!btn) return;
+
+    const href = btn.getAttribute('href');
+    const sec = btn.getAttribute('data-section');
+    const targetId = sec || (href && href.startsWith('#') ? href.substring(1) : null);
+
+    if (targetId && VALID_SECTIONS.includes(targetId)) {
+      e.preventDefault();
+      switchAdminTab(targetId);
+    }
+  });
+
+  // Handle browser Back/Forward navigation
+  window.addEventListener('popstate', () => {
+    const hash = window.location.hash ? window.location.hash.substring(1) : 'sectionLiquidity';
+    if (VALID_SECTIONS.includes(hash)) {
+      switchAdminTab(hash);
+    }
+  });
+
+  // Initialize view from URL hash on load (default to Float / sectionLiquidity)
+  function initDefaultView() {
+    let initialTab = 'sectionLiquidity';
+    if (window.location.hash) {
+      const hash = window.location.hash.substring(1);
+      if (VALID_SECTIONS.includes(hash)) {
+        initialTab = hash;
+      }
+    }
+    switchAdminTab(initialTab);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initDefaultView);
+  } else {
+    initDefaultView();
+  }
+})();
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (typeof initAdminCharts === 'function') {
+    initAdminCharts();
+  }
+  if (window.lucide) {
+    lucide.createIcons();
+  }
+});
+
+window.addEventListener('load', () => {
+  if (typeof initAdminCharts === 'function') {
+    initAdminCharts();
+  }
+  const saved = localStorage.getItem('admin_theme') || 'dark';
+  applyAdminTheme(saved);
+});
+</script>

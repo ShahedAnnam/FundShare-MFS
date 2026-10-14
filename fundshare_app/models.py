@@ -83,6 +83,7 @@ class User(AbstractUser):
 class Wallet(models.Model):
     owner = models.OneToOneField(User, on_delete=models.CASCADE, related_name='wallet')
     balance = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    is_frozen = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -90,7 +91,24 @@ class Wallet(models.Model):
         constraints = [models.CheckConstraint(condition=models.Q(balance__gte=0), name='wallet_nonnegative')]
 
     def __str__(self):
-        return f"Wallet of {self.owner.username} (৳{self.balance})"
+        status_suffix = " [FROZEN]" if self.is_frozen else ""
+        return f"Wallet of {self.owner.username} (৳{self.balance}){status_suffix}"
+
+    @property
+    def is_active(self):
+        return not self.is_frozen
+
+    @is_active.setter
+    def is_active(self, value):
+        self.is_frozen = not value
+
+    def freeze(self):
+        self.is_frozen = True
+        self.save(update_fields=['is_frozen', 'updated_at'])
+
+    def unfreeze(self):
+        self.is_frozen = False
+        self.save(update_fields=['is_frozen', 'updated_at'])
 
 
 class Merchant(models.Model):
@@ -612,3 +630,243 @@ class Contact(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.phone}) - {self.owner.username}"
+
+
+class IncidentRiskTier(models.TextChoices):
+    LOW = 'LOW', 'Low'
+    MEDIUM = 'MEDIUM', 'Medium'
+    HIGH = 'HIGH', 'High'
+    CRITICAL = 'CRITICAL', 'Critical'
+
+
+class IncidentPolicyAction(models.TextChoices):
+    ALLOW = 'ALLOW', 'Allow'
+    STEP_UP_PIN = 'STEP_UP_PIN', 'Step-up PIN'
+    FLAG_FOR_REVIEW = 'FLAG_FOR_REVIEW', 'Flag for Review'
+
+
+class IncidentStatus(models.TextChoices):
+    PENDING = 'PENDING', 'Pending Review'
+    APPROVED = 'APPROVED', 'Approved / False Positive'
+    CONFIRMED_FRAUD = 'CONFIRMED_FRAUD', 'Confirmed Fraud / Blocked'
+    DISMISSED = 'DISMISSED', 'Dismissed'
+
+
+class FraudIncident(models.Model):
+    transaction = models.OneToOneField(
+        Transaction,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='fraud_incident'
+    )
+    anomaly_result = models.OneToOneField(
+        AnomalyResult,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='incident'
+    )
+    risk_score = models.FloatField(default=0.0)
+    risk_tier = models.CharField(
+        max_length=20,
+        choices=[
+            ('LOW', 'Low'),
+            ('MEDIUM', 'Medium'),
+            ('HIGH', 'High'),
+            ('CRITICAL', 'Critical'),
+        ],
+        default='LOW'
+    )
+    policy_action = models.CharField(
+        max_length=30,
+        choices=[
+            ('ALLOW', 'Allow'),
+            ('STEP_UP_PIN', 'Step-up PIN'),
+            ('FLAG_FOR_REVIEW', 'Flag for Review'),
+        ],
+        default='ALLOW'
+    )
+    status = models.CharField(
+        max_length=25,
+        choices=[
+            ('PENDING', 'Pending Review'),
+            ('APPROVED', 'Approved / False Positive'),
+            ('CONFIRMED_FRAUD', 'Confirmed Fraud / Blocked'),
+            ('DISMISSED', 'Dismissed'),
+        ],
+        default='PENDING',
+        db_index=True
+    )
+    reasons = models.JSONField(default=list, blank=True)
+    top_contributions = models.JSONField(default=list, blank=True)
+    reviewed_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='reviewed_incidents'
+    )
+    reviewer_notes = models.TextField(blank=True, default='')
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', '-created_at'], name='incident_status_time_idx'),
+            models.Index(fields=['risk_tier', '-created_at'], name='incident_tier_time_idx'),
+        ]
+
+    def __str__(self):
+        txn_id = self.transaction.transaction_id if self.transaction else (f"Anomaly #{self.anomaly_result_id}" if self.anomaly_result_id else f"#{self.id}")
+        return f"Incident #{self.id or 'new'} [{self.status}] {self.risk_tier} (Txn: {txn_id})"
+
+    def resolve(self, status, reviewer=None, notes=None):
+        self.status = status
+        if reviewer is not None:
+            self.reviewed_by = reviewer
+        if notes is not None:
+            self.reviewer_notes = notes
+        self.resolved_at = timezone.now()
+
+        source_wallet = None
+        if self.transaction and self.transaction.sender:
+            try:
+                source_wallet = getattr(self.transaction.sender, 'wallet', None)
+            except Exception:
+                source_wallet = None
+
+        dest_wallet = None
+        if self.transaction and self.transaction.receiver:
+            try:
+                dest_wallet = getattr(self.transaction.receiver, 'wallet', None)
+            except Exception:
+                dest_wallet = None
+
+        now_str = self.resolved_at.strftime('%Y-%m-%d %H:%M:%S UTC')
+        auto_notes = []
+
+        if status == 'CONFIRMED_FRAUD':
+            # 1. Automatically lock/freeze source wallet
+            if source_wallet:
+                source_wallet.freeze()
+                auto_notes.append(f"[Auto-Lock {now_str}] Source wallet for {self.transaction.sender.username} frozen due to CONFIRMED_FRAUD.")
+
+            # 2. Check if incident reasons indicate mule ring / fan-in destination
+            reasons_text = " ".join(str(r).lower() for r in (self.reasons or []))
+            is_mule_or_fan_in = any(k in reasons_text for k in ['mule', 'fan-in', 'fan_in', 'money mule', 'mule ring'])
+            if is_mule_or_fan_in and dest_wallet:
+                dest_wallet.freeze()
+                auto_notes.append(f"[Auto-Lock {now_str}] Destination wallet for {self.transaction.receiver.username} frozen due to mule ring/fan-in detection.")
+
+        elif status == 'APPROVED':
+            # Unlock / restore wallet if previously locked
+            if source_wallet and source_wallet.is_frozen:
+                source_wallet.unfreeze()
+                auto_notes.append(f"[Auto-Unlock {now_str}] Source wallet for {self.transaction.sender.username} restored/unfrozen upon false positive approval.")
+
+            if dest_wallet and dest_wallet.is_frozen:
+                reasons_text = " ".join(str(r).lower() for r in (self.reasons or []))
+                is_mule_or_fan_in = any(k in reasons_text for k in ['mule', 'fan-in', 'fan_in', 'money mule', 'mule ring'])
+                if is_mule_or_fan_in:
+                    dest_wallet.unfreeze()
+                    auto_notes.append(f"[Auto-Unlock {now_str}] Destination wallet for {self.transaction.receiver.username} restored/unfrozen upon false positive approval.")
+
+        if auto_notes:
+            notes_str = " ".join(auto_notes)
+            if self.reviewer_notes:
+                self.reviewer_notes = f"{self.reviewer_notes.strip()} {notes_str}".strip()
+            else:
+                self.reviewer_notes = notes_str
+
+        self.save()
+        return self
+
+    @classmethod
+    def auto_create_from_evaluation(cls, transaction=None, anomaly_result=None, analysis=None):
+        """
+        Idempotently auto-creates a FraudIncident when policy_action is FLAG_FOR_REVIEW
+        or risk_tier is HIGH or CRITICAL.
+        Does not create duplicates, and preserves the status of already resolved incidents.
+        """
+        policy_action = 'ALLOW'
+        risk_tier = 'LOW'
+        risk_score = 0.0
+        reasons = []
+        top_contributions = []
+
+        if analysis:
+            policy_action = analysis.get('risk_action') or policy_action
+            risk_tier = analysis.get('risk_tier') or risk_tier
+            risk_score = float(analysis.get('anomaly_score', 0.0))
+            reasons = list(analysis.get('rules_flagged') or [])
+            if not reasons and analysis.get('reason'):
+                reasons = [r.strip('• ').strip() for r in analysis.get('reason').split('\n') if r.strip()]
+            top_contributions = list(analysis.get('top_contributions') or [])
+        elif anomaly_result:
+            fs = anomaly_result.features_summary or {}
+            policy_action = fs.get('risk_action', 'ALLOW')
+            risk_tier = fs.get('risk_tier', 'LOW')
+            risk_score = float(anomaly_result.anomaly_score)
+            if anomaly_result.reason:
+                reasons = [r.strip('• ').strip() for r in anomaly_result.reason.split('\n') if r.strip()]
+            top_contributions = list(fs.get('top_contributions', []))
+
+        is_high_risk = (
+            policy_action == 'FLAG_FOR_REVIEW'
+            or risk_tier in ('HIGH', 'CRITICAL')
+        )
+        if not is_high_risk:
+            return None
+
+        # Resolve links if missing
+        if not transaction and anomaly_result and anomaly_result.transaction:
+            transaction = anomaly_result.transaction
+        if not anomaly_result and transaction and hasattr(transaction, 'anomaly_analysis'):
+            try:
+                anomaly_result = transaction.anomaly_analysis
+            except Exception:
+                anomaly_result = None
+
+        incident = None
+        if transaction:
+            incident = cls.objects.filter(transaction=transaction).first()
+        elif anomaly_result:
+            incident = cls.objects.filter(anomaly_result=anomaly_result).first()
+
+        if incident:
+            updated = False
+            if anomaly_result and incident.anomaly_result_id != anomaly_result.id:
+                incident.anomaly_result = anomaly_result
+                updated = True
+            if top_contributions and incident.top_contributions != top_contributions:
+                incident.top_contributions = top_contributions
+                updated = True
+            if reasons and incident.reasons != reasons:
+                incident.reasons = reasons
+                updated = True
+            if risk_score and incident.risk_score != risk_score:
+                incident.risk_score = risk_score
+                updated = True
+            if policy_action and incident.policy_action != policy_action:
+                incident.policy_action = policy_action
+                updated = True
+            if risk_tier and incident.risk_tier != risk_tier:
+                incident.risk_tier = risk_tier
+                updated = True
+            if updated:
+                incident.save()
+            return incident
+
+        return cls.objects.create(
+            transaction=transaction,
+            anomaly_result=anomaly_result,
+            risk_score=risk_score,
+            risk_tier=risk_tier,
+            policy_action=policy_action,
+            status='PENDING',
+            reasons=reasons,
+            top_contributions=top_contributions
+        )

@@ -1,12 +1,17 @@
-import json
 import tempfile
 import uuid
+import warnings
 from pathlib import Path
 from unittest.mock import patch
 
 import joblib
 import numpy as np
 import pandas as pd
+
+try:
+    from sklearn.exceptions import InconsistentVersionWarning
+except ImportError:
+    InconsistentVersionWarning = UserWarning
 from django.core.management import call_command
 from django.db import transaction
 from django.test import TestCase, SimpleTestCase, override_settings
@@ -25,7 +30,9 @@ from fundshare_app.services.report_service import ReportService
 
 class ModelTrainingTests(SimpleTestCase):
     def test_saved_model_has_real_held_out_metrics_and_explicit_inputs(self):
-        bundle = joblib.load(ARTIFACT)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=InconsistentVersionWarning)
+            bundle = joblib.load(ARTIFACT)
         metadata = bundle['metadata']
         self.assertEqual((metadata['sample_size'], metadata['train_size'], metadata['test_size']), (480, 336, 144))
         self.assertEqual(sum(map(sum, metadata['confusion_matrix'])), 144)
@@ -46,7 +53,9 @@ class ModelTrainingTests(SimpleTestCase):
             frame['anomaly_type'] = 'DO_NOT_TRAIN_ON_THIS'
             frame.to_csv(path / 'changed.csv', index=False)
             metadata = AnomalyDetector.train(path / 'changed.csv', changed)
-            a, b = joblib.load(original), joblib.load(changed)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=InconsistentVersionWarning)
+                a, b = joblib.load(original), joblib.load(changed)
             records = feature_records(frame.to_dict('records'))
             xa, xb = a['vectorizer'].transform(records), b['vectorizer'].transform(records)
             np.testing.assert_array_equal(xa, xb)

@@ -1,7 +1,11 @@
 from django.urls import path
-from fundshare_app.views import api_views
+from fundshare_app.views import api_views, ui_views
 
 urlpatterns = [
+    # Trust & Risk Intelligence Console
+    path('risk-console/', ui_views.analyst_risk_dashboard, name='api-risk-console'),
+    path('risk-console/resolve/<int:incident_id>/', ui_views.resolve_fraud_incident, name='api-risk-console-resolve'),
+
     # Auth
     path('auth/login/', api_views.LoginView.as_view(), name='api-login'),
     path('auth/register/', api_views.RegistrationView.as_view(), name='api-register'),
@@ -73,4 +77,12 @@ urlpatterns = [
     path('admin/ml/transactions/', api_views.MLTransactionReportView.as_view(), name='api-ml-transactions'),
     path('seed/', api_views.SeedDemoDataView.as_view(), name='api-seed-data'),             # JS uses /api/seed/
     path('admin/seed-data/', api_views.SeedDemoDataView.as_view(), name='api-seed-data2'),
+
+    # Admin Operations & Management
+    path('admin-actions/wallet/<int:wallet_id>/toggle-freeze/', ui_views.admin_toggle_wallet_freeze, name='api-admin-action-wallet-freeze'),
+    path('admin-actions/familypass/<int:pk>/action/', ui_views.admin_toggle_family_pass, name='api-admin-action-familypass'),
+    path('admin-actions/purposefund/<int:pk>/action/', ui_views.admin_toggle_purpose_fund, name='api-admin-action-purposefund'),
+    path('admin/wallet/<int:wallet_id>/toggle-freeze/', ui_views.admin_toggle_wallet_freeze, name='api-admin-toggle-wallet-freeze'),
+    path('admin/family-pass/<int:pass_id>/toggle-status/', ui_views.admin_toggle_family_pass, name='api-admin-toggle-family-pass'),
+    path('admin/purpose-funds/<int:fund_id>/toggle-status/', ui_views.admin_toggle_purpose_fund, name='api-admin-toggle-purpose-fund'),
 ]

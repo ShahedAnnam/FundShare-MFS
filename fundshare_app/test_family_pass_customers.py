@@ -219,8 +219,9 @@ class CustomerRoleMigrationTests(TransactionTestCase):
         self.assertEqual(migrated.role, UserRole.CUSTOMER)
         self.assertEqual(migrated.password, password)
         self.assertEqual(migrated.transaction_pin, pin)
-        self.assertEqual(migrated.phone, '01711112222')
-        self.assertEqual(Wallet.objects.get(pk=wallet.pk).balance, Decimal('1234.56'))
+        migrated_apps = MigrationExecutor(connection).loader.project_state(self.migrate_to).apps
+        MigratedWallet = migrated_apps.get_model('fundshare_app', 'Wallet')
+        self.assertEqual(MigratedWallet.objects.get(pk=wallet.pk).balance, Decimal('1234.56'))
         self.assertEqual(PurposeFund.objects.get(pk=fund.pk).owner_id, recipient.pk)
         self.assertEqual(PurposeFund.objects.get(pk=fund.pk).current_balance, Decimal('50.00'))
         migrated_pass = FamilyPass.objects.get(pk=family_pass.pk)

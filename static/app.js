@@ -402,13 +402,20 @@ async function initApp() {
 function renderHeader() {
   const u = state.user;
   if (!u) return;
-  const initials = (u.full_name || u.username || 'U').substring(0, 2).toUpperCase();
-  document.getElementById('headerAvatar').textContent = initials;
-  document.getElementById('headerName').textContent = (u.full_name || u.username || 'User').split(' ')[0];
+  const isStaff = u.is_staff || u.is_superuser || u.effective_role === 'ADMIN' || u.role === 'ADMIN';
+  const initials = isStaff ? 'AD' : (u.full_name || u.username || 'U').substring(0, 2).toUpperCase();
+  const avatarEl = document.getElementById('headerAvatar');
+  if (avatarEl) avatarEl.textContent = initials;
+  const nameEl = document.getElementById('headerName');
+  if (nameEl) nameEl.textContent = isStaff ? (u.username || 'Admin') : (u.full_name || u.username || 'User').split(' ')[0];
+  const phoneEl = document.getElementById('headerPhone');
+  if (phoneEl && isStaff) phoneEl.textContent = 'Operations Admin';
   if (state.unreadNotifications > 0) {
     const badge = document.getElementById('notifCount');
-    badge.textContent = state.unreadNotifications;
-    badge.style.display = 'flex';
+    if (badge) {
+      badge.textContent = state.unreadNotifications;
+      badge.style.display = 'flex';
+    }
   }
 }
 
@@ -456,6 +463,12 @@ function checkRoleBasedUI() {
 // DASHBOARD
 // ============================================================
 async function loadDashboard() {
+  const isStaff = state.user?.is_staff || state.user?.is_superuser || state.user?.effective_role === 'ADMIN' || state.user?.role === 'ADMIN';
+  if (isStaff) {
+    // Admin Command Center: preserve system-wide aggregates and avoid single-wallet dummy overwrite
+    return;
+  }
+
   const data = await apiGet('/api/wallet/summary/');
   if (!data) { renderLoadError('recentTxns', 'loadDashboard()'); return; }
 

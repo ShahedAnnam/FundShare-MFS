@@ -17,7 +17,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'full_name', 'email', 'phone', 'role', 'effective_role', 'effective_role_display', 'avatar_url', 'has_transaction_pin', 'can_reset_demo']
+        fields = ['id', 'username', 'full_name', 'email', 'phone', 'role', 'effective_role', 'effective_role_display', 'avatar_url', 'has_transaction_pin', 'can_reset_demo', 'is_staff', 'is_superuser']
 
     def get_has_transaction_pin(self, obj):
         return bool(obj.transaction_pin)

@@ -1,0 +1,408 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FundShare | {% block title %}Trust &amp; Risk Intelligence{% endblock %}</title>
+  <meta name="theme-color" content="#ffcf00">
+  <link rel="icon" type="image/png" href="{% static 'brand-mark.png' %}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'ui.css' %}">
+  <style>
+    :root {
+      --primary: #00875A;
+      --primary-dark: #006B48;
+      --primary-light: #E8F5F0;
+      --gold: #FFB800;
+      --gold-light: #FFF8E1;
+      --danger: #EF4444;
+      --danger-dark: #DC2626;
+      --danger-light: #FEF2F2;
+      --warning: #F59E0B;
+      --warning-light: #FFFBEB;
+      --info: #3B82F6;
+      --info-light: #EFF6FF;
+      --purple: #8B5CF6;
+      --purple-light: #F5F3FF;
+      --text: #1A1A2E;
+      --text-secondary: #4B5563;
+      --text-muted: #6B7280;
+      --border: #E5E7EB;
+      --bg: #F8FAFC;
+      --white: #FFFFFF;
+      --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      --card-hover-shadow: 0 10px 24px rgba(0, 0, 0, 0.1);
+      --nav-height: 64px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      min-height: 100%;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* TOP HEADER */
+    .portal-header {
+      position: sticky;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      height: var(--nav-height);
+      background: linear-gradient(135deg, #00704A 0%, #00875A 100%);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .portal-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: #fff;
+    }
+
+    .portal-logo .brand-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+
+    .portal-logo .brand-icon img {
+      width: 28px;
+      height: 28px;
+      object-fit: contain;
+    }
+
+    .portal-logo .logo-titles {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .portal-logo .logo-text {
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      line-height: 1.1;
+    }
+
+    .portal-logo .logo-sub {
+      font-size: 11px;
+      font-weight: 500;
+      opacity: 0.85;
+      letter-spacing: 0.2px;
+    }
+
+    .portal-nav-links {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .portal-nav-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 14px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      color: #fff;
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .portal-nav-btn:hover {
+      background: rgba(255, 255, 255, 0.25);
+      transform: translateY(-1px);
+    }
+
+    .portal-nav-btn.active {
+      background: #fff;
+      color: var(--primary-dark);
+      border-color: #fff;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .portal-nav-btn.risk-btn {
+      background: rgba(239, 68, 68, 0.25);
+      border-color: rgba(239, 68, 68, 0.5);
+    }
+
+    .portal-nav-btn.risk-btn:hover {
+      background: rgba(239, 68, 68, 0.4);
+    }
+
+    .portal-nav-btn.risk-btn.active {
+      background: #EF4444;
+      color: #fff;
+      border-color: #EF4444;
+    }
+
+    .portal-badge-pill {
+      background: #EF4444;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 12px;
+      line-height: 1;
+      letter-spacing: 0.3px;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+    }
+
+    .portal-user-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.15);
+      padding: 4px 12px 4px 6px;
+      border-radius: 9999px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .portal-user-circle {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--gold);
+      color: var(--primary-dark);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    .portal-user-info {
+      display: flex;
+      flex-direction: column;
+      color: #fff;
+    }
+
+    .portal-user-name {
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .portal-user-role {
+      font-size: 10px;
+      opacity: 0.8;
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .portal-logout-btn {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #fff;
+      padding: 6px 12px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .portal-logout-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* TOASTS & ALERTS */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .toast-msg {
+      pointer-events: auto;
+      background: #1E293B;
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      border-left: 4px solid var(--primary);
+    }
+
+    .toast-msg.success { border-left-color: #10B981; }
+    .toast-msg.error { border-left-color: #EF4444; }
+    .toast-msg.warning { border-left-color: #F59E0B; }
+
+    @keyframes slideInRight {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* FLASH ALERTS */
+    .flash-alerts {
+      max-width: 1200px;
+      margin: 16px auto 0;
+      padding: 0 20px;
+    }
+    .alert-banner {
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .alert-banner.success { background: #ECFDF5; color: #065F46; border: 1px solid #A7F3D0; }
+    .alert-banner.error { background: #FEF2F2; color: #991B1B; border: 1px solid #FECACA; }
+    .alert-banner.warning { background: #FFFBEB; color: #92400E; border: 1px solid #FDE68A; }
+
+    /* MAIN CONTAINER */
+    .main-wrapper {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 24px 20px 60px;
+    }
+
+    @media (max-width: 768px) {
+      .portal-header { padding: 0 14px; }
+      .portal-logo .logo-sub { display: none; }
+      .portal-nav-btn span.btn-label { display: none; }
+      .portal-user-info { display: none; }
+    }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+  <!-- TOP HEADER -->
+  <header class="portal-header">
+    <a href="/" class="portal-logo" aria-label="FundShare Home">
+      <div class="brand-icon">
+        <img src="{% static 'brand-mark.png' %}" alt="FundShare Mark">
+      </div>
+      <div class="logo-titles">
+        <span class="logo-text">FundShare</span>
+        <span class="logo-sub">Your money. Shared purpose.</span>
+      </div>
+    </a>
+
+    <div class="portal-nav-links">
+      <a href="/" class="portal-nav-btn {% block nav_home_active %}{% endblock %}" title="Consumer Wallet Dashboard">
+        <i data-lucide="wallet"></i>
+        <span class="btn-label">Wallet Portal</span>
+      </a>
+
+      {% if user.is_staff or user.is_superuser or user_role == 'ADMIN' %}
+      <a href="{% url 'risk_console' %}" class="portal-nav-btn risk-btn {% block nav_risk_active %}{% endblock %}" title="Trust & Risk Intelligence Console">
+        <i data-lucide="shield-alert"></i>
+        <span class="btn-label">Trust &amp; Risk Console</span>
+        {% if kpis.pending_count %}
+        <span class="portal-badge-pill" id="headerPendingBadge">{{ kpis.pending_count }}</span>
+        {% elif pending_incident_count %}
+        <span class="portal-badge-pill" id="headerPendingBadge">{{ pending_incident_count }}</span>
+        {% endif %}
+      </a>
+
+      {% endif %}
+
+      {% if user.is_authenticated %}
+      <div class="portal-user-chip">
+        <div class="portal-user-circle">{{ user.username|slice:":1"|upper }}</div>
+        <div class="portal-user-info">
+          <span class="portal-user-name">{{ user.username }}</span>
+          <span class="portal-user-role">{{ user_role_display|default:"Customer" }}</span>
+        </div>
+      </div>
+
+      <form method="post" action="{% url 'logout' %}" style="display:inline;margin:0;">
+        {% csrf_token %}
+        <button type="submit" class="portal-logout-btn" title="Sign Out">
+          <i data-lucide="log-out"></i>
+          <span>Log Out</span>
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </header>
+
+  <!-- FLASH MESSAGES -->
+  {% if messages %}
+  <div class="flash-alerts">
+    {% for message in messages %}
+    <div class="alert-banner {{ message.tags }}">
+      <i data-lucide="info"></i>
+      <span>{{ message }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- TOAST CONTAINER -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- MAIN CONTENT BLOCK -->
+  <main class="main-wrapper">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- LUCIDE ICONS VENDOR -->
+  <script src="{% static 'vendor/lucide-0.468.0.min.js' %}"></script>
+  <script>
+    if (window.lucide) {
+      lucide.createIcons();
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      if (!container) return;
+      const toast = document.createElement('div');
+      toast.className = `toast-msg ${type}`;
+      let icon = 'info';
+      if (type === 'success') icon = 'check-circle';
+      if (type === 'error') icon = 'alert-triangle';
+      if (type === 'warning') icon = 'alert-circle';
+      toast.innerHTML = `<i data-lucide="${icon}"></i><span>${message}</span>`;
+      container.appendChild(toast);
+      if (window.lucide) lucide.createIcons();
+      setTimeout(() => {
+        toast.style.transition = 'opacity 0.4s, transform 0.4s';
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(10px)';
+        setTimeout(() => toast.remove(), 400);
+      }, 4500);
+    }
+  </script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

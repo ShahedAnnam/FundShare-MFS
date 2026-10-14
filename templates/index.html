@@ -954,9 +954,31 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
 
 <!-- TOP HEADER -->
 <header class="app-header">
-  <a class="header-logo" href="/" aria-label="FundShare Home"><span class="brand-mark"><img src="{% static 'brand-mark.png' %}" alt="" width="38" height="38"></span><span><span class="logo-text">FundShare</span><span class="brand-caption">Your money. Shared purpose.</span></span></a>
+  <a class="header-logo" href="/" aria-label="FundShare Home">
+    <span class="brand-mark"><img src="{% static 'brand-mark.png' %}" alt="" width="38" height="38"></span>
+    <span>
+      {% if is_admin_portal %}
+      <span class="logo-text">FundShare Operations Platform</span>
+      <span class="brand-caption" style="color:#A7F3D0;">Central Banking &amp; Trust Surveillance</span>
+      {% else %}
+      <span class="logo-text">FundShare</span>
+      <span class="brand-caption">Your money. Shared purpose.</span>
+      {% endif %}
+    </span>
+  </a>
   <div class="header-right">
-    <button class="avatar-btn" onclick="showProfile()" title="View Account"><span class="avatar-circle" id="headerAvatar">U</span><span><span class="avatar-name" id="headerName">Loading...</span><span class="header-phone" id="headerPhone">FundShare Wallet</span></span></button>
+    {% if is_admin_portal or user.is_staff or user.is_superuser or user_role == 'ADMIN' %}
+    <span class="admin-operator-badge" style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700;">
+      <i data-lucide="shield-check" style="width:14px;height:14px;"></i>
+      <span>Admin: {{ user.username }}</span>
+    </span>
+    <button type="button" class="admin-theme-toggle-header btn-theme-toggle" onclick="toggleAdminTheme()" title="Toggle Dark/Light Mode" aria-label="Toggle Dark/Light Mode" style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.2s;">
+      <span class="theme-icon-sun">☀️</span>
+      <span class="theme-icon-moon" style="display:none;">🌙</span>
+      <span class="theme-text">Light</span>
+    </button>
+    {% endif %}
+    <button class="avatar-btn" onclick="showProfile()" title="View Account"><span class="avatar-circle" id="headerAvatar">{{ request.user.username|slice:":1"|upper|default:"A" }}</span><span><span class="avatar-name" id="headerName">{{ request.user.username|default:"Admin" }}</span><span class="header-phone" id="headerPhone">{% if is_admin_portal %}Admin Operator{% else %}FundShare Wallet{% endif %}</span></span></button>
     <button class="header-balance" onclick="navigateTo('account')">Account</button>
     <button class="notif-btn" onclick="openNotifications()" title="Notifications" aria-label="Notifications"><i data-lucide="bell"></i><span class="notif-badge" id="notifCount" style="display:none">0</span></button>
   </div>
@@ -965,7 +987,11 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
 <!-- MAIN BODY -->
 <div class="app-body">
 
-  {% include 'components/dashboard.html' %}
+  {% if is_admin_portal or request.user.is_staff or request.user.is_superuser %}
+    {% include 'components/admin_operations_dashboard.html' %}
+  {% else %}
+    {% include 'components/dashboard.html' %}
+
 
   <!-- ====== FUNDS TAB ====== -->
   <div class="tab-panel" id="tab-funds">
@@ -1071,11 +1097,14 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
 
   {% include 'components/account.html' %}
   {% include 'components/history.html' %}
+  {% endif %}
+
   {% include 'components/more.html' %}
 
 </div><!-- end app-body -->
 
 <!-- ====== BOTTOM NAV ====== -->
+{% if not is_admin_portal and not request.user.is_staff and not request.user.is_superuser %}
 <nav class="bottom-nav" aria-label="Main navigation">
   <button class="nav-item active" id="nav-home" onclick="navigateTo('home')"><span class="nav-icon"><i data-lucide="house"></i></span><span class="nav-label">Home</span></button>
   <button class="nav-item" id="nav-account" onclick="navigateTo('account')"><span class="nav-icon"><i data-lucide="wallet"></i></span><span class="nav-label">Account</span></button>
@@ -1087,6 +1116,7 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--b
   <button class="nav-item" id="nav-more" onclick="navigateTo('more')"><span class="nav-icon"><i data-lucide="ellipsis"></i></span><span class="nav-label">More</span></button>
   <div class="nav-footer"><strong>FundShare Prototype</strong>Built for a shared tomorrow.</div>
 </nav>
+{% endif %}
 
 <!-- ====== MODALS ====== -->
 
